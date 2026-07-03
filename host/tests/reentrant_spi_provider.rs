@@ -74,6 +74,9 @@ async fn resident_provider_satisfies_spi_import() {
         None,
         String::new(),
         None,
+        None,
+        None,
+        false,
     )
     .expect("compile eval-provider");
     assert!(provider.is_resident());
@@ -106,6 +109,9 @@ async fn eval_scalar_reenters_spi_execute() {
         None,
         String::new(),
         None,
+        None,
+        None,
+        false,
     )
     .expect("compile eval-provider");
     let func_id = first_scalar_id(&provider).await;

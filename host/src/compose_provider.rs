@@ -103,6 +103,13 @@ pub enum ProviderKind {
         /// self-load would); the resulting Host↔provider Arc cycle is benign
         /// (both are process-lived).
         loader_host: Option<crate::Host>,
+        /// #106/#220 grant-threading: the ext's manifest-granted http/dns/s3
+        /// capabilities, threaded from `load_extension`'s policy so a granted
+        /// resident extension actually gets those host surfaces. `None`/`None`/
+        /// `false` = deny-by-default (introspection / non-granted exts).
+        http_policy: Option<crate::HttpPolicy>,
+        dns_policy: Option<crate::DnsPolicy>,
+        s3_granted: bool,
     },
 }
 
@@ -154,6 +161,9 @@ impl ProviderHandle {
         dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
         spi_db_path: String,
         loader_host: Option<crate::Host>,
+        http_policy: Option<crate::HttpPolicy>,
+        dns_policy: Option<crate::DnsPolicy>,
+        s3_granted: bool,
     ) -> Result<Self, String> {
         let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
         let component = Component::from_binary(&engine, &bytes)
@@ -167,6 +177,9 @@ impl ProviderHandle {
                 dynlink_bridge,
                 spi_db_path,
                 loader_host,
+                http_policy,
+                dns_policy,
+                s3_granted,
             },
         })
     }
@@ -182,6 +195,9 @@ impl ProviderHandle {
         dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
         spi_db_path: String,
         loader_host: Option<crate::Host>,
+        http_policy: Option<crate::HttpPolicy>,
+        dns_policy: Option<crate::DnsPolicy>,
+        s3_granted: bool,
     ) -> Result<Self, String> {
         let component = Component::from_binary(&engine, bytes)
             .map_err(|e| format!("compile {}: {e}", path_label.display()))?;
@@ -194,6 +210,9 @@ impl ProviderHandle {
                 dynlink_bridge,
                 spi_db_path,
                 loader_host,
+                http_policy,
+                dns_policy,
+                s3_granted,
             },
         })
     }
@@ -234,6 +253,9 @@ impl ProviderHandle {
                 dynlink_bridge,
                 spi_db_path,
                 loader_host,
+                http_policy,
+                dns_policy,
+                s3_granted,
                 ..
             } => {
                 resident_wasm_component_invoke(
@@ -245,6 +267,9 @@ impl ProviderHandle {
                     dynlink_bridge.as_ref(),
                     spi_db_path,
                     loader_host.as_ref(),
+                    http_policy.clone(),
+                    dns_policy.clone(),
+                    *s3_granted,
                 )
                 .await
             }
@@ -1268,6 +1293,9 @@ async fn resident_wasm_component_invoke(
     dynlink_bridge: Option<&datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
     spi_db_path: &str,
     loader_host: Option<&crate::Host>,
+    http_policy: Option<crate::HttpPolicy>,
+    dns_policy: Option<crate::DnsPolicy>,
+    s3_granted: bool,
 ) -> Result<Vec<u8>, String> {
     let mut guard = resident.lock().await;
     if guard.is_none() {
@@ -1424,12 +1452,14 @@ async fn resident_wasm_component_invoke(
             // `:memory:` (the loader's per-extension default).
             spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
             spi_db_path: spi_db_path.to_string(),
-            // #220: deny-by-default http/dns policies (see the field docs).
-            // A resident http/dns provider instantiates; calls are gated at
-            // call time by check_http_policy/check_dns_policy.
-            http_policy: None,
-            dns_policy: None,
-            s3_granted: false,
+            // #106/#220 grant-threading: the ext's manifest-granted http/dns/s3
+            // surfaces, threaded from `load_extension`'s policy. Calls are still
+            // gated at call time by check_http_policy/check_dns_policy (and the
+            // s3_base impl's s3_granted check); a non-granted ext gets
+            // None/None/false = deny-by-default.
+            http_policy,
+            dns_policy,
+            s3_granted,
             cli: CliCapture::default(),
             // #220 full-port: per-provider session registry (session-cli).
             session_handles: Arc::new(Mutex::new(HashMap::new())),

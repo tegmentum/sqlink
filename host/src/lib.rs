@@ -5697,6 +5697,13 @@ impl Host {
                 // #220 full-port: thread the loader Host so a loader-bridge
                 // ext (sqlink-meta-cli) can re-enter the loader provider-only.
                 Some(self.clone()),
+                // #106/#220 grant-threading: the ext's granted http/dns/s3
+                // capabilities from the load policy, so a granted resident
+                // extension actually gets those surfaces (deny-by-default
+                // otherwise, gated at call time).
+                policy.http.clone(),
+                policy.dns.clone(),
+                policy.is_granted(Capability::S3),
             )
             .map_err(|e| anyhow!("compile resident provider {}: {e}", resolved.display()))?;
             // The provider's own manifest names the extension; describe it
@@ -5775,6 +5782,12 @@ impl Host {
             Some(self.dynlink_bridge.clone()),
             self.db_path(),
             Some(self.clone()),
+            // #106/#220: the byte-load / contract-guard path carries no ext
+            // policy in scope; deny http/dns/s3 (introspection doesn't need
+            // those surfaces).
+            None,
+            None,
+            false,
         )
         .map_err(|e| anyhow!("compile resident provider {name_hint}: {e}"))?;
         let (mbytes, _) = provider
@@ -5878,6 +5891,10 @@ impl Host {
             Some(self.dynlink_bridge.clone()),
             self.db_path(),
             Some(self.clone()),
+            // #106/#220: describe/introspection path — no ext surfaces needed.
+            None,
+            None,
+            false,
         )
         .map_err(|e| anyhow!("compile resident provider {name_hint}: {e}"))?;
         let (mbytes, _) = provider
@@ -10682,6 +10699,13 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
             self.host.db_path(),
             // #220 full-port: thread the loader Host for loader-bridge exts.
             Some(self.host.clone()),
+            // #106/#220: the in-WASM cli `.load` callback path — deny http/dns/s3
+            // by default. Threading the operator's grant for this path (from the
+            // manifest's declared capabilities, described just below) is a further
+            // follow-up; the provider still instantiates, calls are gated.
+            None,
+            None,
+            false,
         ) {
             Ok(p) => p,
             Err(e) => {
