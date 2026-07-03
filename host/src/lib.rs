@@ -580,10 +580,55 @@ pub mod provider_envelope {
             "text" => SqlValue::Text(inner.map(text).unwrap_or_default()),
             "blob" => SqlValue::Blob(match inner {
                 Some(Cbor::Bytes(b)) => b.clone(),
+                // The declarative provider serializes SqlValue::Blob through
+                // serde, which renders Vec<u8> as a CBOR array of integers
+                // rather than a byte string. Accept that form too so
+                // blob-returning provider scalars (e.g. changeset_invert /
+                // changeset_concat) round-trip instead of decoding to empty.
+                Some(c @ Cbor::Array(_)) => arr(c).iter().map(|e| int(e) as u8).collect(),
                 _ => Vec::new(),
             }),
             other => return Err(format!("unsupported SqlValue tag {other}")),
         })
+    }
+
+    #[cfg(test)]
+    mod blob_result_tests {
+        use super::*;
+
+        // Regression: the declarative provider serializes SqlValue::Blob via
+        // serde, which renders Vec<u8> as a CBOR array of integers (not a byte
+        // string). The host result decoder must accept that form, else
+        // blob-returning provider scalars (changeset_invert / changeset_concat)
+        // decode to an empty blob. Both wire forms must round-trip.
+        #[test]
+        fn blob_result_accepts_serde_array_and_byte_string() {
+            let bytes = vec![0x54u8, 0x02, 0x00, 0xff, 0x7f];
+            let as_array = Cbor::Map(vec![
+                (Cbor::Text("t".into()), Cbor::Text("blob".into())),
+                (
+                    Cbor::Text("v".into()),
+                    Cbor::Array(
+                        bytes
+                            .iter()
+                            .map(|b| Cbor::Integer((*b as i64).into()))
+                            .collect(),
+                    ),
+                ),
+            ]);
+            match cbor_to_sqlval(&as_array) {
+                Ok(SqlValue::Blob(b)) => assert_eq!(b, bytes),
+                _ => panic!("serde array-of-ints blob must decode to the bytes"),
+            }
+            let as_bytes = Cbor::Map(vec![
+                (Cbor::Text("t".into()), Cbor::Text("blob".into())),
+                (Cbor::Text("v".into()), Cbor::Bytes(bytes.clone())),
+            ]);
+            match cbor_to_sqlval(&as_bytes) {
+                Ok(SqlValue::Blob(b)) => assert_eq!(b, bytes),
+                _ => panic!("native byte-string blob must still decode"),
+            }
+        }
     }
 
     fn scalar_specs(v: &Cbor) -> Vec<(String, u64, i32)> {
