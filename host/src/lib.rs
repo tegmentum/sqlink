@@ -7428,50 +7428,51 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host
                 },
             );
         };
-        let policy = Policy::default();
-        match host
-            .load_extension_from_bytes(bytes, &name_hint, policy)
-            .await
-        {
-            Ok(name) => {
-                let components = host.components.read();
-                let Some(ext) = components.get(&name) else {
-                    return Err(
-                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                            code: 1,
-                            message: format!("loader-bridge: {name} vanished after load"),
-                        },
-                    );
-                };
-                let dot_commands = ext
-                    .dot_commands
-                    .iter()
-                    .map(|d| {
-                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedDotCommand {
-                            id: d.id,
-                            name: d.name.clone(),
-                            summary: d.summary.clone(),
-                            usage: d.usage.clone(),
-                            help: d.help.clone(),
-                            requires_write: d.requires_write,
-                        }
-                    })
-                    .collect();
-                Ok(
-                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest {
-                        name: ext.name.clone(),
-                        version: ext.version.clone(),
-                        dot_commands,
+        // #220 loader retirement: the loader-bridge sub-load (ext-loads-ext)
+        // goes provider-only. A provider-backed ext lives in
+        // `provider_manifests`, not the bespoke `components` registry, so
+        // build the BridgedManifest from the provider manifest's dotcmd specs.
+        let name = match host.instantiate_provider_from_bytes(&name_hint, &bytes).await {
+            Ok(name) => name,
+            Err(e) => {
+                return Err(
+                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                        code: 1,
+                        message: e.to_string(),
                     },
                 )
             }
-            Err(e) => Err(
+        };
+        let manifests = host.provider_manifests.read();
+        let Some(m) = manifests.get(&name) else {
+            return Err(
                 loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
                     code: 1,
-                    message: e.to_string(),
+                    message: format!("loader-bridge: {name} not provider-backed after load"),
                 },
-            ),
-        }
+            );
+        };
+        let dot_commands = m
+            .dotcmd_specs
+            .iter()
+            .map(|d| {
+                loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedDotCommand {
+                    id: d.id,
+                    name: d.name.clone(),
+                    summary: d.summary.clone(),
+                    usage: d.usage.clone(),
+                    help: String::new(),
+                    requires_write: d.requires_write,
+                }
+            })
+            .collect();
+        Ok(
+            loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest {
+                name: m.name.clone(),
+                version: m.version.clone(),
+                dot_commands,
+            },
+        )
     }
 
     async fn extension_digest(&mut self, name: String) -> String {
@@ -9271,7 +9272,10 @@ impl Host {
         } else {
             uri.to_string()
         };
-        self.load_extension_from_bytes(bytes, &hint, policy).await
+        // #220 loader retirement: URI loads go provider-only, same as the
+        // path-based router. A non-provider component is a hard error.
+        let _ = policy;
+        self.instantiate_provider_from_bytes(&hint, &bytes).await
     }
 
     /// PLAN-latent-cleanup.md L3b: shared "URI → bytes" path. Used
@@ -9665,6 +9669,51 @@ impl Host {
              loader has been retired (#220) — provider-back this extension \
              (build its <ext>-provider.wasm onto SQLINK_EXT_DIR)."
         ))
+    }
+
+    /// #220 loader retirement: instantiate component BYTES as a WARM-ONCE
+    /// RESIDENT compose:dynlink provider — the byte-based analog of
+    /// `load_extension`'s provider branch, for callers that hold bytes
+    /// rather than a resolved path (the URI load path, the cli loader
+    /// callback, the loader-bridge sub-load). A non-provider component
+    /// (no `compose:dynlink/endpoint` export) is a hard error: the bespoke
+    /// `loaded::*` loader is retired. Returns the registered extension name.
+    pub async fn instantiate_provider_from_bytes(
+        &self,
+        name_hint: &str,
+        bytes: &[u8],
+    ) -> Result<String> {
+        let component = Component::from_binary(&self.engine, bytes)
+            .map_err(|e| anyhow!("compile provider {name_hint}: {e}"))?;
+        if !compose_provider::exports_endpoint(&component, &self.engine) {
+            return Err(anyhow!(
+                "extension '{name_hint}': not a compose:dynlink provider (no \
+                 endpoint export); the bespoke loader has been retired (#220) \
+                 — provider-back this extension."
+            ));
+        }
+        let provider = compose_provider::ProviderHandle::new_resident_wasm_component_from_bytes(
+            self.engine.clone(),
+            bytes,
+            PathBuf::from(format!("bytes:{name_hint}")),
+            Some(self.dynlink_bridge.clone()),
+            self.db_path(),
+            Some(self.clone()),
+        )
+        .map_err(|e| anyhow!("compile resident provider {name_hint}: {e}"))?;
+        let (mbytes, _) = provider
+            .invoke_cli("describe", &[], std::collections::HashMap::new())
+            .await
+            .map_err(|e| anyhow!("provider describe: {e}"))?;
+        let manifest = provider_envelope::decode_manifest(&mbytes)
+            .map_err(|e| anyhow!("decode manifest: {e}"))?;
+        let ext_name = if manifest.name.is_empty() {
+            name_hint.to_string()
+        } else {
+            manifest.name.clone()
+        };
+        self.load_extension_as_provider(&ext_name, provider).await?;
+        Ok(ext_name)
     }
 
     /// Describe an extension WITHOUT loading it — instantiates
@@ -16260,21 +16309,25 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         bytes: Vec<u8>,
         options: bindings::sqlite::extension::policy::LoadOptions,
     ) -> std::result::Result<Manifest, LoaderError> {
-        let policy = policy_from_load_options(&options);
+        // #220 loader retirement: the cli's in-band `.load <bytes>` goes
+        // provider-only. A provider-backed ext lives in `provider_manifests`
+        // (not the bespoke `components` registry), so build its manifest via
+        // `provider_backed_bindings_manifest`.
+        let _ = options;
         let name = self
             .host
-            .load_extension_from_bytes(bytes, &name_hint, policy)
+            .instantiate_provider_from_bytes(&name_hint, &bytes)
             .await
             .map_err(|e| LoaderError {
                 code: 1,
                 message: e.to_string(),
             })?;
-        let components = self.host.components.read();
-        let ext = components.get(&name).ok_or_else(|| LoaderError {
-            code: 1,
-            message: format!("load-from-bytes succeeded but {name} not in registry"),
-        })?;
-        Ok(manifest_for_ext(ext))
+        self.host
+            .provider_backed_bindings_manifest(&name)
+            .ok_or_else(|| LoaderError {
+                code: 1,
+                message: format!("load-from-bytes succeeded but {name} not provider-backed"),
+            })
     }
 
     async fn dispatch_dot_command(

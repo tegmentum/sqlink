@@ -171,6 +171,33 @@ impl ProviderHandle {
         })
     }
 
+    /// #220 loader retirement: same as `new_resident_wasm_component` but the
+    /// component bytes are already in hand (a byte-based `.load` / URI load /
+    /// loader-bridge sub-load), so no path read is needed. `path_label` is a
+    /// synthetic identity for diagnostics + the resident store's `path` slot.
+    pub fn new_resident_wasm_component_from_bytes(
+        engine: Engine,
+        bytes: &[u8],
+        path_label: PathBuf,
+        dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
+        spi_db_path: String,
+        loader_host: Option<crate::Host>,
+    ) -> Result<Self, String> {
+        let component = Component::from_binary(&engine, bytes)
+            .map_err(|e| format!("compile {}: {e}", path_label.display()))?;
+        Ok(Self {
+            kind: ProviderKind::ResidentWasmComponent {
+                engine,
+                component,
+                path: path_label,
+                resident: Arc::new(AsyncMutex::new(None)),
+                dynlink_bridge,
+                spi_db_path,
+                loader_host,
+            },
+        })
+    }
+
     /// Same as `new_wasm_component` but takes the bytes pre-loaded.
     /// `Host::register_wasm_provider` uses this to run a digest /
     /// trust check on the bytes before paying for compilation.
