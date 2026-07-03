@@ -109,7 +109,7 @@ export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}"
 export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}"
 export AWS_DEFAULT_REGION=auto
 EP="https://${R2_ACCOUNT_ID:?}.r2.cloudflarestorage.com"
-BUCKET=datalink-ext
+BUCKET="${R2_BUCKET:-sqlink-ext}"
 
 # --- 0. (optional) deterministic rebuild of every registry extension ------
 if [ "$DO_BUILD" = 1 ]; then
