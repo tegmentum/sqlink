@@ -19,6 +19,14 @@ AR_wasm32_wasip2 = "__WASI_SDK_PATH__/bin/ar"
 # nothing at runtime and lets clang's auto-vectorizer hit memcpy /
 # memcmp / strlen / hash inner loops.
 CFLAGS_wasm32_wasip2 = "--sysroot=__WASI_SDK_PATH__/share/wasi-sysroot -target wasm32-wasip2 -msimd128"
+# `cargo component` compiles the core module as wasm32-wasip1 (then wraps it
+# into a wasip2 component), so C deps that build UNDER cargo component
+# (zstd-sys / libzstd for the zstd + compress extensions, etc.) need the
+# wasip1 CC/AR/CFLAGS too — the wasip2 vars above do not apply to that
+# wasip1 sub-build, so without these clang falls back to the system compiler.
+CC_wasm32_wasip1 = "__WASI_SDK_PATH__/bin/clang"
+AR_wasm32_wasip1 = "__WASI_SDK_PATH__/bin/ar"
+CFLAGS_wasm32_wasip1 = "--sysroot=__WASI_SDK_PATH__/share/wasi-sysroot -target wasm32-wasip1 -msimd128"
 # Extra defines threaded into libsqlite3-sys's bundled compile.
 # libsqlite3-sys 0.30.1's build.rs honors LIBSQLITE3_FLAGS for
 # extra -D/-U flags. The bundled flag set covers FTS5 + RTREE +
