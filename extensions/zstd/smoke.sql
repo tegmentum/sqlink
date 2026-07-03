@@ -1,7 +1,10 @@
 -- Smoke test for the `zstd` extension.
 -- Wraps the C libzstd 1.5.7 reference encoder/decoder; round-trip
 -- correctness + interop with the host `zstd` CLI both checked.
-.load extensions/zstd/target/wasm32-wasip2/release/zstd_extension.component.wasm
+-- Provider-backed load (#220): resolves zstd-provider.wasm from SQLINK_EXT_DIR.
+-- The provider is a thin shim; libzstd lives in the resident compression-endpoint
+-- (SQLINK_COMPRESSION_ENDPOINT_WASM), instantiated warm-once by the host.
+.load zstd
 
 /* zstd_version() reports this crate's semver  pinned to 0.1.0. */
 SELECT zstd_version();

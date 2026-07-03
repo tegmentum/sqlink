@@ -62,12 +62,6 @@ embed = []
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
-# `zstd` 0.13 + `zstd-sys` 2.0 (reference C libzstd 1.5.5).
-# Builds for wasm via the wasi-sdk clang. `cargo component` compiles the
-# core module as wasm32-wasip1, so the wasip1 CC/AR/CFLAGS env must point
-# at the wasi-sdk (the workspace .cargo/config only sets the wasip2 vars):
-#   CC_wasm32_wasip1=$WASI_SDK/bin/clang
-#   AR_wasm32_wasip1=$WASI_SDK/bin/ar
-#   CFLAGS_wasm32_wasip1="--sysroot=$WASI_SDK/share/wasi-sysroot -target wasm32-wasip1"
-# `no_asm` skips zstd's x86 huf_decompress_amd64.S (can't assemble for wasm).
-zstd = { version = "0.13", default-features = false, features = ["no_asm"] }
+# No libzstd here — this extension is a thin shim that imports the host
+# `sqlite:extension/compression` interface and forwards to the resident
+# `compression-endpoint` provider (one libzstd in the catalog). See src/lib.rs.

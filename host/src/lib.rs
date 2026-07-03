@@ -40,6 +40,7 @@ pub mod s3;
 /// default S3 path. #106.
 #[cfg(not(feature = "native-s3"))]
 mod s3_resident;
+mod compression_resident;
 /// Resident `http-endpoint` compose:dynlink/endpoint provider routing — the
 /// default HTTP path. #106.
 #[cfg(not(feature = "native-http"))]
@@ -113,6 +114,7 @@ pub mod loaded_minimal_http {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
@@ -139,6 +141,7 @@ pub mod loaded_minimal_dns {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
@@ -166,6 +169,7 @@ pub mod loaded_stateful {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
@@ -192,6 +196,7 @@ pub mod loaded_dotcmd_aware {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
@@ -253,6 +258,7 @@ pub mod loaded_collating {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
@@ -279,6 +285,7 @@ pub mod loaded_tabular {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
@@ -314,6 +321,7 @@ pub mod loaded_tabular_mutating {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
@@ -339,6 +347,7 @@ pub mod loaded_authorizing {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
@@ -1412,6 +1421,7 @@ pub mod loaded_resolving {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
@@ -1447,6 +1457,7 @@ pub mod loaded_hooked {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
@@ -2374,6 +2385,34 @@ impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::Provi
             dest_bucket,
             dest_key,
         );
+    }
+}
+
+// The `compression` interface is satisfied by forwarding to the warm resident
+// `compression-endpoint` provider (one libzstd in the catalog, reused by every
+// extension). Compression is pure / non-egress, so there is no capability gate
+// (unlike s3-base's `s3_granted`).
+impl loaded::sqlite::extension::compression::Host for crate::compose_provider::ProviderState {
+    async fn compress(&mut self, data: Vec<u8>, level: i32) -> std::result::Result<Vec<u8>, String> {
+        crate::compression_resident::compress(data, level).await
+    }
+    async fn decompress(&mut self, data: Vec<u8>) -> std::result::Result<Vec<u8>, String> {
+        crate::compression_resident::decompress(data).await
+    }
+    async fn compress_dict(
+        &mut self,
+        data: Vec<u8>,
+        dict: Vec<u8>,
+        level: i32,
+    ) -> std::result::Result<Vec<u8>, String> {
+        crate::compression_resident::compress_dict(data, dict, level).await
+    }
+    async fn decompress_dict(
+        &mut self,
+        data: Vec<u8>,
+        dict: Vec<u8>,
+    ) -> std::result::Result<Vec<u8>, String> {
+        crate::compression_resident::decompress_dict(data, dict).await
     }
 }
 

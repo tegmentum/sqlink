@@ -684,6 +684,17 @@ pub fn imports_sqlite_s3_base(component: &Component, engine: &Engine) -> bool {
         .any(|(name, _)| name.starts_with("sqlite:extension/s3-base"))
 }
 
+/// True if `component` imports `sqlite:extension/compression` — the `zstd`
+/// extension (and any other ext that compresses). Host-satisfied on the resident
+/// linker by forwarding to the warm `compression-endpoint` resident. Pure /
+/// non-egress, so no capability gate (unlike s3-base).
+pub fn imports_sqlite_compression(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/compression"))
+}
+
 /// #220 full-port: true if `component` imports `sqlite:extension/session` —
 /// the changeset/session extension (`session-cli`). Host-satisfied on the
 /// resident linker against this provider's own `spi_conn` + `session_handles`
@@ -1329,6 +1340,10 @@ async fn resident_wasm_component_invoke(
         // streaming-dotcmd exts. All async surfaces → force the async linker.
         let imports_wal = imports_sqlite_wal_frames(component, engine);
         let imports_s3 = imports_sqlite_s3_base(component, engine);
+        // The `compression` surface (the zstd ext) — host-satisfied on the
+        // resident linker by forwarding to the warm compression-endpoint. Async
+        // → forces the async WASI linker.
+        let imports_compression = imports_sqlite_compression(component, engine);
         let imports_cli = imports_cli_stdout(component, engine) || imports_cli_state(component, engine);
         // #220 full-port: the stateful `sqlite:extension/session` surface
         // (session-cli), host-satisfied on the resident linker against this
@@ -1340,7 +1355,7 @@ async fn resident_wasm_component_invoke(
         // async → forces the async WASI linker.
         let imports_loader_bridge = imports_sqlite_loader_bridge(component, engine);
         let mut linker: Linker<ProviderState> = Linker::new(engine);
-        if reentrant || imports_spi || imports_http || imports_dns || imports_wal || imports_s3 || imports_cli || imports_session || imports_loader_bridge {
+        if reentrant || imports_spi || imports_http || imports_dns || imports_wal || imports_s3 || imports_compression || imports_cli || imports_session || imports_loader_bridge {
             wasmtime_wasi::p2::add_to_linker_async(&mut linker)
                 .map_err(|e| format!("wasi (async) linker: {e}"))?;
         } else {
@@ -1397,6 +1412,13 @@ async fn resident_wasm_component_invoke(
                 |state: &mut ProviderState| state,
             )
             .map_err(|e| format!("resident sqlite:extension/s3-base linker: {e}"))?;
+        }
+        if imports_compression {
+            crate::loaded::sqlite::extension::compression::add_to_linker::<_, ProviderNetData>(
+                &mut linker,
+                |state: &mut ProviderState| state,
+            )
+            .map_err(|e| format!("resident sqlite:extension/compression linker: {e}"))?;
         }
         if imports_cli {
             cli_ext::cli_stdout::add_to_linker::<_, ProviderNetData>(
