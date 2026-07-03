@@ -1,4 +1,4 @@
-.load extensions/hyphenation/target/wasm32-wasip2/release/hyphenation_extension.component.wasm
+.load hyphenation
 
 /* The "hyphenation" extension exposes 4 SQL surfaces (some with
  * 1-arg + 2-arg overloads): hyphenate, hyphenate_positions,

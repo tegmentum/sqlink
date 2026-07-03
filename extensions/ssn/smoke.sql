@@ -1,4 +1,4 @@
-.load extensions/ssn/target/wasm32-wasip2/release/ssn_extension.component.wasm
+.load ssn
 
 /* Smoke test for the `ssn` extension.
  * Run via:  tooling/smoke.py ssn

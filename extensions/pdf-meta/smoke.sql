@@ -1,4 +1,4 @@
-.load extensions/pdf-meta/target/wasm32-wasip2/release/pdf_meta_extension.component.wasm
+.load pdf-meta
 
 /* PDF metadata extraction.
  *

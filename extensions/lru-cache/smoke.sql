@@ -2,7 +2,7 @@
 -- across every statement in this CLI session, so each SELECT below
 -- is observing state mutated by an earlier one. That ordering is
 -- the whole point of the test.
-.load extensions/lru-cache/target/wasm32-wasip2/release/lru_cache_extension.component.wasm
+.load lru-cache
 
 /* version + defaults */
 SELECT length(lru_version()) > 0;

@@ -1,4 +1,4 @@
-.load extensions/webauthn/target/wasm32-wasip2/release/webauthn_extension.component.wasm
+.load webauthn
 
 /* ─── webauthn_version() ─── */
 SELECT length(webauthn_version()) > 0;

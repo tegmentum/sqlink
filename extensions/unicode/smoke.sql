@@ -1,4 +1,4 @@
-.load extensions/unicode/target/wasm32-wasip2/release/unicode_extension.component.wasm
+.load unicode
 
 /* === Normalization ===
  * 'e' + U+0301 combining acute accent normalizes to U+00E9. We

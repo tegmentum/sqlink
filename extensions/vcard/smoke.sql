@@ -1,4 +1,4 @@
-.load extensions/vcard/target/wasm32-wasip2/release/vcard_extension.component.wasm
+.load vcard
 
 /* ─── vCard 3.0 fixture (RFC 2426) ───
  * One canonical contact with every property the plan calls out:

@@ -1,4 +1,4 @@
-.load extensions/crc/target/wasm32-wasip2/release/crc_extension.component.wasm
+.load crc
 
 /* Smoke test for the `crc` extension.
  * Run via:  tooling/smoke.py crc

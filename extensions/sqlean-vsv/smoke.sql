@@ -1,4 +1,4 @@
-.load extensions/sqlean-vsv/target/wasm32-wasip2/release/sqlean_vsv_extension.component.wasm
+.load sqlean-vsv
 
 /* Smoke test for `sqlean-vsv`. Run via: tooling/smoke.py sqlean-vsv
  *

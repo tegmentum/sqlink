@@ -1,4 +1,4 @@
-.load extensions/toml/target/wasm32-wasip2/release/toml_extension.component.wasm
+.load toml
 
 /* ─── Validity ─── */
 SELECT toml_is_valid('a = 1');

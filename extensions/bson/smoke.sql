@@ -1,4 +1,4 @@
-.load extensions/bson/target/wasm32-wasip2/release/bson_extension.component.wasm
+.load bson
 
 /* ─── Byte-exact acceptance vector ─── */
 

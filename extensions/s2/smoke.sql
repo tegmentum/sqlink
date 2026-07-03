@@ -1,4 +1,4 @@
-.load extensions/s2/target/wasm32-wasip2/release/s2_extension.component.wasm
+.load s2
 
 /* Acceptance #1: level-12 cell for SF (37.7749, -122.4194) parses
  * back via s2_cell_level to the same level. The exact i64 cell

@@ -1,4 +1,4 @@
-.load extensions/yaml/target/wasm32-wasip2/release/yaml_extension.component.wasm
+.load yaml
 
 /* --- Validity --- */
 SELECT yaml_is_valid('a: 1');

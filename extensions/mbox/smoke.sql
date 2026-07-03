@@ -1,4 +1,4 @@
-.load extensions/mbox/target/wasm32-wasip2/release/mbox_extension.component.wasm
+.load mbox
 
 /* Build a two-message mbox-O text blob in a CTE; reuse it across
  * the rest of the smoke. char(10) is LF; mbox is line-oriented. */

@@ -1,4 +1,4 @@
-.load extensions/totype/target/wasm32-wasip2/release/totype_extension.component.wasm
+.load totype
 
 /* tointeger: passes through INTEGER, accepts lossless REAL,
  * parses TEXT including hex, returns NULL for any non-round-trip. */

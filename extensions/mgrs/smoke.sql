@@ -1,4 +1,4 @@
-.load extensions/mgrs/target/wasm32-wasip2/release/mgrs_extension.component.wasm
+.load mgrs
 
 /* ===== mgrs_from_latlng =====
  * Reference: Eiffel Tower @ (48.8584, 2.2945) -> zone 31U, 100km square DQ.

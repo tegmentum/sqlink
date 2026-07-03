@@ -1,4 +1,4 @@
-.load extensions/qrcode/target/wasm32-wasip2/release/qrcode_extension.component.wasm
+.load qrcode
 
 /* ---- qr_svg: full SVG document, stripped XML prolog so it starts
  * with `<svg ` (PLAN-more-extensions-3.md #6 acceptance). */

@@ -1,4 +1,4 @@
-.load extensions/country/target/wasm32-wasip2/release/country_extension.component.wasm
+.load country
 
 /* alpha-2 input. */
 SELECT country_name('US');

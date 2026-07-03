@@ -1,4 +1,4 @@
-.load extensions/geohash/target/wasm32-wasip2/release/geohash_extension.component.wasm
+.load geohash
 
 /* ===== geohash_encode =====
  * Reference: Wikipedia / Niemeyer geohash.org canonical example.

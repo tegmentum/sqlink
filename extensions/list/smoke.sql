@@ -1,4 +1,4 @@
-.load extensions/list/target/wasm32-wasip2/release/list_extension.component.wasm
+.load list
 
 /* array_length, array_contains, array_position */
 SELECT array_length('[1,2,3,4,5]');

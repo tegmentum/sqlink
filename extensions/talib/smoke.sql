@@ -1,7 +1,7 @@
 -- talib smoke: TA-Lib indicators as SQLite WINDOW functions over a frame.
 -- Each aggregate is advertised is-window=true, so the loader registers it
 -- via create_window_function and SQLite drives step/inverse/value/finalize.
-.load extensions/talib/target/wasm32-wasip2/release/talib_extension.component.wasm
+.load talib
 
 CREATE TABLE prices(t INTEGER, close REAL);
 INSERT INTO prices VALUES (1,10),(2,11),(3,12),(4,13),(5,14),(6,13),(7,11);

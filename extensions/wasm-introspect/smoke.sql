@@ -1,4 +1,4 @@
-.load extensions/wasm-introspect/target/wasm32-wasip2/release/wasm_introspect_extension.component.wasm
+.load wasm-introspect
 
 /* wasm-introspect  scalar introspection of .wasm blobs.
  *

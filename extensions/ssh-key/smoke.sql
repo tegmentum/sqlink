@@ -1,4 +1,4 @@
-.load extensions/ssh-key/target/wasm32-wasip2/release/ssh_key_extension.component.wasm
+.load ssh-key
 
 /* ssh-key  OpenSSH key file parsing (RFC 4253 + RFC 4716 + the
  * wrapped OpenSSH private-key format).

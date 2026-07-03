@@ -1,4 +1,4 @@
-.load extensions/tar/target/wasm32-wasip2/release/tar_extension.component.wasm
+.load tar
 
 /* Smoke test for the `tar` extension.
  * Run via:  tooling/smoke.py tar

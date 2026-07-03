@@ -1,4 +1,4 @@
-.load extensions/radix/target/wasm32-wasip2/release/radix_extension.component.wasm
+.load radix
 
 /* Common bases: binary, octal, hex. */
 SELECT radix_to(255, 2);             /* "11111111" */

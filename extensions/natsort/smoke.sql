@@ -1,4 +1,4 @@
-.load extensions/natsort/target/wasm32-wasip2/release/natsort_extension.component.wasm
+.load natsort
 
 /* The classic natural-sort test: 2 < 10, not 10 < 2. */
 SELECT natsort_compare('file2', 'file10');    /* -1 */

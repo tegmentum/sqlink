@@ -1,4 +1,4 @@
-.load extensions/rsa/target/wasm32-wasip2/release/rsa_extension.component.wasm
+.load rsa
 
 /* ─── Pre-baked 2048-bit RSA test keypair ───
  *

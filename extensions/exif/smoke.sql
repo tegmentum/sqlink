@@ -1,4 +1,4 @@
-.load extensions/exif/target/wasm32-wasip2/release/exif_extension.component.wasm
+.load exif
 
 /* EXIF metadata extraction.
  *

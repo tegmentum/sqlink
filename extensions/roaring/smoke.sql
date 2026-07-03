@@ -1,4 +1,4 @@
-.load extensions/roaring/target/wasm32-wasip2/release/roaring_extension.component.wasm
+.load roaring
 
 /* ─── Plan acceptance: cardinality / contains ─── */
 SELECT rb_cardinality(rb_from_array('[1,2,3]'));

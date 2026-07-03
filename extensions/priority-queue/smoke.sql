@@ -1,6 +1,6 @@
 -- Smoke test for the `priority-queue` extension.
 -- Heap-backed named priority queues with thread-local state.
-.load extensions/priority-queue/target/wasm32-wasip2/release/priority_queue_extension.component.wasm
+.load priority-queue
 
 -- version scalar (deterministic)
 SELECT pq_version() = '0.1.0';

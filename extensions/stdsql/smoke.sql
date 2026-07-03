@@ -1,4 +1,4 @@
-.load extensions/stdsql/target/wasm32-wasip2/release/stdsql_extension.component.wasm
+.load stdsql
 
 /* greatest / least  variadic, NULL-skipping. */
 SELECT greatest(1, 5, 3, 2);

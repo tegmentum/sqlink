@@ -1,4 +1,4 @@
-.load extensions/sentence-split/target/wasm32-wasip2/release/sentence_split_extension.component.wasm
+.load sentence-split
 
 /* ─── basic split: two simple sentences ─── */
 SELECT split_sentences('Hello world. How are you?');

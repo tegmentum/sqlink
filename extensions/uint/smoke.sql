@@ -1,4 +1,4 @@
-.load extensions/uint/target/wasm32-wasip2/release/uint_extension.component.wasm
+.load uint
 
 /* Verify the collation is registered and works via ORDER BY. */
 CREATE TABLE t(s TEXT);

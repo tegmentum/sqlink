@@ -1,4 +1,4 @@
-.load extensions/mac-oui/target/wasm32-wasip2/release/mac_oui_extension.component.wasm
+.load mac-oui
 
 /* ─── mac_is_valid: accepts every common shape ─── */
 SELECT mac_is_valid('aa:bb:cc:dd:ee:ff');

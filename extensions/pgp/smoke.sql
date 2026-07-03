@@ -1,4 +1,4 @@
-.load extensions/pgp/target/wasm32-wasip2/release/pgp_extension.component.wasm
+.load pgp
 
 /* pgp  OpenPGP key parsing + signature verification (RFC 4880).
  *

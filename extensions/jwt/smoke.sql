@@ -1,4 +1,4 @@
-.load extensions/jwt/target/wasm32-wasip2/release/jwt_extension.component.wasm
+.load jwt
 
 /* ─── HS256: canonical jwt.io worked example ───
  * header  : {"alg":"HS256","typ":"JWT"}

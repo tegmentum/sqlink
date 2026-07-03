@@ -1,4 +1,4 @@
-.load extensions/publicsuffix/target/wasm32-wasip2/release/publicsuffix_extension.component.wasm
+.load publicsuffix
 
 /* ─── psl_tld: extract the public suffix (eTLD) ─── */
 SELECT psl_tld('www.example.co.uk');

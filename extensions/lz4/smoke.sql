@@ -1,4 +1,4 @@
-.load extensions/lz4/target/wasm32-wasip2/release/lz4_extension.component.wasm
+.load lz4
 
 /* Frame-format round-trip on a short ASCII payload. The frame
  * envelope is larger than 11 bytes so the compressed BLOB is

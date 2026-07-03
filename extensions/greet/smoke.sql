@@ -1,4 +1,4 @@
-.load extensions/greet/target/wasm32-wasip2/release/greet_extension.component.wasm
+.load greet
 
 /* Smoke test for the `greet` extension.
  * Run via:  tooling/smoke.py greet

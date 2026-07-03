@@ -1,4 +1,4 @@
-.load extensions/phone-prefix/target/wasm32-wasip2/release/phone_prefix_extension.component.wasm
+.load phone-prefix
 
 /* Smoke test for the `phone-prefix` extension.
  * Run via:  tooling/smoke.py phone-prefix

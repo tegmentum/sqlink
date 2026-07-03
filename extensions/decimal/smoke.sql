@@ -1,7 +1,7 @@
 -- Smoke test for `decimal`. Stateful world (aggregate-function
 -- export) so a stale build against an older WIT shape would fail
 -- visibly here.
-.load extensions/decimal/target/wasm32-wasip2/release/decimal_extension.component.wasm
+.load decimal
 
 /* Scalar arithmetic */
 SELECT decimal_add('1.5', '2.5');

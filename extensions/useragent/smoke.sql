@@ -1,4 +1,4 @@
-.load extensions/useragent/target/wasm32-wasip2/release/useragent_extension.component.wasm
+.load useragent
 
 /* ────────────── Chrome on Linux ──────────────
  * Acceptance: ua_browser=="Chrome", ua_os=="Linux". */

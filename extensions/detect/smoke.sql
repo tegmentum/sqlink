@@ -1,5 +1,5 @@
 -- Smoke test for the `detect` extension.
-.load extensions/detect/target/wasm32-wasip2/release/detect_extension.component.wasm
+.load detect
 
 SELECT slug('Hello, World!');
 SELECT lang_detect('This is an English sentence.');

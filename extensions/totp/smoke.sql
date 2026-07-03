@@ -1,4 +1,4 @@
-.load extensions/totp/target/wasm32-wasip2/release/totp_extension.component.wasm
+.load totp
 
 /* ─── HOTP RFC 4226 Appendix D ───
  * Secret = "12345678901234567890" (20 ASCII bytes) base32-encoded as

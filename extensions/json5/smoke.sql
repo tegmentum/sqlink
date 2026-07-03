@@ -1,4 +1,4 @@
-.load extensions/json5/target/wasm32-wasip2/release/json5_extension.component.wasm
+.load json5
 
 /* ─── Validity probes ─── */
 SELECT json5_is_valid('{a:1,}');

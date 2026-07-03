@@ -1,4 +1,4 @@
-.load extensions/escape/target/wasm32-wasip2/release/escape_extension.component.wasm
+.load escape
 
 /* Smoke test for the `escape` extension.
  * Run via:  tooling/smoke.py escape

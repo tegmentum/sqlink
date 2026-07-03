@@ -12,7 +12,7 @@
 --   * peak_detect: prominence filter behaves like scipy.find_peaks.
 --   * rms([3,4]) = sqrt(12.5)
 --   * NULL + malformed input  NULL (or 0 for rms over empty arrays).
-.load extensions/signal-processing/target/wasm32-wasip2/release/signal_processing_extension.component.wasm
+.load signal-processing
 
 /* ─── Build a 200-sample DC vector via recursive CTE (the cli's
        sqlite3 build doesn't include the generate_series vtab). We

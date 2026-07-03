@@ -1,4 +1,4 @@
-.load extensions/polyline-simplify/target/wasm32-wasip2/release/polyline_simplify_extension.component.wasm
+.load polyline-simplify
 
 /* ── Douglas-Peucker happy path ───────────────────────────────
  * Five collinear points along y=x. With any positive tolerance

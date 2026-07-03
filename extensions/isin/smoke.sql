@@ -1,4 +1,4 @@
-.load extensions/isin/target/wasm32-wasip2/release/isin_extension.component.wasm
+.load isin
 
 /* Smoke test for the `isin` extension.
  * Run via:  tooling/smoke.py isin

@@ -1,7 +1,7 @@
 -- Smoke test for `stats`. Pure-aggregate extension (14 aggregates,
 -- 0 scalars). Stateful world so a stale build against an older
 -- WIT shape would fail visibly here.
-.load extensions/stats/target/wasm32-wasip2/release/stats_extension.component.wasm
+.load stats
 
 /* Variance / stddev sanity on {1,2,3,4,5}: var_pop=2, var_samp=2.5,
    stddev_pop=sqrt(2), median=3. */

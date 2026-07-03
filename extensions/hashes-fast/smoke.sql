@@ -1,4 +1,4 @@
-.load extensions/hashes-fast/target/wasm32-wasip2/release/hashes_fast_extension.component.wasm
+.load hashes-fast
 
 /* ---- xxh3 (unseeded, 64-bit) ----
  * Reference vector: xxh3_64("abc") = 0x78AF5F94892F3950 = 8696308367974082384

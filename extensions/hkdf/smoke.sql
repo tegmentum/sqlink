@@ -1,4 +1,4 @@
-.load extensions/hkdf/target/wasm32-wasip2/release/hkdf_extension.component.wasm
+.load hkdf
 
 /* ---- RFC 5869 Appendix A.1 ----
  * Test Case 1: Basic test case with SHA-256

@@ -1,4 +1,4 @@
-.load extensions/sha1/target/wasm32-wasip2/release/sha1_extension.component.wasm
+.load sha1
 
 /* ---- Canonical SHA-1 test vectors (RFC 3174 + classics) ----
  * Empty input is the universally-quoted SHA-1 of nothing.

@@ -1,4 +1,4 @@
-.load extensions/aes-modes/target/wasm32-wasip2/release/aes_modes_extension.component.wasm
+.load aes-modes
 
 /* ─── AES-128-CTR  RFC 3686 §6 Test Vector #1 ───────────────────
  *   Key   = AE6852F8121067CC4BF7A5765577F39E             (16 bytes)

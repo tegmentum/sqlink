@@ -1,4 +1,4 @@
-.load extensions/iso-codes/target/wasm32-wasip2/release/iso_codes_extension.component.wasm
+.load iso-codes
 
 /* ---- ISO 3166-1 country ---- */
 SELECT iso3166_alpha2_name('US');                /* United States */

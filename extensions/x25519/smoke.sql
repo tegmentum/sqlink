@@ -1,4 +1,4 @@
-.load extensions/x25519/target/wasm32-wasip2/release/x25519_extension.component.wasm
+.load x25519
 
 /* ─── RFC 7748 § 5.2 single-step test vector ───
  * Scalar (priv): a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4

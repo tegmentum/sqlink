@@ -1,4 +1,4 @@
-.load extensions/html/target/wasm32-wasip2/release/html_extension.component.wasm
+.load html
 
 /* ---- html_to_text: tags stripped, entities decoded ---- */
 SELECT html_to_text('<p>hi</p>');

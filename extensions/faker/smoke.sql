@@ -1,4 +1,4 @@
-.load extensions/faker/target/wasm32-wasip2/release/faker_extension.component.wasm
+.load faker
 
 SELECT length(fake_name()) > 0;
 SELECT length(fake_email()) > 0;

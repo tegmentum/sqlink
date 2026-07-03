@@ -1,4 +1,4 @@
-.load extensions/creditcard/target/wasm32-wasip2/release/creditcard_extension.component.wasm
+.load creditcard
 
 /* Smoke test for the `creditcard` extension.
  * Run via:  tooling/smoke.py creditcard

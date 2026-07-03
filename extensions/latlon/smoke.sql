@@ -1,4 +1,4 @@
-.load extensions/latlon/target/wasm32-wasip2/release/latlon_extension.component.wasm
+.load latlon
 
 /* NYC: 40.7128 N, 74.0060 W. */
 SELECT latlon_to_dms(40.7128, 'lat');

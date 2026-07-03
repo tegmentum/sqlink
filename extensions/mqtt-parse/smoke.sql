@@ -1,4 +1,4 @@
-.load extensions/mqtt-parse/target/wasm32-wasip2/release/mqtt_parse_extension.component.wasm
+.load mqtt-parse
 
 /* ---- PUBLISH QoS=0 topic=a/b payload='hi' ---- */
 SELECT mqtt_packet_type(x'30070003612f626869');            /* PUBLISH */

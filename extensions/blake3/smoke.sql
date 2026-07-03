@@ -1,4 +1,4 @@
-.load extensions/blake3/target/wasm32-wasip2/release/blake3_extension.component.wasm
+.load blake3
 
 /* ---- Known vectors (BLAKE3 reference implementation) ----
  * Empty-string digest is the canonical BLAKE3 test vector. */

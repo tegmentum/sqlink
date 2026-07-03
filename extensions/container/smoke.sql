@@ -1,4 +1,4 @@
-.load extensions/container/target/wasm32-wasip2/release/container_extension.component.wasm
+.load container
 
 /* Smoke test for the `container` extension.
  * Run via:  tooling/smoke.py container

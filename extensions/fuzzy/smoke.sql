@@ -1,4 +1,4 @@
-.load extensions/fuzzy/target/wasm32-wasip2/release/fuzzy_extension.component.wasm
+.load fuzzy
 
 /* ─── Jaro / Jaro-Winkler ───
  * The canonical Winkler 1990 paper example:

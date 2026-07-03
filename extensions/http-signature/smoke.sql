@@ -1,4 +1,4 @@
-.load extensions/http-signature/target/wasm32-wasip2/release/http_signature_extension.component.wasm
+.load http-signature
 
 /* ─── http_sig_input: the signature-input header value ───
  * Just the params list + sf-dict params; this is what goes in the

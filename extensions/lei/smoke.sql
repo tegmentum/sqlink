@@ -1,4 +1,4 @@
-.load extensions/lei/target/wasm32-wasip2/release/lei_extension.component.wasm
+.load lei
 
 /* Canonical published LEIs (GLEIF). Each is 20 alphanumeric chars
  * and satisfies ISO 7064 MOD 97-10  is_valid -> 1. */

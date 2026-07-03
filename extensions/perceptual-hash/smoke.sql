@@ -1,4 +1,4 @@
-.load extensions/perceptual-hash/target/wasm32-wasip2/release/perceptual_hash_extension.component.wasm
+.load perceptual-hash
 
 /* perceptual-hash  pHash / dHash / aHash for image similarity.
  *

@@ -1,4 +1,4 @@
-.load extensions/oauth-pkce/target/wasm32-wasip2/release/oauth_pkce_extension.component.wasm
+.load oauth-pkce
 
 /* ─── RFC 7636 §4.6 / Appendix B acceptance vector ───
  * The canonical PKCE S256 test pair from the RFC itself:

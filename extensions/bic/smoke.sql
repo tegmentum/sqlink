@@ -1,4 +1,4 @@
-.load extensions/bic/target/wasm32-wasip2/release/bic_extension.component.wasm
+.load bic
 
 /* Smoke test for the `bic` extension.
  * Run via:  tooling/smoke.py bic

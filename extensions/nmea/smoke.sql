@@ -1,4 +1,4 @@
-.load extensions/nmea/target/wasm32-wasip2/release/nmea_extension.component.wasm
+.load nmea
 
 /* ────────────── GGA (Global Positioning Fix Data) ──────────────
  * Acceptance: sentence_type=GGA, lat=53.36133..., lng=-6.50562...,

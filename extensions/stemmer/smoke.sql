@@ -1,4 +1,4 @@
-.load extensions/stemmer/target/wasm32-wasip2/release/stemmer_extension.component.wasm
+.load stemmer
 
 /* ─── english (default lang) acceptance cases ───
  * Per PLAN-more-extensions.md  4: stem("running")  "run",

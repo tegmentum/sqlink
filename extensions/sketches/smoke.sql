@@ -1,7 +1,7 @@
 -- Smoke test for `sketches` (t-digest + minhash). Sanity-loads the
 -- stateful world so a stale build against an older WIT shape would
 -- fail visibly. Smokes both aggregates and a scalar.
-.load extensions/sketches/target/wasm32-wasip2/release/sketches_extension.component.wasm
+.load sketches
 
 SELECT sketches_version() = '0.1.0';
 

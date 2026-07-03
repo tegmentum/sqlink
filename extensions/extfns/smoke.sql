@@ -1,4 +1,4 @@
-.load extensions/extfns/target/wasm32-wasip2/release/extfns_extension.component.wasm
+.load extfns
 
 /* charindex(haystack, needle, [start])  1-indexed match position.
  * 0 if not found. Matches extension-functions.c semantics. */

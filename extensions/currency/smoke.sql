@@ -1,4 +1,4 @@
-.load extensions/currency/target/wasm32-wasip2/release/currency_extension.component.wasm
+.load currency
 
 /* Major currencies: name + numeric ISO 4217 code. */
 SELECT currency_name('USD');

@@ -1,4 +1,4 @@
-.load extensions/asn1/target/wasm32-wasip2/release/asn1_extension.component.wasm
+.load asn1
 
 /* ---- OID lookup ----
  * Curated table covers the standard crypto + RDN OIDs the plan

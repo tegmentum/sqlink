@@ -1,4 +1,4 @@
-.load extensions/duckdbcompat/target/wasm32-wasip2/release/duckdbcompat_extension.component.wasm
+.load duckdbcompat
 
 /* Smoke test for the `duckdbcompat` extension (#153 cross-compat):
  * DuckDB-native scalars SQLite lacks. Run via: tooling/smoke.py duckdbcompat

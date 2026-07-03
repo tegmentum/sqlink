@@ -1,4 +1,4 @@
-.load extensions/bibcodes/target/wasm32-wasip2/release/bibcodes_extension.component.wasm
+.load bibcodes
 
 /* ─── ISBN-13 ───
  * "Concrete Mathematics" 2e (Knuth) - 9780201558029

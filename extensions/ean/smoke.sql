@@ -1,4 +1,4 @@
-.load extensions/ean/target/wasm32-wasip2/release/ean_extension.component.wasm
+.load ean
 
 /* Smoke test for the `ean` extension.
  * Run via:  tooling/smoke.py ean

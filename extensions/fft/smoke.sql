@@ -6,7 +6,7 @@
 --   * round-trip forward+inverse recovers the input
 --   * fft_magnitude returns (re + im)
 --   * Hann window applied (to all-ones) sums to N/2
-.load extensions/fft/target/wasm32-wasip2/release/fft_extension.component.wasm
+.load fft
 
 /* ─── DC input: fft_forward of [1,1,1,1]  bin 0 = [4,0], rest [0,0]. */
 SELECT fft_forward('[1,1,1,1]');

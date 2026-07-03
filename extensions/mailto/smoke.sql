@@ -1,4 +1,4 @@
-.load extensions/mailto/target/wasm32-wasip2/release/mailto_extension.component.wasm
+.load mailto
 
 SELECT mailto_validate('mailto:alice@example.com');
 SELECT mailto_validate('not a mailto');

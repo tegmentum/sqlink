@@ -1,4 +1,4 @@
-.load extensions/tld-list/target/wasm32-wasip2/release/tld_list_extension.component.wasm
+.load tld-list
 
 /* ─── tld_type: classify a TLD ─── */
 SELECT tld_type('com');

@@ -1,4 +1,4 @@
-.load extensions/number-theory/target/wasm32-wasip2/release/number_theory_extension.component.wasm
+.load number-theory
 
 /* ---- primality ----
  * 2 prime; 4 composite; 2147483647 = Mersenne M_31 prime. */

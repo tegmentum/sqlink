@@ -1,4 +1,4 @@
-.load extensions/color-palette/target/wasm32-wasip2/release/color_palette_extension.component.wasm
+.load color-palette
 
 /* Smoke test for the `color-palette` extension.
  *

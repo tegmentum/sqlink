@@ -1,4 +1,4 @@
-.load extensions/lang-detect/target/wasm32-wasip2/release/lang_detect_extension.component.wasm
+.load lang-detect
 
 /* ---- Basic English / French detection (PLAN acceptance).
  *

@@ -1,4 +1,4 @@
-.load extensions/dicom/target/wasm32-wasip2/release/dicom_extension.component.wasm
+.load dicom
 
 /* DICOM medical-imaging metadata extraction.
  *

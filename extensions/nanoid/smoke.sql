@@ -1,4 +1,4 @@
-.load extensions/nanoid/target/wasm32-wasip2/release/nanoid_extension.component.wasm
+.load nanoid
 
 /* nanoid() is nondet  pin the format (length + alphabet), not bytes. */
 

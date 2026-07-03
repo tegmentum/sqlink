@@ -1,6 +1,6 @@
 -- Smoke test for the `skiplist` extension.
 -- Named sorted-set ordered containers with thread-local state.
-.load extensions/skiplist/target/wasm32-wasip2/release/skiplist_extension.component.wasm
+.load skiplist
 
 -- version scalar (deterministic)
 SELECT sl_version() = '0.1.0';

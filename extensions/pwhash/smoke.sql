@@ -1,4 +1,4 @@
-.load extensions/pwhash/target/wasm32-wasip2/release/pwhash_extension.component.wasm
+.load pwhash
 
 /* ─── Argon2id round-trip ───
  * Use cheap params for smoke speed: m=8 KiB, t=1, p=1. Salt is

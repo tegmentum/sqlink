@@ -1,4 +1,4 @@
-.load extensions/cusip/target/wasm32-wasip2/release/cusip_extension.component.wasm
+.load cusip
 
 /* Smoke test for the `cusip` extension.
  * Run via:  tooling/smoke.py cusip

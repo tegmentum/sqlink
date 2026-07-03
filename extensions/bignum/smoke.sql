@@ -1,4 +1,4 @@
-.load extensions/bignum/target/wasm32-wasip2/release/bignum_extension.component.wasm
+.load bignum
 
 /* ---- Text round-trip (acceptance: 30-digit value) ---- */
 SELECT bn_to_text(bn_from_text('123456789012345678901234567890'));

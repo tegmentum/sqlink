@@ -1,6 +1,6 @@
 -- Smoke test for `numeric`. Sample-based numerical methods exercised
 -- with closed-form references; tolerances rounded for stable output.
-.load extensions/numeric/target/wasm32-wasip2/release/numeric_extension.component.wasm
+.load numeric
 
 /* ---- num_root_brent: sin(x) sampled densely around pi, find x where y=0.
        Brent + cubic-spline interpolant: pi to ~12 decimal places. */

@@ -1,4 +1,4 @@
-.load extensions/aead/target/wasm32-wasip2/release/aead_extension.component.wasm
+.load aead
 
 /* ─── ChaCha20-Poly1305: RFC 7539 §2.8.2 worked example ───
  *   key   = 80818283...9d9e9f                (32 bytes)

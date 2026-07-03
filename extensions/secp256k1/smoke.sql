@@ -1,4 +1,4 @@
-.load extensions/secp256k1/target/wasm32-wasip2/release/secp256k1_extension.component.wasm
+.load secp256k1
 
 /* ─── Bitcoin wiki test vector (compressed pubkey) ───
  * Private key (hex):

@@ -3,7 +3,7 @@
 -- canonical textbook reference values  documented in
 -- smoke.expected. NULL on out-of-domain inputs is part of the
 -- contract; we exercise it for every family.
-.load extensions/dist/target/wasm32-wasip2/release/dist_extension.component.wasm
+.load dist
 
 /* ─── Normal: standard normal at 0  pdf = 1/√(2π), cdf = 0.5,
        symmetric inverse: P(Z <= 1.96) ≈ 0.975 (the canonical

@@ -1,5 +1,5 @@
 -- Smoke test for the `morse` extension.
-.load extensions/morse/target/wasm32-wasip2/release/morse_extension.component.wasm
+.load morse
 
 SELECT morse_encode('SOS');
 SELECT morse_encode('HELLO WORLD');

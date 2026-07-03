@@ -1,4 +1,4 @@
-.load extensions/roman/target/wasm32-wasip2/release/roman_extension.component.wasm
+.load roman
 
 /* Roman numerals. Shared roman_encode/decode/validate plus the
  * to_roman/from_roman aliases gained from the datalink core superset.

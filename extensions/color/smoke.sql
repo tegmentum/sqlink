@@ -1,4 +1,4 @@
-.load extensions/color/target/wasm32-wasip2/release/color_extension.component.wasm
+.load color
 
 /* ---- v0.1 surface (kept for back-compat) ---- */
 

@@ -1,7 +1,7 @@
 -- Smoke test for the `hyperloglog` extension. Sanity-loads the
 -- stateful world (aggregate-function export) so a stale build
 -- against an older WIT shape would fail visibly here.
-.load extensions/hyperloglog/target/wasm32-wasip2/release/hyperloglog_extension.component.wasm
+.load hyperloglog
 
 SELECT hll_version() = '0.1.0';
 

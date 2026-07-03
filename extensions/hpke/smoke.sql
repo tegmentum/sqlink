@@ -1,4 +1,4 @@
-.load extensions/hpke/target/wasm32-wasip2/release/hpke_extension.component.wasm
+.load hpke
 
 /* HPKE (RFC 9180) extension smoke.
  *

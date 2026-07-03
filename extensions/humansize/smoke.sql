@@ -1,4 +1,4 @@
-.load extensions/humansize/target/wasm32-wasip2/release/humansize_extension.component.wasm
+.load humansize
 
 /* Decimal byte formatter: 1500  "1.5 KB". */
 SELECT humansize_bytes(0);          /* "0 B" */

@@ -1,4 +1,4 @@
-.load extensions/uuid/target/wasm32-wasip2/release/uuid_extension.component.wasm
+.load uuid
 
 /* uuid generators (nondet) just verify the format looks UUID-y. */
 SELECT length(uuid()) = 36;

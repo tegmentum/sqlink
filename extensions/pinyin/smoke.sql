@@ -1,4 +1,4 @@
-.load extensions/pinyin/target/wasm32-wasip2/release/pinyin_extension.component.wasm
+.load pinyin
 
 /* ─── pinyin(): plain pinyin, no tones ─── */
 SELECT pinyin('中国');

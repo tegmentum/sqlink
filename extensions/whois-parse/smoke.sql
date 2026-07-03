@@ -1,4 +1,4 @@
-.load extensions/whois-parse/target/wasm32-wasip2/release/whois_parse_extension.component.wasm
+.load whois-parse
 
 /* ---- baseline Verisign-style .com response (key:value shape) ----
  * Lifted shape from a typical example.com response, trimmed to the

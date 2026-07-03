@@ -1,4 +1,4 @@
-.load extensions/unitconv/target/wasm32-wasip2/release/unitconv_extension.component.wasm
+.load unitconv
 
 /* Lengths: 1 mile  meters (exact: 1609.344), and back. */
 SELECT round(conv_length(1, 'mi', 'm'), 3);

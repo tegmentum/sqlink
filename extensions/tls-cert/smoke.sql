@@ -1,4 +1,4 @@
-.load extensions/tls-cert/target/wasm32-wasip2/release/tls_cert_extension.component.wasm
+.load tls-cert
 
 /* tls-cert  X.509 v3 certificate parsing (RFC 5280).
  *

@@ -1,4 +1,4 @@
-.load extensions/setops/target/wasm32-wasip2/release/setops_extension.component.wasm
+.load setops
 
 /* Integer set ops. */
 SELECT set_union('[1,2,3]', '[3,4,5]');

@@ -1,4 +1,4 @@
-.load extensions/postcode/target/wasm32-wasip2/release/postcode_extension.component.wasm
+.load postcode
 
 /* Smoke test for the `postcode` extension.
  * Run via:  tooling/smoke.py postcode

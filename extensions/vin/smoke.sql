@@ -1,4 +1,4 @@
-.load extensions/vin/target/wasm32-wasip2/release/vin_extension.component.wasm
+.load vin
 
 /* Smoke test for the `vin` extension.
  * Run via:  tooling/smoke.py vin

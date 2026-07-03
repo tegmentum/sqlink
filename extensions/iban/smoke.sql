@@ -1,4 +1,4 @@
-.load extensions/iban/target/wasm32-wasip2/release/iban_extension.component.wasm
+.load iban
 
 /* Canonical example IBANs from the wikipedia "IBAN" examples list;
  * each is a registry-valid test pattern, not a real account. */

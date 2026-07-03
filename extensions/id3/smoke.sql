@@ -1,4 +1,4 @@
-.load extensions/id3/target/wasm32-wasip2/release/id3_extension.component.wasm
+.load id3
 
 /* ID3 tag parsing.
  *

@@ -1,4 +1,4 @@
-.load extensions/binary-codecs/target/wasm32-wasip2/release/binary_codecs_extension.component.wasm
+.load binary-codecs
 
 /* ─── Byte-exact acceptance vectors ─── */
 

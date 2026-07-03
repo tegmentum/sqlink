@@ -1,6 +1,6 @@
 -- Smoke test for `multi-comparison`. Verifies the four correction
 -- procedures (Bonferroni, Holm, BH, BY) on textbook arrays.
-.load extensions/multi-comparison/target/wasm32-wasip2/release/multi_comparison_extension.component.wasm
+.load multi-comparison
 
 /* ---- Bonferroni: alpha/N matches known examples.
        N=5, alpha=0.05  adjusted_alpha = 0.01. The first two p-values

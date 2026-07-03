@@ -1,4 +1,4 @@
-.load extensions/iso-639-5/target/wasm32-wasip2/release/iso_639_5_extension.component.wasm
+.load iso-639-5
 
 /* ---- iso639_5_name ---- */
 SELECT iso639_5_name('afa');              /* Afro-Asiatic languages */

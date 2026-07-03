@@ -5,7 +5,7 @@
 --
 -- statrs CDFs and our hand-rolled Welch / Mann-Whitney / KS / Shapiro
 -- approximations agree with scipy.stats to ~3 dp for the cases below.
-.load extensions/hypothesis/target/wasm32-wasip2/release/hypothesis_extension.component.wasm
+.load hypothesis
 
 /* ---- 1-sample t  sample mean ~5.04 vs mu0=5.0, small t, large p.
        Reference (scipy): t  0.784, df=4, p  0.477. */

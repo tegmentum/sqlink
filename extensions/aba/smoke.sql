@@ -1,4 +1,4 @@
-.load extensions/aba/target/wasm32-wasip2/release/aba_extension.component.wasm
+.load aba
 
 /* Smoke test for the `aba` extension.
  * Run via:  tooling/smoke.py aba

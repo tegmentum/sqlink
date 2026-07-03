@@ -1,5 +1,5 @@
 -- Smoke test for the `baseN` extension.
-.load extensions/baseN/target/wasm32-wasip2/release/baseN_extension.component.wasm
+.load baseN
 
 SELECT base32_encode(x'48656c6c6f');
 SELECT hex(base32_decode('JBSWY3DP'));

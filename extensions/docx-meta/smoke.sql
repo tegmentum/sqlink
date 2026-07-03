@@ -1,4 +1,4 @@
-.load extensions/docx-meta/target/wasm32-wasip2/release/docx_meta_extension.component.wasm
+.load docx-meta
 
 /* docx-meta smoke harness.
  *

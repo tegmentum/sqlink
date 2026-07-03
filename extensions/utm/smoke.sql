@@ -1,4 +1,4 @@
-.load extensions/utm/target/wasm32-wasip2/release/utm_extension.component.wasm
+.load utm
 
 /* ===== utm_from_latlng =====
  * NYC (40.7128, -74.0060) -> zone 18, hemisphere N.

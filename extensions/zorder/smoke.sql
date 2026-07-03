@@ -1,4 +1,4 @@
-.load extensions/zorder/target/wasm32-wasip2/release/zorder_extension.component.wasm
+.load zorder
 
 /* 2D Z-order: small grid by hand.
  * zorder(x=0, y=0) = bits ... = 0

@@ -1,4 +1,4 @@
-.load extensions/image-meta/target/wasm32-wasip2/release/image_meta_extension.component.wasm
+.load image-meta
 
 /* image-meta  scalar image header metadata.
  *

@@ -1,5 +1,5 @@
 -- smoke-db: tempfile
-.load extensions/eval/target/wasm32-wasip2/release/eval_extension.component.wasm
+.load eval
 
 /* T-40: this smoke needs a file-backed db because spi.execute
  * doesn't bridge :memory: between the host and the wasm-internal

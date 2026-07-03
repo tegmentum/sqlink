@@ -1,4 +1,4 @@
-.load extensions/vat/target/wasm32-wasip2/release/vat_extension.component.wasm
+.load vat
 
 /* ─── vat_normalize: upper + strip ws/punct ─── */
 SELECT vat_normalize(' de 123 456 789 ');

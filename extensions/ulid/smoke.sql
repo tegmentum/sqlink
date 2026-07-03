@@ -1,4 +1,4 @@
-.load extensions/ulid/target/wasm32-wasip2/release/ulid_extension.component.wasm
+.load ulid
 
 /* Default ulid() returns 26 chars of Crockford base32. */
 SELECT length(ulid());

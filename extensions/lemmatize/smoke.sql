@@ -1,4 +1,4 @@
-.load extensions/lemmatize/target/wasm32-wasip2/release/lemmatize_extension.component.wasm
+.load lemmatize
 
 /* ─── brief acceptance cases ─── */
 SELECT lemmatize('running');                   -- expected: run

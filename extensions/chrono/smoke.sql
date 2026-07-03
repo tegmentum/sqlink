@@ -1,4 +1,4 @@
-.load extensions/chrono/target/wasm32-wasip2/release/chrono_extension.component.wasm
+.load chrono
 
 /* ── ISO 8601 parse round-trip ── */
 SELECT date_parse('2025-06-20T15:30:00Z');

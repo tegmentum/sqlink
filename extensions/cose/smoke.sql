@@ -1,4 +1,4 @@
-.load extensions/cose/target/wasm32-wasip2/release/cose_extension.component.wasm
+.load cose
 
 /* ─── version is non-empty ─── */
 SELECT length(cose_version()) > 0;

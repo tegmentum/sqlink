@@ -1,4 +1,4 @@
-.load extensions/h3/target/wasm32-wasip2/release/h3_extension.component.wasm
+.load h3
 
 /* Known H3 reference: SF at resolution 9 → the published H3 string
  * is 8928308280fffff. The full-precision lat/lng matching that

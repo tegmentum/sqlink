@@ -1,6 +1,6 @@
 -- Smoke test for `count_min`. Sanity-loads the stateful world so
 -- a stale build against an older WIT shape would fail visibly.
-.load extensions/count_min/target/wasm32-wasip2/release/count_min_extension.component.wasm
+.load count_min
 
 SELECT count_min_version() = '0.1.0';
 

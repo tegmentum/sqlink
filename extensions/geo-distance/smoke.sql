@@ -1,4 +1,4 @@
-.load extensions/geo-distance/target/wasm32-wasip2/release/geo_distance_extension.component.wasm
+.load geo-distance
 
 /* Smoke test for the `geo-distance` extension.
  * Run via:  tooling/smoke.py geo-distance

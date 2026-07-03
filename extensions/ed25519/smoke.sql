@@ -1,4 +1,4 @@
-.load extensions/ed25519/target/wasm32-wasip2/release/ed25519_extension.component.wasm
+.load ed25519
 
 /* ─── RFC 8032 Section 7.1 acceptance ───
  * Ed25519 test vectors from RFC 8032 §7.1. We exercise vectors

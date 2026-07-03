@@ -1,6 +1,6 @@
 -- Smoke test for `linalg`. Each SELECT maps to a PLAN-more-extensions-5
 -- #5 acceptance point or to a documented NULL-propagation path.
-.load extensions/linalg/target/wasm32-wasip2/release/linalg_extension.component.wasm
+.load linalg
 
 /* ---- Constructors. */
 SELECT la_zeros(2, 3);                            -- [[0,0,0],[0,0,0]]

@@ -1,4 +1,4 @@
-.load extensions/sys-compat/target/wasm32-wasip2/release/sys_compat_extension.component.wasm
+.load sys-compat
 
 SELECT user();
 SELECT current_user();

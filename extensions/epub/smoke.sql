@@ -1,4 +1,4 @@
-.load extensions/epub/target/wasm32-wasip2/release/epub_extension.component.wasm
+.load epub
 
 /* EPUB metadata extraction.
  *

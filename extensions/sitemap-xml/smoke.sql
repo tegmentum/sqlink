@@ -1,4 +1,4 @@
-.load extensions/sitemap-xml/target/wasm32-wasip2/release/sitemap_xml_extension.component.wasm
+.load sitemap-xml
 
 /* ---- sitemap_urls on a basic urlset ----
  * Single-line XML to dodge cli line continuation quirks. */

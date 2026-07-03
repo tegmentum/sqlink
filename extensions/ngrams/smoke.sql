@@ -1,4 +1,4 @@
-.load extensions/ngrams/target/wasm32-wasip2/release/ngrams_extension.component.wasm
+.load ngrams
 
 /* Smoke test for the `ngrams` extension.
  * Run via:  tooling/smoke.py ngrams

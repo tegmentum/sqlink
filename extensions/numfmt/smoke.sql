@@ -1,4 +1,4 @@
-.load extensions/numfmt/target/wasm32-wasip2/release/numfmt_extension.component.wasm
+.load numfmt
 
 /* Commas + fixed places. */
 SELECT numfmt_commas(1234567.891, 2);

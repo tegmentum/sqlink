@@ -1,4 +1,4 @@
-.load extensions/robotstxt/target/wasm32-wasip2/release/robotstxt_extension.component.wasm
+.load robotstxt
 
 /* ---- robots_is_allowed: RFC 9309-style basic deny ----
  * Body:

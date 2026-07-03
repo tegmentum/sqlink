@@ -1,5 +1,5 @@
 -- smoke-db: tempfile
-.load extensions/completion/target/wasm32-wasip2/release/completion_extension.component.wasm
+.load completion
 
 /* Eponymous vtab  no CREATE VIRTUAL TABLE needed; just SELECT
  * directly from `completion`. T-41: phases 1-4 (keyword, pragma,

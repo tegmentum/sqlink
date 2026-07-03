@@ -1,4 +1,4 @@
-.load extensions/sha3/target/wasm32-wasip2/release/sha3_extension.component.wasm
+.load sha3
 
 /* NIST FIPS 202 test vectors for empty input  these are the
  * canonical reference hashes. Locking them byte-exactly. */
