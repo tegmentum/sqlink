@@ -11513,44 +11513,7 @@ impl Host {
                 Err(e) => Err(e),
             });
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_create(
-                        &mut cached.store,
-                        vtab_id,
-                        instance_id,
-                        &db_name,
-                        &table_name,
-                        &args,
-                    )
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_create(
-                        &mut cached.store,
-                        vtab_id,
-                        instance_id,
-                        &db_name,
-                        &table_name,
-                        &args,
-                    )
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.create: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_connect(
@@ -11578,44 +11541,7 @@ impl Host {
                 Err(e) => Err(e),
             });
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_connect(
-                        &mut cached.store,
-                        vtab_id,
-                        instance_id,
-                        &db_name,
-                        &table_name,
-                        &args,
-                    )
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_connect(
-                        &mut cached.store,
-                        vtab_id,
-                        instance_id,
-                        &db_name,
-                        &table_name,
-                        &args,
-                    )
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.connect: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_destroy(
@@ -11634,30 +11560,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_destroy(&mut cached.store, vtab_id, instance_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_destroy(&mut cached.store, vtab_id, instance_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.destroy: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_disconnect(
@@ -11676,30 +11579,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_disconnect(&mut cached.store, vtab_id, instance_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_disconnect(&mut cached.store, vtab_id, instance_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.disconnect: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_best_index(
@@ -11738,34 +11618,7 @@ impl Host {
         // Each arm's `call_best_index` returns the IndexPlan from
         // its own bindgen — converted to the wire-side IndexPlan
         // inside the arm so the outer types line up.
-        let mut g = self.tabular_guard(ext_name).await?;
-        let raw: wasmtime::Result<std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>> = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                let info_loaded = convert_vtab_index_info_to_loaded(info);
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_best_index(&mut cached.store, vtab_id, instance_id, &info_loaded)
-                    .await
-                    .map(|r| r.map(convert_vtab_index_plan_from_loaded))
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                let info_loaded = convert_vtab_index_info_to_loaded_mut(info);
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_best_index(&mut cached.store, vtab_id, instance_id, &info_loaded)
-                    .await
-                    .map(|r| r.map(convert_vtab_index_plan_from_loaded_mut))
-            }
-        };
-        if let Err(ref e) = raw {
-            g.poison_if_trap(e);
-        }
-        let r = raw.map_err(|e| anyhow!("vtab.best_index: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_open(
@@ -11785,30 +11638,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_open(&mut cached.store, vtab_id, instance_id, cursor_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_open(&mut cached.store, vtab_id, instance_id, cursor_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.open: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_close(
@@ -11827,30 +11657,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_close(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_close(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.close: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_filter(
@@ -11874,45 +11681,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_filter(
-                        &mut cached.store,
-                        vtab_id,
-                        cursor_id,
-                        idx_num,
-                        idx_str.as_deref(),
-                        &loaded_args,
-                    )
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_filter(
-                        &mut cached.store,
-                        vtab_id,
-                        cursor_id,
-                        idx_num,
-                        idx_str.as_deref(),
-                        &loaded_args,
-                    )
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.filter: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_next(
@@ -11931,30 +11700,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_next(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_next(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.next: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_eof(
@@ -11978,29 +11724,7 @@ impl Host {
                 Err(e) => Err(anyhow!("vtab.eof: {e}")),
             };
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_eof(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_eof(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        r.map_err(|e| anyhow!("vtab.eof: {e}"))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_column(
@@ -12024,30 +11748,7 @@ impl Host {
                 Err(e) => Err(e),
             });
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let raw = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_column(&mut cached.store, vtab_id, cursor_id, col)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_column(&mut cached.store, vtab_id, cursor_id, col)
-                    .await
-            }
-        };
-        if let Err(ref e) = raw {
-            g.poison_if_trap(e);
-        }
-        let r = raw.map_err(|e| anyhow!("vtab.column: {e}"))?;
-        Ok(r.map(convert_sql_value_from_loaded))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_rowid(
@@ -12071,30 +11772,7 @@ impl Host {
                 Err(e) => Err(e),
             });
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let raw = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_rowid(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_rowid(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = raw {
-            g.poison_if_trap(e);
-        }
-        let r = raw.map_err(|e| anyhow!("vtab.rowid: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Batched vtab fetch. Returns up to `max_rows` rows starting
@@ -12138,46 +11816,7 @@ impl Host {
                 Err(e) => Err(e),
             });
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let raw = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_fetch_batch(&mut cached.store, vtab_id, cursor_id, max_rows)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                let rs = cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_fetch_batch(&mut cached.store, vtab_id, cursor_id, max_rows)
-                    .await;
-                // Translate mutating-world rows  read-only-world rows.
-                // The two bindgens are independent type universes;
-                // sql-value is shared via `with:` but vtab-row is
-                // emitted per-world.
-                rs.map(|res| {
-                    res.map(|rows| {
-                        rows.into_iter()
-                            .map(
-                                |r| loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
-                                    rowid: r.rowid,
-                                    columns: r.columns,
-                                },
-                            )
-                            .collect()
-                    })
-                })
-            }
-        };
-        if let Err(ref e) = raw {
-            g.poison_if_trap(e);
-        }
-        let r = raw.map_err(|e| anyhow!("vtab.fetch_batch: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     // ── Mutating-vtab dispatch ──────────────────────────────
@@ -12209,23 +11848,7 @@ impl Host {
                 });
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_update(&mut cached.store, vtab_id, instance_id, &loaded_args)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.update: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_begin(
@@ -12244,22 +11867,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_begin(&mut cached.store, vtab_id, instance_id)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.begin: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_sync(
@@ -12278,22 +11886,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_sync(&mut cached.store, vtab_id, instance_id)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.sync: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_commit(
@@ -12312,22 +11905,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_commit(&mut cached.store, vtab_id, instance_id)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.commit: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_rollback(
@@ -12346,22 +11924,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_rollback(&mut cached.store, vtab_id, instance_id)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.rollback: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_rename(
@@ -12382,22 +11945,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_rename(&mut cached.store, vtab_id, instance_id, &new_name)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.rename: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_savepoint(
@@ -12417,22 +11965,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_savepoint(&mut cached.store, vtab_id, instance_id, savepoint)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.savepoint: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_release(
@@ -12452,22 +11985,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_release(&mut cached.store, vtab_id, instance_id, savepoint)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.release: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_rollback_to(
@@ -12487,22 +12005,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_rollback_to(&mut cached.store, vtab_id, instance_id, savepoint)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.rollback_to: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_is_shadow_name(
@@ -12525,22 +12028,7 @@ impl Host {
                 };
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_is_shadow_name(&mut cached.store, vtab_id, name)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.is_shadow_name: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_integrity(
@@ -12568,29 +12056,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_integrity(
-                    &mut cached.store,
-                    vtab_id,
-                    instance_id,
-                    schema,
-                    table_name,
-                    mode_flags,
-                )
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.integrity: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Shared helper: look up the extension and return a locked
