@@ -846,7 +846,13 @@
    "checksum": "sha256:7fa6d3d16acbcac4b3bc9faafab3c918c6eb01d6a56d51e562f58c542c472d0e",
    "size_bytes": 13009,
    "min_sqlite_version": "3.39.0",
-   "exports": [],
+   "exports": [
+    "changeset_invert",
+    "changeset_concat",
+    "changeset_count",
+    "changeset_tables",
+    "changeset_decode"
+   ],
    "dependencies": [],
    "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
    "wit_contract_version": "0.1.0"

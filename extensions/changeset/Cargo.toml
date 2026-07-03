@@ -3,9 +3,7 @@ name = "changeset-extension"
 version = "0.1.0"
 edition = "2021"
 description = """
-Pure-function changeset helpers — Phase 1 of the
-session/changeset deferred work. Five scalars expose
-sqlite's connection-free changeset operations as SQL:
+SQLite session/changeset helpers as SQL scalars:
 
     SELECT changeset_invert(blob);             -- swap INSERT/DELETE
     SELECT changeset_concat(a, b);             -- merge two changesets
@@ -13,26 +11,30 @@ sqlite's connection-free changeset operations as SQL:
     SELECT changeset_tables(blob);             -- JSON list of tables
     SELECT changeset_decode(blob);             -- JSON dump
 
-Capture (sqlite3session_*) and apply (sqlite3changeset_apply)
-are NOT in this extension; the cli already exposes them via the
-`.session` dot-command and `sqlink-run changeset` CLI
-subcommands. Phase 2/3 of PLAN-tooling-and-session.md cover
-WIT-level capture/apply only when a concrete consumer needs
-them at the SQL layer.
+THIN, GENERATED shim. All logic + the capability surface live ONCE in
+datalink `changeset-core`, a pure-Rust changeset codec with NO dependency
+on libsqlite3-sys or the SQLite C session library. The per-DB shims are
+derived from the core's `declare!` table by datalink-extcore.
 
-Embed-only by design: routes through the cli's own sqlite3
-(which already has SESSION + PREUPDATE_HOOK compiled in via
-LIBSQLITE3_FLAGS). A WIT-path port would have to bundle its
-own sqlite3 — wasteful for an extension whose hot path is
-~50 bytes of FFI per call.
+Because the codec is pure Rust, the extension is now provider-able as a
+standalone wasm component (`sqlite:extension`), unlike the previous
+embed-only version that FFI'd into the CLI's own sqlite3. `invert` is
+byte-for-byte identical to sqlite3changeset_invert; `concat` is
+semantically equivalent (see changeset-core docs).
 """
 license = "MIT"
 publish = false
+
+# NOTE: no [workspace] here, so the cli's embed path dep can reach this
+# crate from the parent workspace (mirrors the other embed-capable exts).
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [features]
+# Enables the static embed path (register the same core into the cli's
+# sqlite3 via sqlite3_create_function_v2). The WIT component build is
+# unaffected and default-off.
 embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
@@ -40,3 +42,7 @@ wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
 sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }
+# Shared, DB-agnostic changeset codec + capability declaration. The shim
+# below is GENERATED from this core via the sqlite_shim! / embed_shim! macros.
+changeset-core = { path = "../../../datalink/extensions/changeset-core" }
+datalink-extcore = { path = "../../../datalink/crates/datalink-extcore" }

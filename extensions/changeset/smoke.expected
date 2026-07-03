@@ -1,0 +1,7 @@
+# Outputs for extensions/changeset/smoke.sql.
+3
+["t1"]
+[{"table":"t1","op":"INSERT","indirect":false,"new":[5,"hi"]},{"table":"t1","op":"DELETE","indirect":false,"old":[5,"hi"]},{"table":"t1","op":"UPDATE","indirect":false,"old":[7,"a"],"new":[null,"b"]}]
+54020100743100090001000000000000000503026869120001000000000000000503026869170001000000000000000703016200030161
+1
+540201007431001200010000000000000005030179
