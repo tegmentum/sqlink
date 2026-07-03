@@ -12,7 +12,7 @@ bridge:
 - Registers each shim function as a SQLite UDF via rusqlite.
 - Ships ~11 MB of compiled-in wasm runtime per bridge.
 
-In a sqlink-hosted process — where `sqlink-loader.dylib` (or sqlink-host,
+In a sqlink-hosted process — where `sqlink-extension.dylib` (or sqlink-host,
 or composed-cli-worker) is already running its own wasmtime — the native
 bridge brings a SECOND wasmtime into the same address space. ~10 MB of
 cranelift code duplicated, no shared engine cache, two independent
@@ -25,10 +25,10 @@ The fix is structural, not surgical:
   `mobilitydb:wasm/*`) and exports the sqlink WIT contract
   (`sqlink:wasm@X.Y.Z`).
 - One artifact runs **everywhere** that speaks sqlink's WIT contract:
-  - `sqlink-loader.dylib` loaded in vanilla `sqlite3` (native deployment)
+  - `sqlink-extension.dylib` loaded in vanilla `sqlite3` (native deployment)
   - `composed-cli-worker` inside a browser dedicated worker
   - `sqlink-host` directly as a Rust runtime
-- The native `.dylib` per bridge disappears entirely. `sqlink-loader.dylib`
+- The native `.dylib` per bridge disappears entirely. `sqlink-extension.dylib`
   is the only native artifact; all bridges become wasm components it loads.
 
 Same pattern applies to `mobilitydb-sqlite-bridge` and to every future
@@ -59,7 +59,7 @@ mobilitydb-sqlink-bridge.wasm + mdb-temporal-wasm.wasm + postgis-composed.wasm
    →  mobilitydb-sqlink-loadable.wasm
 ```
 
-`sqlink-loader.dylib` loads either via its existing wasm-extension catalog
+`sqlink-extension.dylib` loads either via its existing wasm-extension catalog
 path. `composed-cli-worker` loads either via the same path in browser. No
 .dylib per bridge. One wasmtime per process either way.
 
@@ -162,16 +162,16 @@ bridges; no codegen schema work was needed.**
 
 1. Native bridges (`postgis-sqlite-bridge.dylib`,
    `mobilitydb-sqlite-bridge.dylib`) retire from sqlink's deployment
-   story. `sqlink-loader.dylib` is the only native artifact; bridges are
+   story. `sqlink-extension.dylib` is the only native artifact; bridges are
    loaded as wasm components via its existing catalog path.
-2. **For vanilla-SQLite users** (no sqlink-loader loaded), the native
+2. **For vanilla-SQLite users** (no sqlink-extension loaded), the native
    bridges may still have value — embedded wasmtime is the only way to
    run wasm shims without a host runtime. Two paths:
    - **5a.** Keep the native target in the codegen; emits the
      embed-wasmtime path only when explicitly requested. Default emits
      the wasm component.
    - **5b.** Retire the native target entirely; vanilla-SQLite users
-     must load `sqlink-loader.dylib` first. Simpler codegen, harder UX
+     must load `sqlink-extension.dylib` first. Simpler codegen, harder UX
      for non-sqlink users.
    Decision deferred until Phase 5 starts; depends on real adoption
    signal from non-sqlink-using PostGIS/MobilityDB users.
@@ -180,7 +180,7 @@ bridges; no codegen schema work was needed.**
    in commit history as the implementation oracle. (Same fate for any
    hand-written `extensions/mobilitydb-bridge/` if it exists.)
 
-**Done = sqlink ships exactly one .dylib per platform (sqlink-loader);
+**Done = sqlink ships exactly one .dylib per platform (sqlink-extension);
 all bridges are wasm components; codegen produces both bridge artifacts.**
 
 ### Phase 6 — cross-project leverage (datafission, ducklink)
@@ -212,7 +212,7 @@ Blocked by:
   for Phase 1.
 - Sqlink-loader doesn't currently have a stable "load a wasm bridge by
   path" entry exposed to other native dylibs. NOT BLOCKING if all
-  consumers go through sqlink-loader's existing catalog; only matters
+  consumers go through sqlink-extension's existing catalog; only matters
   if Phase 5a (keep native target) keeps non-wasm bridges around.
 
 Unblocks:
@@ -287,8 +287,8 @@ Unblocks:
   locatable as the implementation oracle.
 - **D3. Native `.dylib` target: dropped entirely (Phase 5).** Codegen
   emits wasm components only. Vanilla-SQLite users must `.load
-  sqlink-loader.dylib` first, then `.load <bridge>.wasm` via
-  sqlink-loader's catalog. Simpler codegen; forces the one-wasmtime-
+  sqlink-extension.dylib` first, then `.load <bridge>.wasm` via
+  sqlink-extension's catalog. Simpler codegen; forces the one-wasmtime-
   per-process architectural intent.
 - **D4. Cross-project priority: sqlink-first.** Build the codegen + WIT
   target for sqlink. ducklink + datafission come in Phase 6 once
@@ -323,7 +323,7 @@ Unblocks:
   (4658 LOC; the implementation oracle for codegen).
 - `~/git/postgis-sqlite-bridge/` + `~/git/mobilitydb-sqlite-bridge/` —
   the existing native dylib bridges (to be retargeted).
-- `~/git/sqlink/sqlink-loader/` — sqlink as a SQLite loadable extension
+- `~/git/sqlink/sqlink-extension/` — sqlink as a SQLite loadable extension
   (cross-extension API surface lives in `src/api.rs`).
 - `~/git/sqlink/docs/postgis-mobilitydb-integration.md` — the original
   integration doc (described the native-route flow; this PLAN
@@ -844,7 +844,7 @@ This covers Phase 3's per-stream verification gates:
 
 `~/git/shim-bridge-smoke-tests/scripts/run.sh` extended on
 branch `feat/wasm-bridge-target` to recognise a `.wasm`
-bridge path: when given one, it loads `sqlink-loader.dylib`
+bridge path: when given one, it loads `sqlink-extension.dylib`
 and calls `sqlink_load_ext('postgis', <wasm>)` rather than
 `.load <wasm>` directly. The smoke runner's existing
 `shim-sql-preprocess` env-var path stays intact, so the
@@ -865,21 +865,21 @@ cases/postgis:
 ```
 
 cases/postgis-sqlite-only/05-udtfs fails because
-`sqlink-loader.dylib` doesn't yet wire `VtabSpec` entries
-through to `sqlite3_create_module_v2` (sqlink-loader's
+`sqlink-extension.dylib` doesn't yet wire `VtabSpec` entries
+through to `sqlite3_create_module_v2` (sqlink-extension's
 `load.rs` explicitly defers vtab installation: "Collations
 / vtabs / hooks: not in this iteration"). That's a
-sqlink-loader gap, not a bridge gap — the bridge correctly
+sqlink-extension gap, not a bridge gap — the bridge correctly
 declares all 12 vtabs in its manifest, and the verify
 harness's direct `dispatch_vtab_*` path could exercise them
 once needed. Documented as a follow-up below.
 
 ### Phase 3 deferrals (carried forward)
 
-- **sqlink-loader vtab installation.** The wasm UDTFs Phase
+- **sqlink-extension vtab installation.** The wasm UDTFs Phase
   3 wires (st_dump, st_dumppoints, ...) are visible in the
   manifest but not surfaced as `CREATE TABLE` schemas to
-  SQLite. `sqlink-loader/src/load.rs` returns the vtab
+  SQLite. `sqlink-extension/src/load.rs` returns the vtab
   count as `skipped` rather than calling
   `sqlite3_create_module_v2`. Wiring it is straightforward
   (the C trampoline shape mirrors the scalar / aggregate
@@ -923,7 +923,7 @@ Round 2 closed the three honest codegen extensions that round 1
 left as deferrals, raising the canonical-scalar count from 258
 to 280 and the aggregate count from 9 to 11. Topology + raster
 (75 scalars) remain architectural and carry forward to v1.6+;
-the `sqlink-loader.dylib` vtab-install gap also carries forward
+the `sqlink-extension.dylib` vtab-install gap also carries forward
 unchanged.
 
 ### Where the work lives
@@ -1069,7 +1069,7 @@ cases/postgis:
 ```
 
 `cases/postgis-sqlite-only/05-udtfs` continues to fail because
-of the sqlink-loader vtab-install gap — unchanged from round 1.
+of the sqlink-extension vtab-install gap — unchanged from round 1.
 The bridge wasm declares all 12 vtabs in its manifest; the
 verify harness's `dispatch_vtab_*` path could exercise them
 through the host directly once needed.
@@ -1079,8 +1079,8 @@ through the host directly once needed.
 - **Topology + raster surfaces (~75 scalars).** Architectural;
   needs additional upstream shims composed (postgis-topology-tk,
   postgis-raster-tk) before the codegen can route to them.
-- **`sqlink-loader.dylib` vtab installation.** Unchanged from
-  round 1: `sqlink-loader/src/load.rs` returns the vtab count
+- **`sqlink-extension.dylib` vtab installation.** Unchanged from
+  round 1: `sqlink-extension/src/load.rs` returns the vtab count
   as `skipped` rather than calling `sqlite3_create_module_v2`.
 - **`bbox` record return / `tuple<bool, option<string>,
   option<geometry>>` return / `option<tuple<f64, f64, f64,
@@ -1243,8 +1243,8 @@ Unchanged from rounds 1 and 2.
   needs additional upstream shims composed
   (postgis-topology-tk, postgis-raster-tk) before the codegen
   can route to them. Tracked in #490.
-- **`sqlink-loader.dylib` vtab installation.** Unchanged:
-  `sqlink-loader/src/load.rs` returns the vtab count as
+- **`sqlink-extension.dylib` vtab installation.** Unchanged:
+  `sqlink-extension/src/load.rs` returns the vtab count as
   `skipped` rather than calling `sqlite3_create_module_v2`.
   Tracked in #489. **Resolved 2026-06-27** — see #489 done
   section below.
@@ -1256,9 +1256,9 @@ Unchanged from rounds 1 and 2.
   path is a small additional task left for a future polish
   round.
 
-## #489 sqlink-loader vtab wiring — done (2026-06-27)
+## #489 sqlink-extension vtab wiring — done (2026-06-27)
 
-`sqlink-loader.dylib` now installs each loaded extension's
+`sqlink-extension.dylib` now installs each loaded extension's
 `VtabSpec` entries as SQLite virtual table modules via
 `sqlite3_create_module_v2` over the captured pApi indirection.
 The path mirrors `host/src/vtab.rs` (the in-host CLI path) but
@@ -1268,14 +1268,14 @@ constraint the scalar / aggregate trampolines already live with.
 
 ### Where the work lives
 
-- `sqlink-loader/src/api.rs` — C-ABI struct layouts:
+- `sqlink-extension/src/api.rs` — C-ABI struct layouts:
   `sqlite3_module` (iVersion=2-shaped — supports read-only +
   the slot for future xUpdate without ABI churn),
   `sqlite3_vtab`, `sqlite3_vtab_cursor`,
   `sqlite3_index_info` (+ substructs). pApi entries for
   `create_module_v2` and `declare_vtab` typed properly.
   `SQLITE_INDEX_CONSTRAINT_*` op codes mirror sqlite3.h.
-- `sqlink-loader/src/vtab.rs` (new) — two `const sqlite3_module`
+- `sqlink-extension/src/vtab.rs` (new) — two `const sqlite3_module`
   templates (read-only and read-only-eponymous, picked at
   registration time per `VtabSpec.eponymous`), every method
   body proxying through `Host::dispatch_vtab_*` via the held
@@ -1284,7 +1284,7 @@ constraint the scalar / aggregate trampolines already live with.
   subclassed `sqlite3_vtab` / `sqlite3_vtab_cursor` structs
   carrying `instance_id` / `cursor_id` plus a heap-allocated
   `ext_name` clone for the trampolines to consult.
-- `sqlink-loader/src/load.rs` — `load_and_install` now iterates
+- `sqlink-extension/src/load.rs` — `load_and_install` now iterates
   `ext.vtabs` and calls `vtab::register_vtab_module` per spec.
   `InstallCounts.vtab` surfaces the count alongside scalar +
   aggregate.
@@ -1293,7 +1293,7 @@ constraint the scalar / aggregate trampolines already live with.
 
 ```sh
 brew_sqlite3 :memory:
-.load /…/libsqlink_loader.dylib sqlite3_sqlinkloader_init
+.load /…/libsqlink_extension.dylib sqlite3_sqlinkloader_init
 SELECT sqlink_load_ext('postgis', '/…/postgis-sqlink-loadable.wasm');
 → loaded postgis: 930 scalar, 27 aggregate, 12 vtab (0 skipped)
 
@@ -1311,7 +1311,7 @@ Phase E3 codegen regen-up).
 ### Smoke gate (05-udtfs) — bridge-side blocker surfaced
 
 Running `cases/postgis-sqlite-only/05-udtfs` against the wasm
-bridge through `SQLINK_LOADER=…/libsqlink_loader.dylib` yields:
+bridge through `SQLINK_LOADER=…/libsqlink_extension.dylib` yields:
 
 ```
 Parse error near line 10: too many arguments on st_dumppoints() - max 0
@@ -1372,7 +1372,7 @@ verification path is independently sound:
 
 ### Test coverage
 
-- 4 new unit tests in `sqlink-loader::vtab` guard the module
+- 4 new unit tests in `sqlink-extension::vtab` guard the module
   templates' iVersion (=1), the eponymous template's null
   `xCreate`, the standard template's non-null
   `xCreate`/`xConnect`, and the constraint-op-map's
@@ -1383,7 +1383,7 @@ verification path is independently sound:
 
 ### Context
 
-#489 (sqlink-loader vtab wiring) registered every UDTF as an
+#489 (sqlink-extension vtab wiring) registered every UDTF as an
 eponymous module via `sqlite3_create_module_v2` and routed
 `xConnect → bridge::connect()` through `sqlite3_declare_vtab`,
 but the bridge's `connect()` was a single placeholder arm
@@ -1605,7 +1605,7 @@ work — each row's WKB is wrapped in a 1-element
   composed mobilitydb wasm (long build), `wasm-tools` + `wac`,
   and the wasm32-wasip2 toolchain. Manual `SELECT * FROM
   temporal_join_float(...)` validation through vanilla sqlite3
-  + `.load sqlink_loader.dylib` is the smoke gate. Postgis
+  + `.load sqlink_extension.dylib` is the smoke gate. Postgis
   regen + the `~/git/shim-bridge-smoke-tests` postgis cases
   cover the regression check.
 - **Record-typed UDTF row fields.** Nested-record fields

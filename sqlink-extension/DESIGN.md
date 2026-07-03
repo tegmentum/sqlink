@@ -1,4 +1,4 @@
-# sqlink-loader DESIGN
+# sqlink-extension DESIGN
 
 Scenario 1 sub-option: a SQLite loadable extension (`.so` / `.dylib`)
 that vanilla `sqlite3` can `SELECT load_extension('...')` to gain
@@ -19,7 +19,7 @@ host dispatch APIs. Tracking as follow-up.
 
 See "Implementation: option B" below for the resolved approach.
 
-## The shape of the working sqlink-loader
+## The shape of the working sqlink-extension
 
 The entry point `sqlite3_sqlinkloader_init(db, pErrMsg, pApi)`:
 
@@ -72,7 +72,7 @@ hood; we just don't lean on `libsqlite3-sys` to generate it.
 
 Result: `sqlink-host`, `sqlite-component-core`, `sqlink-native`,
 and everything else in the workspace continue to use
-`libsqlite3-sys = { features = ["bundled"] }`. `sqlink-loader` is
+`libsqlite3-sys = { features = ["bundled"] }`. `sqlink-extension` is
 a transitive consumer of that same crate (via `sqlink-host`), with
 identical features. Cargo unifies cleanly  `loadable_extension`
 is never selected.

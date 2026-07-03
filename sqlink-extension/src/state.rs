@@ -33,7 +33,7 @@ pub fn runtime() -> Result<Arc<Runtime>> {
     }
     let rt = Builder::new_multi_thread()
         .enable_all()
-        .thread_name("sqlink-loader")
+        .thread_name("sqlink-extension")
         .build()
         .map_err(|e| anyhow!("build tokio runtime: {e}"))?;
     let arc = Arc::new(rt);

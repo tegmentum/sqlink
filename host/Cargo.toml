@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Canonical Policy / Capability / HttpPolicy / PolicyError types,
-# shared with sqlink-loader/runtimes/{wasmtime,wamr}.
+# shared with sqlink-extension/runtimes/{wasmtime,wamr}.
 sqlite-extension-policy = { path = "../sqlite-wit" }
 
 # Pure-fn parsers + spawn-build validators. Extracted so fuzz

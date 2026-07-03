@@ -5,7 +5,7 @@
 //! that record named sets of (extension_name, content_hash)
 //! tuples and any baked sqlink binaries built from them. This
 //! module owns the CRUD; the `bundles` SPI in
-//! `sqlink-loader-wit/wit/host-spi.wit` is the WIT contract the
+//! `sqlink-extension-wit/wit/host-spi.wit` is the WIT contract the
 //! host's `loaded::bundles::Host` impl dispatches into.
 //!
 //! Identity model: a bundle's `set_hash` is the SHA-256 (hex)

@@ -59,7 +59,7 @@ import {
 // flowing through the worker -- the composed cli wasm itself, init-time
 // embeds, and runtime `loadExtension` bytes -- is screened against
 // CONTRACT_MAJOR before instantiation. Same friendly error string as
-// host/src/lib.rs + sqlink-loader/src/load.rs so operators can grep one
+// host/src/lib.rs + sqlink-extension/src/load.rs so operators can grep one
 // message across all three loaders.
 import {
   CONTRACT_MAJOR,

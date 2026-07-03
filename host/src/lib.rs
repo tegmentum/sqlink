@@ -14,7 +14,7 @@
 //!
 //! Resource-limit knobs (fuel-per-call, memory cap, epoch deadline)
 //! apply to every loaded extension's `Store` identically to how the
-//! native `sqlink-loader` applies them.
+//! native `sqlink-extension` applies them.
 //!
 //! The component-side dispatch (the in-WASM CLI calling back into
 //! loaded extensions' `scalar-function.call`) is the next iteration
@@ -1434,7 +1434,7 @@ fn from_wit_cap(c: &WitCapability) -> Capability {
 }
 
 /// Translate the WIT `load-options` record into the host's
-/// `Policy`. Mirrors `sqlink-loader`'s `Policy::from_wit` so
+/// `Policy`. Mirrors `sqlink-extension`'s `Policy::from_wit` so
 /// values port directly across deployment modes.
 fn policy_from_load_options(opts: &bindings::sqlite::extension::policy::LoadOptions) -> Policy {
     let mut policy = Policy::deny_all();
@@ -1576,7 +1576,7 @@ fn manifest_for_provider(
 }
 
 /// Default epoch-bumper tick interval; matches the
-/// `sqlink-loader` setting so policy values port directly.
+/// `sqlink-extension` setting so policy values port directly.
 const EPOCH_TICK: Duration = Duration::from_millis(1);
 
 /// The WIT package a loadable extension component imports — the runtime
@@ -1599,7 +1599,7 @@ const CONTRACT_PACKAGE: &str = "sqlite:extension";
 pub const CONTRACT_MAJOR: u64 = 1;
 
 /// The WIT contract package this host speaks (exposed for diagnostics and
-/// for sibling loaders — sqlink-loader, composed-cli-worker — that mirror
+/// for sibling loaders — sqlink-extension, composed-cli-worker — that mirror
 /// the same guard semantics). See [`CONTRACT_MAJOR`] for the major version
 /// and [`contract_version_string`] for the human-readable form.
 pub const CONTRACT_PACKAGE_NAME: &str = CONTRACT_PACKAGE;
@@ -6378,7 +6378,7 @@ impl Host {
     /// verify the manifest, and store the loaded component. Returns
     /// the manifest's name on success.
     ///
-    /// This is the runtime mirror of `sqlink-loader`'s
+    /// This is the runtime mirror of `sqlink-extension`'s
     /// `Registry::load_with_policy`: same gates, same shape, same
     /// outcome. The in-WASM `.load` command will route here via the
     /// `extension-loader` WIT interface (wiring lives in a host impl

@@ -33,7 +33,7 @@ the contract's value-type discriminant.
 
 Add a `wit-value` arm to the sql-value variant. The arm carries enough
 metadata to identify the WIT record's structural type and a payload of
-the canonical-encoded record bytes. Hosts (sqlink-host, sqlink-loader,
+the canonical-encoded record bytes. Hosts (sqlink-host, sqlink-extension,
 composed-cli) marshal it; the wasm bridge's dispatch emits a wit-value
 when calling a record-typed shim function and unwraps a wit-value when
 returning one.
@@ -198,7 +198,7 @@ value.
 1. `sqlink-host`: extend the runtime to recognize `wit-value`, look up
    the type-id in the per-extension registry, call the decoder import
    to recover the WIT record, pass it to the called function.
-2. Same for `sqlink-loader.dylib` and `composed-cli-worker`.
+2. Same for `sqlink-extension.dylib` and `composed-cli-worker`.
 3. Reverse path: when a function returns a WIT record, wrap it as
    `wit-value(...)` via the matching encoder.
 
@@ -479,7 +479,7 @@ migration is a recompile, not a behavior change.
     fixed-size array (the WIT lists `list<u8>` for flexibility,
     every Phase B+ producer ships sha256 → 32 bytes).
   - SQLite has no first-class typed-record cell; `Statement::
-    bind`, `set_result_value`, and the sqlink-loader's
+    bind`, `set_result_value`, and the sqlink-extension's
     `value::write_result` surface the `WitValue` arm as `BLOB`
     on the SQLite C surface so the wire form round-trips through
     a column store. The wasm bridge recovers typed identity on
@@ -549,8 +549,8 @@ migration is a recompile, not a behavior change.
   - `short_hex` helper renders the first 4 bytes of a type-id
     with an ellipsis so error messages stay terse.
 
-- **sqlink-loader inheritance (sqlink commit `926ca467`):**
-  - `sqlink-loader/src/load.rs` documents that the loader does
+- **sqlink-extension inheritance (sqlink commit `926ca467`):**
+  - `sqlink-extension/src/load.rs` documents that the loader does
     NOT maintain its own registry. It inherits the full Phase B
     path through `host.load_extension` (registry drain) and
     `host.dispatch_scalar` (which carries WitValue through
@@ -598,7 +598,7 @@ migration is a recompile, not a behavior change.
 - `cargo check --workspace` — clean across every workspace
   member. **0 unreachable-pattern warnings** (Phase A had ~16
   in postgis-bridge; stripped in B1's regex sweep).
-- `cargo test -p sqlink-loader --lib -- --test-threads=1` —
+- `cargo test -p sqlink-extension --lib -- --test-threads=1` —
   45/45 pass.
 - Node smoke test against `browser/src/extension-loader.js`
   ExtensionRegistry exercise: roundtrip lookup, conflict throws,
@@ -1231,11 +1231,11 @@ wasmtime trap.
   `sqlink --contract-version` CLI flag that prints the major (`1`)
   to stdout before any engine init. Lets operators / CI pair a host
   binary with a catalog targeting the same major.
-- **F3 — sqlink-loader.dylib mirror.** The vanilla-SQLite loader
+- **F3 — sqlink-extension.dylib mirror.** The vanilla-SQLite loader
   inherits the guard transitively: its `load_and_install` calls
   `host.load_extension(path, policy)` → `host.load_extension_from_bytes`
   → `register_component` (the F1 gate). Verified with two end-to-end
-  tests (`sqlink-loader::load::tests::loader_path_rejects_*`) that
+  tests (`sqlink-extension::load::tests::loader_path_rejects_*`) that
   synthesize tiny component-model components via `wat::parse_str`
   with deliberately-skewed contract imports (`@0.1.0`, `@2.0.0`) and
   confirm the friendly message fires.
@@ -1268,8 +1268,8 @@ wasmtime trap.
 - `cargo test -p sqlink-host --lib contract_guard` — 5 / 5 pass
   (3 helper-fn cases inherited from Phase A + 2 new F5
   load_extension_from_bytes cases).
-- `cargo test -p sqlink-loader --lib loader_path` — 2 / 2 pass.
-- `cargo test -p sqlink-loader --lib` — 47 / 47 pass.
+- `cargo test -p sqlink-extension --lib loader_path` — 2 / 2 pass.
+- `cargo test -p sqlink-extension --lib` — 47 / 47 pass.
 - `cd browser && npm run test:unit` — 10 / 10 pass via `node --test`.
 - `sqlink --contract-version` prints `1`.
 
@@ -1387,7 +1387,7 @@ existing `FirstGeomBlob` and `FirstOptionU32Int` precedents
 (`st_clusterwithin`, `st_clusterdbscan`).
 
 Multi-row exposure of `list<record>` returns is the table-function /
-vtab path, which is wired separately (#489 sqlink-loader vtab wiring +
+vtab path, which is wired separately (#489 sqlink-extension vtab wiring +
 the per-shim UDTF registry). This decision is documented in the new
 `RetShape::FirstWitValueRecord` doc-comment in
 `sqlink-shim-codegen/src/wasm_target/dispatch.rs`.

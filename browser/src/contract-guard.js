@@ -1,7 +1,7 @@
 // PLAN-wit-value-extension.md Phase F (F4) — composed-cli-worker mirror
 // of the host's sqlite:extension contract-version load guard.
 //
-// The native host (host/src/lib.rs) and sqlink-loader.dylib both pre-check
+// The native host (host/src/lib.rs) and sqlink-extension.dylib both pre-check
 // every component's imported `sqlite:extension` package MAJOR against the
 // host's `CONTRACT_MAJOR` BEFORE instantiation. The browser scenario runs
 // the same composed-cli wasm, but through jco's runtime-bindgen rather
@@ -87,7 +87,7 @@ export function componentContractMajor(bytes) {
  * match.
  *
  * Matches the wording in `datalink-contract::check_component_contract`
- * so the native host, sqlink-loader, and browser worker all surface the
+ * so the native host, sqlink-extension, and browser worker all surface the
  * same error string — operators can grep once.
  *
  * @param {Uint8Array | ArrayBuffer} bytes  Raw component-model bytes.

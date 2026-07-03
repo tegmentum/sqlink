@@ -28,7 +28,7 @@ SQLite hosts. The extension binary doesn't change; the host does.
 
 1. **Native SQLite + sqlink loader.** A traditional SQLite installation
    loaded as a system library, with a sqlink-shaped sqlite extension
-   that embeds a wasm runtime. `sqlite3_load_extension("sqlink_loader")`
+   that embeds a wasm runtime. `sqlite3_load_extension("sqlink_extension")`
    from any SQLite-linked program; subsequent `.load <ext>.wasm` calls
    bootstrap the wasm runtime, host the extension, and bridge its
    scalar / aggregate / vtab / hook surface back into the native SQLite

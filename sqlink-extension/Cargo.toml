@@ -1,17 +1,17 @@
 [package]
-name = "sqlink-loader"
+name = "sqlink-extension"
 version = "0.1.0"
 edition = "2021"
 description = """
 Scenario 1 sub-option: SQLite loadable extension (.so / .dylib) that
-vanilla sqlite3 can `SELECT load_extension('./sqlink-loader.so')` to
+vanilla sqlite3 can `SELECT load_extension('./sqlink-extension.so')` to
 gain access to the sqlink wasm extension catalog. Sister to
 `sqlink-native` (a standalone binary that opens its own connection);
 this one registers trampolines on the host process's existing
 sqlite3* handle and brings wasmtime + the sqlink-host runtime along
 inside the .so.
 
-Implementation: option B from sqlink-loader/DESIGN.md. The .so does
+Implementation: option B from sqlink-extension/DESIGN.md. The .so does
 NOT use libsqlite3-sys's `loadable_extension` feature (which would
 clash with `bundled` everywhere else in the workspace). Instead we
 hand-roll the `sqlite3_api_routines` indirection — the pApi argument
@@ -30,7 +30,7 @@ db. See DESIGN.md for the full rationale.
 license = "MIT"
 
 [lib]
-name = "sqlink_loader"
+name = "sqlink_extension"
 crate-type = ["cdylib"]
 path = "src/lib.rs"
 

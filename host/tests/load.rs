@@ -1,7 +1,7 @@
 //! End-to-end test for the host's extension-loader path.
 //!
 //! Exercises Host::load_extension on a real wasm component
-//! (sqlink-loader's test_extension.wasm) to validate that:
+//! (sqlink-extension's test_extension.wasm) to validate that:
 //!   - the wasmtime engine compiles the component
 //!   - load_extension instantiates it against the canonical
 //!     `sqlite:extension/minimal` world
@@ -14,7 +14,7 @@
 //! static composition, not the canonical sqlite:extension/metadata.
 //! It can't be Host::load_extension-loaded because the host can't
 //! call describe() on it. For that path, use a canonical-world
-//! extension like sqlink-loader's test_extension.
+//! extension like sqlink-extension's test_extension.
 //!
 //! Tests silently skip if the wasm isn't built so the suite stays
 //! green in environments without the wasm toolchain.
@@ -32,14 +32,14 @@ fn open_db(path: &Path) -> db::Connection {
     .expect("open db")
 }
 
-/// Path to a canonical-world wasm extension. Uses sqlink-loader's
+/// Path to a canonical-world wasm extension. Uses sqlink-extension's
 /// test_extension.wasm because it's already built against the
 /// canonical sqlite:extension/minimal world and is the same binary
 /// validated by the loader's integration tests.
 fn canonical_ext_path() -> Option<PathBuf> {
     let candidates = [
-        "../../sqlink-loader/target/wasm32-wasip1/release/test_extension.wasm",
-        "../sqlink-loader/target/wasm32-wasip1/release/test_extension.wasm",
+        "../../sqlink-extension/target/wasm32-wasip1/release/test_extension.wasm",
+        "../sqlink-extension/target/wasm32-wasip1/release/test_extension.wasm",
     ];
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for c in candidates {
@@ -54,7 +54,7 @@ fn canonical_ext_path() -> Option<PathBuf> {
 #[tokio::test]
 async fn loads_and_unloads_an_extension() {
     let Some(path) = canonical_ext_path() else {
-        eprintln!("skipping: test_extension.wasm not found (build sqlink-loader's test-extension)");
+        eprintln!("skipping: test_extension.wasm not found (build sqlink-extension's test-extension)");
         return;
     };
 
@@ -89,7 +89,7 @@ async fn run_resolves_sqlite_runtime() {
     use std::sync::Arc;
 
     let mut wasm_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    wasm_path.push("../../sqlink-loader/target/wasm32-wasip1/release/runnable_hello.wasm");
+    wasm_path.push("../../sqlink-extension/target/wasm32-wasip1/release/runnable_hello.wasm");
     if !wasm_path.exists() {
         eprintln!("skipping: runnable_hello.wasm not built");
         return;
@@ -129,7 +129,7 @@ async fn wasm_component_provider_handles_invoke() {
     use sqlink_host::compose_provider::ProviderHandle;
 
     let mut std_text = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    std_text.push("../../sqlink-loader/target/wasm32-wasip1/release/std_text.wasm");
+    std_text.push("../../sqlink-extension/target/wasm32-wasip1/release/std_text.wasm");
     if !std_text.exists() {
         eprintln!("skipping: std_text.wasm not built");
         return;
@@ -184,7 +184,7 @@ async fn run_tenant_scoping_isolates_providers() {
     use std::sync::Arc;
 
     let mut wasm_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    wasm_path.push("../../sqlink-loader/target/wasm32-wasip1/release/runnable_hello.wasm");
+    wasm_path.push("../../sqlink-extension/target/wasm32-wasip1/release/runnable_hello.wasm");
     if !wasm_path.exists() {
         eprintln!("skipping: runnable_hello.wasm not built");
         return;
@@ -269,7 +269,7 @@ async fn trust_policy_gates_provider_registration() {
     use sqlink_host::TrustPolicy;
 
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../sqlink-loader/target/wasm32-wasip1/release/std_text.wasm");
+    path.push("../../sqlink-extension/target/wasm32-wasip1/release/std_text.wasm");
     if !path.exists() {
         eprintln!("skipping: std_text.wasm not built");
         return;
@@ -322,7 +322,7 @@ async fn std_hashing_provider() {
     use sqlink_host::compose_provider::ProviderHandle;
 
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../sqlink-loader/target/wasm32-wasip1/release/std_hashing.wasm");
+    path.push("../../sqlink-extension/target/wasm32-wasip1/release/std_hashing.wasm");
     if !path.exists() {
         eprintln!("skipping: std_hashing.wasm not built");
         return;
@@ -377,7 +377,7 @@ async fn std_encoding_provider() {
     use sqlink_host::compose_provider::ProviderHandle;
 
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../../sqlink-loader/target/wasm32-wasip1/release/std_encoding.wasm");
+    path.push("../../sqlink-extension/target/wasm32-wasip1/release/std_encoding.wasm");
     if !path.exists() {
         eprintln!("skipping: std_encoding.wasm not built");
         return;
@@ -463,9 +463,9 @@ async fn run_composes_sqlite_runtime_and_std_text() {
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut wasm_path = manifest_dir.clone();
-    wasm_path.push("../../sqlink-loader/target/wasm32-wasip1/release/runnable_text_demo.wasm");
+    wasm_path.push("../../sqlink-extension/target/wasm32-wasip1/release/runnable_text_demo.wasm");
     let mut std_text = manifest_dir.clone();
-    std_text.push("../../sqlink-loader/target/wasm32-wasip1/release/std_text.wasm");
+    std_text.push("../../sqlink-extension/target/wasm32-wasip1/release/std_text.wasm");
     if !wasm_path.exists() || !std_text.exists() {
         eprintln!("skipping: runnable_text_demo.wasm or std_text.wasm not built");
         return;

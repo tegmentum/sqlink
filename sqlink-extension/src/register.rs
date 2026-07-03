@@ -51,7 +51,7 @@ unsafe extern "C" fn scalar_xfunc(
         write_error(
             &api_routines,
             ctx,
-            "sqlink-loader scalar: null trampoline ctx",
+            "sqlink-extension scalar: null trampoline ctx",
         );
         return;
     }
@@ -78,7 +78,7 @@ unsafe extern "C" fn scalar_xfunc(
             write_error(&scalar_ctx.api, ctx, &extension_err);
         }
         Err(host_err) => {
-            let msg = format!("sqlink-loader dispatch_scalar: {host_err}");
+            let msg = format!("sqlink-extension dispatch_scalar: {host_err}");
             write_error(&scalar_ctx.api, ctx, &msg);
         }
     }
@@ -207,7 +207,7 @@ unsafe extern "C" fn agg_xstep(
         write_error(
             &api_routines,
             ctx,
-            "sqlink-loader aggregate: null trampoline ctx",
+            "sqlink-extension aggregate: null trampoline ctx",
         );
         return;
     }
@@ -215,7 +215,7 @@ unsafe extern "C" fn agg_xstep(
     let (context_id, _first) = match agg_state(&agg.api, ctx, agg) {
         Some(s) => s,
         None => {
-            write_error(&agg.api, ctx, "sqlink-loader aggregate: out of memory");
+            write_error(&agg.api, ctx, "sqlink-extension aggregate: out of memory");
             return;
         }
     };
@@ -237,7 +237,7 @@ unsafe extern "C" fn agg_xstep(
             write_error(
                 &agg.api,
                 ctx,
-                &format!("sqlink-loader dispatch_aggregate_step: {host_err}"),
+                &format!("sqlink-extension dispatch_aggregate_step: {host_err}"),
             );
         }
     }
@@ -254,7 +254,7 @@ unsafe extern "C" fn agg_xfinal(ctx: *mut sqlite3_context) {
         write_error(
             &api_routines,
             ctx,
-            "sqlink-loader aggregate: null trampoline ctx",
+            "sqlink-extension aggregate: null trampoline ctx",
         );
         return;
     }
@@ -285,7 +285,7 @@ unsafe extern "C" fn agg_xfinal(ctx: *mut sqlite3_context) {
         Err(host_err) => write_error(
             &agg.api,
             ctx,
-            &format!("sqlink-loader dispatch_aggregate_finalize: {host_err}"),
+            &format!("sqlink-extension dispatch_aggregate_finalize: {host_err}"),
         ),
     }
 }
@@ -303,7 +303,7 @@ unsafe extern "C" fn agg_xvalue(ctx: *mut sqlite3_context) {
         write_error(
             &api_routines,
             ctx,
-            "sqlink-loader aggregate: null trampoline ctx",
+            "sqlink-extension aggregate: null trampoline ctx",
         );
         return;
     }
@@ -330,7 +330,7 @@ unsafe extern "C" fn agg_xvalue(ctx: *mut sqlite3_context) {
         Err(host_err) => write_error(
             &agg.api,
             ctx,
-            &format!("sqlink-loader dispatch_aggregate_value: {host_err}"),
+            &format!("sqlink-extension dispatch_aggregate_value: {host_err}"),
         ),
     }
 }
@@ -350,7 +350,7 @@ unsafe extern "C" fn agg_xinverse(
         write_error(
             &api_routines,
             ctx,
-            "sqlink-loader aggregate: null trampoline ctx",
+            "sqlink-extension aggregate: null trampoline ctx",
         );
         return;
     }
@@ -383,7 +383,7 @@ unsafe extern "C" fn agg_xinverse(
         Err(host_err) => write_error(
             &agg.api,
             ctx,
-            &format!("sqlink-loader dispatch_aggregate_inverse: {host_err}"),
+            &format!("sqlink-extension dispatch_aggregate_inverse: {host_err}"),
         ),
     }
 }

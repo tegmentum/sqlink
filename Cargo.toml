@@ -16,7 +16,7 @@ members = [
     "cli",
     "host",
     "sqlink-cli-argv",
-    "sqlink-loader",
+    "sqlink-extension",
     "sqlink-native",
     "sqlink-parsers",
     "sqlite-cas-cache",

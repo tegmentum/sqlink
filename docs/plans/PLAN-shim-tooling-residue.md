@@ -239,7 +239,7 @@ push postgis + mobilitydb to near-full coverage.
 ### W5 — Smoke corpus
 
 - 4 mobilitydb cases pass against the wasm bridge through
-  sqlink-loader.dylib.
+  sqlink-extension.dylib.
 - `make mobilitydb-sqlite` runs to completion.
 - Pre-existing postgis cases still pass (no regression).
 
@@ -1351,7 +1351,7 @@ and sqlink (this plan doc).
 ### Change in one sentence
 
 Added a 4-case mobilitydb baseline (4/4 PASS via `make
-mobilitydb-sqlite`) chained through `sqlink-loader.dylib` against
+mobilitydb-sqlite`) chained through `sqlink-extension.dylib` against
 postgis + mobilitydb wasm bridges in load order; replaced the runner
 loader's single-extension assumption with a colon-separated chain;
 relocated the 11 pre-existing wit-value-chained cases that hit a
@@ -1394,7 +1394,7 @@ SQLite-side substrate gap to `cases/mobilitydb-duckdb-only/`.
 - `make postgis-sqlite` cases/postgis → 5/5 PASS (unchanged
   regression baseline).
 - `cases/postgis-sqlite-only/05-udtfs` → still 0/1 (pre-existing
-  sqlink-loader vtab gap; documented in case 4's README; see
+  sqlink-extension vtab gap; documented in case 4's README; see
   Substrate gap B below).
 
 ### Spec deltas (W5.3 narrowed)
@@ -1405,7 +1405,7 @@ equivalent surface that exercises the same codegen/dispatch chain
 without depending on work blocked elsewhere.
 
 **Substrate gap A — SQLite Blob → WitValue lift missing.**
-`sqlink-loader/src/value.rs::read_value` maps SQLITE_BLOB cells to
+`sqlink-extension/src/value.rs::read_value` maps SQLITE_BLOB cells to
 `SqlValue::Blob`; there is no recovery of the per-extension
 `TypedValueRegistry` typed identity. So a wit-value returned by one
 scalar lands as a BLOB in SQLite, and the next scalar's
@@ -1419,8 +1419,8 @@ constructor — `tfloat_from_csv` / `tfloat_from_ewkt` /
 `tfloat_from_mfjson` are spec'd in the bridge manifest but lack
 dispatch arms entirely.
 
-**Substrate gap B — sqlink-loader vtab wiring deferred.**
-`sqlink-loader/src/load.rs:218` lists "Collations / vtabs / hooks:
+**Substrate gap B — sqlink-extension vtab wiring deferred.**
+`sqlink-extension/src/load.rs:218` lists "Collations / vtabs / hooks:
 not in this iteration. Surface the count so the env-var dispatcher
 can log a hint." The bridges register 12+ vtabs each (per their
 manifests), but the loader doesn't call
@@ -1454,7 +1454,7 @@ $ cd ~/git/shim-bridge-smoke-tests && make mobilitydb-sqlite
 
 ### Out of scope (filed downstream)
 
-- Substrate gap A (Blob → WitValue lift) — needs a sqlink-loader
+- Substrate gap A (Blob → WitValue lift) — needs a sqlink-extension
   hook against `Host::typed_value_codecs` that looks up the
   caller's expected type-id and lifts BLOB → `SqlValue::WitValue`
   on the dispatch boundary. Track as a follow-up.
@@ -1476,7 +1476,7 @@ $ cd ~/git/shim-bridge-smoke-tests && make mobilitydb-sqlite
 
 ## #559 W5 follow-up — done (Blob → WitValue lift)
 
-`sqlink-loader/src/value.rs` now frames `SqlValue::WitValue` payloads
+`sqlink-extension/src/value.rs` now frames `SqlValue::WitValue` payloads
 written through `write_result` with a tagged wire prefix so a
 subsequent `read_value_lifted` on the same blob recovers the typed
 identity. The framing is the minimum change that closes "Substrate
@@ -1523,7 +1523,7 @@ arrives at the wasm boundary, AFTER the loader has already
 marshalled args into `Vec<SqlValue>`.
 
 Magic-prefix on the SQL-cell boundary (a) keeps the contract change
-inside sqlink-loader, (b) round-trips transparently through any
+inside sqlink-extension, (b) round-trips transparently through any
 `SELECT` that materialises the value into a column, (c) collapses
 the gap to ~50 LoC + tests rather than a multi-crate codegen patch,
 and (d) is reversible without churning generated bridges. The
@@ -1549,7 +1549,7 @@ collision) and double-guarded by the registry lookup.
 
 ### Verify
 
-  * `cargo check -p sqlink-loader --tests` — clean.
+  * `cargo check -p sqlink-extension --tests` — clean.
   * Per-test coverage in `value.rs::tests`:
       `write_result_witvalue_emits_framed_blob`
       `write_result_witvalue_zero_pads_short_type_id`
@@ -1580,12 +1580,12 @@ collision) and double-guarded by the registry lookup.
 
 Survey confirmed that #489's commit `83e07735 feat(loader): wire
 VtabSpec through sqlite3_create_module_v2` ALREADY closes
-"Substrate gap B". The wiring lives in `sqlink-loader/src/load.rs`
+"Substrate gap B". The wiring lives in `sqlink-extension/src/load.rs`
 lines 224-256, iterating `ext.vtabs` and dispatching each through
 `crate::vtab::register_vtab_module` (pApi-routed mirror of
 `host::vtab::register_vtab_module`). The two read-only module
 templates (eponymous and standard CREATE-VIRTUAL-TABLE) are in
-`sqlink-loader/src/vtab.rs`; eponymous covers the postgis ST_Dump
+`sqlink-extension/src/vtab.rs`; eponymous covers the postgis ST_Dump
 family and mobilitydb table-functions.
 
 The "Substrate gap B" wording in the W5 done section above is
@@ -1596,8 +1596,8 @@ this section is the closure note.
 
 ### Verify
 
-  * `cargo check -p sqlink-loader` — clean.
-  * `sqlink-loader/src/vtab.rs::tests::register_signature_is_stable`
+  * `cargo check -p sqlink-extension` — clean.
+  * `sqlink-extension/src/vtab.rs::tests::register_signature_is_stable`
     + `module_templates_are_v1` etc still pass at the source level
     (env-blocker permitting on the linker step).
   * Manual smoke: load postgis-sqlink-loadable.wasm and run

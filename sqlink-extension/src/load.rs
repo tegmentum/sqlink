@@ -73,6 +73,13 @@ pub fn resolve_extension_path(hint: &str) -> Result<PathBuf> {
     let with = |name: &str| name.replace('-', "_");
     for base in &bases {
         let candidates = [
+            // #220: the host retired the bespoke loader, so `.load` now
+            // requires the `<ext>-provider.wasm` compose:dynlink artifact.
+            // Prefer it; the plain `.component.wasm` variants remain as a
+            // fallback the host will reject with an actionable message if
+            // no provider artifact is present.
+            base.join(format!("{hint}-provider.wasm")),
+            base.join(format!("{}_provider.wasm", with(hint))),
             base.join(format!("{}_extension.component.wasm", with(hint))),
             base.join(format!("{hint}_extension.component.wasm")),
             base.join(format!("{}.component.wasm", with(hint))),
@@ -92,6 +99,13 @@ pub fn resolve_extension_path(hint: &str) -> Result<PathBuf> {
         .collect();
     for root in &repo_roots {
         let candidates = [
+            // #220: prefer the compose:dynlink provider artifact.
+            root.join(format!(
+                "target/wasm32-wasip2/release/{hint}-provider.wasm"
+            )),
+            root.join(format!(
+                "extensions/{hint}/target/wasm32-wasip2/release/{hint}-provider.wasm"
+            )),
             root.join(format!(
                 "target/wasm32-wasip2/release/{}_extension.component.wasm",
                 with(hint)
@@ -115,7 +129,7 @@ pub fn resolve_extension_path(hint: &str) -> Result<PathBuf> {
     }
 
     Err(anyhow!(
-        "sqlink-loader: could not resolve extension '{hint}' to a .component.wasm. \
+        "sqlink-extension: could not resolve extension '{hint}' to a .component.wasm. \
         Set SQLINK_LOADER_EXT_DIR or SQLINK_LOADER_REPO_ROOT, or pass an absolute path."
     ))
 }
@@ -203,7 +217,7 @@ pub fn policy_from_env() -> Policy {
             None => {
                 tracing::warn!(
                     cap = %trimmed,
-                    "sqlink-loader: SQLINK_LOADER_EXT_CAPS contains unknown capability; skipping"
+                    "sqlink-extension: SQLINK_LOADER_EXT_CAPS contains unknown capability; skipping"
                 );
             }
         }
@@ -254,9 +268,13 @@ pub unsafe fn load_and_install(
     let host_for_dispatch = host.clone();
     let ext_name = rt.block_on(host.load_extension(path, policy))?;
 
+    // #220: the extension is provider-backed now; its scalar/aggregate/
+    // vtab surface comes from the provider manifest (the bespoke
+    // `get_loaded_extension`/`LoadedExtension` were retired with the
+    // loaded::* loader).
     let ext = host
-        .get_loaded_extension(&ext_name)
-        .ok_or_else(|| anyhow!("sqlink-loader: host did not retain loaded extension {ext_name}"))?;
+        .provider_backed_bindings_manifest(&ext_name)
+        .ok_or_else(|| anyhow!("sqlink-extension: host did not retain provider-backed extension {ext_name}"))?;
 
     let mut counts = InstallCounts::default();
 
@@ -280,7 +298,7 @@ pub unsafe fn load_and_install(
                 func = %spec.name,
                 arity = spec.num_args,
                 rc,
-                "sqlink-loader register_scalar failed"
+                "sqlink-extension register_scalar failed"
             );
         }
     }
@@ -307,7 +325,7 @@ pub unsafe fn load_and_install(
                 arity = spec.num_args,
                 rc,
                 is_window = spec.is_window,
-                "sqlink-loader register_aggregate failed"
+                "sqlink-extension register_aggregate failed"
             );
         }
     }
@@ -341,7 +359,7 @@ pub unsafe fn load_and_install(
                 rc,
                 eponymous = spec.eponymous,
                 mutable = spec.mutable,
-                "sqlink-loader register_vtab_module failed"
+                "sqlink-extension register_vtab_module failed"
             );
         }
     }
@@ -612,7 +630,7 @@ mod tests {
 
     // ─── F3: contract-version guard inheritance ──────────────────
     //
-    // sqlink-loader does NOT maintain its own loader pre-check. It
+    // sqlink-extension does NOT maintain its own loader pre-check. It
     // calls `host.load_extension(path, policy)` which delegates to
     // `host.load_extension_from_bytes`; the contract-version pre-
     // check lives there (see PLAN-wit-value-extension.md Phase F and
@@ -658,8 +676,8 @@ mod tests {
         // message (not a cryptic wasmtime trap, not a silent succeed).
         let bytes = synth_component_targeting("0.1.0");
         let host = sqlink_host::Host::new().expect("host new");
-        let err = block_on(host.load_extension_from_bytes(bytes, "synth_legacy", default_policy()))
-            .expect_err("legacy @0.1 must be rejected by @1.x host via the loader path");
+        let err = block_on(host.instantiate_provider_from_bytes("synth_legacy", &bytes))
+            .expect_err("legacy @0.1 must be rejected by @1.x host via the provider path");
         let msg = err.to_string();
         assert!(msg.contains("synth_legacy"), "names the extension: {msg}");
         assert!(
@@ -679,8 +697,8 @@ mod tests {
         // into a @1.x host. Same path, same message shape.
         let bytes = synth_component_targeting("2.0.0");
         let host = sqlink_host::Host::new().expect("host new");
-        let err = block_on(host.load_extension_from_bytes(bytes, "synth_future", default_policy()))
-            .expect_err("future @2.x must be rejected by @1.x host via the loader path");
+        let err = block_on(host.instantiate_provider_from_bytes("synth_future", &bytes))
+            .expect_err("future @2.x must be rejected by @1.x host via the provider path");
         let msg = err.to_string();
         assert!(msg.contains("synth_future"), "names the extension: {msg}");
         assert!(

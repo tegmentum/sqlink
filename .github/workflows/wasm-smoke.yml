@@ -1,6 +1,6 @@
 name: Wasm smoke
 
-# Builds the wasm side (cli + sqlink-loader + workspace + standalone
+# Builds the wasm side (cli + sqlink-extension + workspace + standalone
 # extensions), encodes the produced .wasm artifacts to component
 # blobs, and runs the extension-smoke native test driver against
 # the freshly-encoded components.

@@ -30,7 +30,7 @@ host does:
 1. **Native SQLite + sqlink loader.** A traditional SQLite
    installation loaded as a system library, with a sqlink-shaped
    sqlite extension that embeds a wasm runtime (wasmtime, wamr,
-   ...). `sqlite3_load_extension("sqlink_loader")` from any
+   ...). `sqlite3_load_extension("sqlink_extension")` from any
    SQLite-linked program; subsequent `.load <ext>.wasm` calls
    bootstrap the wasm runtime, host the extension, and bridge
    its scalar / aggregate / vtab / hook surface back into the
@@ -62,25 +62,25 @@ host does:
        `extension_smoke` test still runs the wasm cli path
        unchanged).
 
-     - **`sqlink-loader` SQLite loadable extension**. Same
+     - **`sqlink-extension` SQLite loadable extension**. Same
        dispatch surface as `sqlink-native`, but packaged as a
        cdylib that vanilla `sqlite3` can side-load. Working for
        scalars and aggregates as of option B's first cut; see
-       [`sqlink-loader/DESIGN.md`](sqlink-loader/DESIGN.md) for
+       [`sqlink-extension/DESIGN.md`](sqlink-extension/DESIGN.md) for
        the full surface inventory.
 
        ```bash
-       cargo build --release -p sqlink-loader
+       cargo build --release -p sqlink-extension
        # Resolve extension names against the workspace target.
        export SQLINK_LOADER_REPO_ROOT=$PWD
        # Eager-load via env, no per-extension SQL calls needed.
        export SQLINK_LOADER_EXTS=uuid
        sqlite3 :memory: \
-           "SELECT load_extension('./target/release/libsqlink_loader');" \
+           "SELECT load_extension('./target/release/libsqlink_extension');" \
            "SELECT uuid();"
        # Or load at runtime once the .so is in:
        sqlite3 :memory: \
-           "SELECT load_extension('./target/release/libsqlink_loader');" \
+           "SELECT load_extension('./target/release/libsqlink_extension');" \
            "SELECT sqlink_load_ext('uuid', './extensions/uuid/target/wasm32-wasip2/release/uuid_extension.component.wasm');" \
            "SELECT uuid();"
        ```

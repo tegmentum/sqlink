@@ -5663,6 +5663,20 @@ name = "sqlink-cli-argv"
 version = "0.1.0"
 
 [[package]]
+name = "sqlink-extension"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "sqlink-host",
+ "sqlite-extension-policy",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "wat 1.240.0",
+]
+
+[[package]]
 name = "sqlink-host"
 version = "0.1.0"
 dependencies = [
@@ -5813,20 +5827,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "urlencoding",
-]
-
-[[package]]
-name = "sqlink-loader"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "once_cell",
- "sqlink-host",
- "sqlite-extension-policy",
- "tempfile",
- "tokio",
- "tracing",
- "wat 1.240.0",
 ]
 
 [[package]]

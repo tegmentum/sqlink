@@ -5,7 +5,7 @@
 //! Each test shells out to a vanilla `sqlite3` shell:
 //!
 //!     sqlite3 <db> \
-//!         "SELECT load_extension('<libsqlink_loader>');" \
+//!         "SELECT load_extension('<libsqlink_extension>');" \
 //!         "SELECT sqlink_load_ext('<plugin>', '<component.wasm>');" \
 //!         "<probe sql>"
 //!
@@ -13,7 +13,7 @@
 //! `expects` / `expects_regex`.
 //!
 //! Build the .dylib first:
-//!     cargo build --release -p sqlink-loader
+//!     cargo build --release -p sqlink-extension
 //!
 //! And ensure a sqlite3 with load_extension is on PATH (macOS:
 //! `brew install sqlite`  the system shell has load_extension

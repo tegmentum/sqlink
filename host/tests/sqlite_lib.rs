@@ -57,12 +57,12 @@ fn sqlite_lib_path() -> Option<PathBuf> {
     None
 }
 
-/// Path to a canonical-world wasm extension (sqlink-loader's
+/// Path to a canonical-world wasm extension (sqlink-extension's
 /// `test_extension.wasm`). Same artifact load.rs uses.
 fn canonical_ext_path() -> Option<PathBuf> {
     let candidates = [
-        "../../sqlink-loader/target/wasm32-wasip1/release/test_extension.wasm",
-        "../sqlink-loader/target/wasm32-wasip1/release/test_extension.wasm",
+        "../../sqlink-extension/target/wasm32-wasip1/release/test_extension.wasm",
+        "../sqlink-extension/target/wasm32-wasip1/release/test_extension.wasm",
     ];
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for c in candidates {
@@ -253,7 +253,7 @@ async fn library_load_extension_round_trip() {
         return;
     };
     let Some(ext_path) = canonical_ext_path() else {
-        eprintln!("skipping: test_extension.wasm not built (sqlink-loader)");
+        eprintln!("skipping: test_extension.wasm not built (sqlink-extension)");
         return;
     };
     let library = lib.sqlink_wasm_library();

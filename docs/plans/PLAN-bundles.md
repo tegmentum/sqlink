@@ -148,7 +148,7 @@ In-process:
      `include_bytes!()` baking each extension's bytes from
      cas-cache.
    - `Cargo.toml` with workspace path-deps to sqlink-host +
-     sqlink-loader-wit etc. via absolute paths sourced from the
+     sqlink-extension-wit etc. via absolute paths sourced from the
      host's installation prefix.
 4. Calls `build.spawn-build(crate_root, target_triple, env)`.
 5. On success: records the binary path in `bundle_binaries` +
@@ -397,7 +397,7 @@ and the plan's stated APIs didn't match the actual codebase:
    explicit control will hit the question later.
 2. **Generated-crate dep resolution**: **`SQLINK_DEV_ROOT` env var
    with compile-time fallback.** The bundle-cli extension's
-   generated `Cargo.toml` resolves `sqlink-host` / `sqlink-loader-wit`
+   generated `Cargo.toml` resolves `sqlink-host` / `sqlink-extension-wit`
    via `$SQLINK_DEV_ROOT` if set; otherwise it uses the workspace
    path baked at bundle-cli build time. Works out-of-box in dev
    (sqlink built in workspace  compile-time path is valid).

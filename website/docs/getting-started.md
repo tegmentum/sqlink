@@ -30,7 +30,7 @@ needs every extension built + encoded first:
 # Build all extensions for wasm32-wasip2.
 cargo build --workspace --target wasm32-wasip2 --release \
   --exclude host --exclude sqlite-cas-cache --exclude sqlink-native \
-  --exclude sqlink-loader --exclude postgis-bridge-extension \
+  --exclude sqlink-extension --exclude postgis-bridge-extension \
   --exclude extension-smoke --exclude extension-proptest \
   --exclude runnable-sqlite-demo
 

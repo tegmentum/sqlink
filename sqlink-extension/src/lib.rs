@@ -1,9 +1,9 @@
-//! `sqlink-loader` — Scenario 1 sub-option: SQLite loadable
+//! `sqlink-extension` — Scenario 1 sub-option: SQLite loadable
 //! extension (.so / .dylib).
 //!
 //! Built as a `cdylib`. A vanilla `sqlite3` process can run
 //!
-//!     .load /path/to/libsqlink_loader.dylib
+//!     .load /path/to/libsqlink_extension.dylib
 //!
 //! to gain access to the sqlink wasm extension catalog without
 //! recompiling SQLite. After `.load`:
@@ -17,7 +17,7 @@
 //!
 //! ## Implementation
 //!
-//! This is option B from `sqlink-loader/DESIGN.md`. The .so does
+//! This is option B from `sqlink-extension/DESIGN.md`. The .so does
 //! NOT use `libsqlite3-sys`'s `loadable_extension` feature  that
 //! would conflict with the `bundled` feature the rest of the
 //! workspace needs. Instead every sqlite3_* C call goes through a
@@ -42,7 +42,7 @@
 //! ## Symbol name
 //!
 //! Per https://www.sqlite.org/loadext.html, the entry point for
-//! filename `libsqlink_loader` is `sqlite3_sqlinkloader_init`.
+//! filename `libsqlink_extension` is `sqlite3_sqlinkloader_init`.
 
 mod api;
 mod load;
@@ -67,7 +67,7 @@ use crate::value::{read_value, write_error, write_result};
 // ─── Init entry point ────────────────────────────────────────────
 
 /// SQLite loadable-extension entry point. The symbol naming
-/// convention for filename `libsqlink_loader` is
+/// convention for filename `libsqlink_extension` is
 /// `sqlite3_sqlinkloader_init`.
 ///
 /// SAFETY: SQLite hands us live pointers valid for the duration of
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn sqlite3_sqlinkloader_init(
     match init_inner(db, p_api) {
         Ok(()) => SQLITE_OK,
         Err(e) => {
-            set_err(p_api, pz_err_msg, &format!("sqlink-loader init: {e}"));
+            set_err(p_api, pz_err_msg, &format!("sqlink-extension init: {e}"));
             SQLITE_ERROR
         }
     }
@@ -126,14 +126,14 @@ unsafe fn init_inner(db: *mut sqlite3, p_api: *const sqlite3_api_routines) -> Re
                         aggregate = counts.aggregate,
                         vtab = counts.vtab,
                         skipped = counts.skipped,
-                        "sqlink-loader loaded"
+                        "sqlink-extension loaded"
                     );
                 }
                 Err(e) => {
                     // Don't abort init  one bad extension shouldn't
                     // block the others. Log and move on. The user
                     // can re-try via sqlink_load_ext().
-                    eprintln!("sqlink-loader: failed to load '{entry}': {e}");
+                    eprintln!("sqlink-extension: failed to load '{entry}': {e}");
                 }
             }
         }
@@ -281,7 +281,7 @@ unsafe fn register_sqlink_load_ext(
     );
     if rc != SQLITE_OK {
         return Err(anyhow::anyhow!(
-            "sqlink-loader: create_function_v2(sqlink_load_ext) returned {rc}"
+            "sqlink-extension: create_function_v2(sqlink_load_ext) returned {rc}"
         ));
     }
     Ok(())
@@ -373,7 +373,7 @@ mod tests {
         let table = fake_api_with_malloc();
         let api: *const sqlite3_api_routines = &table;
         let mut msg_ptr: *mut c_char = std::ptr::null_mut();
-        let msg = "sqlink-loader init: oops";
+        let msg = "sqlink-extension init: oops";
         unsafe { set_err(api, &mut msg_ptr, msg) };
 
         assert!(!msg_ptr.is_null(), "malloc was called  msg_ptr populated");

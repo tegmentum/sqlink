@@ -110,17 +110,17 @@ pub fn sqlink_native_bin() -> PathBuf {
 /// Path to the Scenario 1 sub-option .so/.dylib. Overridable via
 /// `SQLINK_LOADER_SO`. The test_loader harness gates on this
 /// existing  if not built, every loader probe SKIPs.
-pub fn sqlink_loader_so() -> Option<PathBuf> {
+pub fn sqlink_extension_so() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("SQLINK_LOADER_SO") {
         let path = PathBuf::from(p);
         return path.exists().then_some(path);
     }
     let cand = if cfg!(target_os = "macos") {
-        repo_root().join("target/release/libsqlink_loader.dylib")
+        repo_root().join("target/release/libsqlink_extension.dylib")
     } else if cfg!(target_os = "windows") {
-        repo_root().join("target/release/sqlink_loader.dll")
+        repo_root().join("target/release/sqlink_extension.dll")
     } else {
-        repo_root().join("target/release/libsqlink_loader.so")
+        repo_root().join("target/release/libsqlink_extension.so")
     };
     cand.exists().then_some(cand)
 }
@@ -631,7 +631,7 @@ pub fn run_probe_native(
 }
 
 /// Scenario 1 sub-option variant: drive the probe through a
-/// vanilla `sqlite3` shell + the sqlink-loader .so/.dylib instead
+/// vanilla `sqlite3` shell + the sqlink-extension .so/.dylib instead
 /// of the sqlink-native binary or the wasm cli component. The
 /// shell's stdout is parsed the same way the native path parses
 /// it; we just take the first content line.
@@ -646,7 +646,7 @@ pub fn run_probe_loader(
     probe: &Probe,
     _grants: &[String],
 ) -> Option<ProbeReport> {
-    let so = sqlink_loader_so()?;
+    let so = sqlink_extension_so()?;
     let shell = sqlite3_bin_for_loader()?;
 
     // Pass the component path AND the plugin name via env so the
@@ -759,7 +759,7 @@ pub fn run_probe_loader(
         eprintln!("STDOUT: {stdout:?}");
         eprintln!("STDERR: {stderr:?}");
     }
-    if stderr.contains("Error: ") || stderr.contains("sqlink-loader: failed") {
+    if stderr.contains("Error: ") || stderr.contains("sqlink-extension: failed") {
         // If the .so itself failed to load (e.g. SQL function
         // sqlink_load_ext returned an error), surface as LoadFailed.
         // We deliberately don't pattern-match on every load-error

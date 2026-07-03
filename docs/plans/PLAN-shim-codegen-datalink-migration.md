@@ -153,7 +153,7 @@ sqlite-emit puts it in Manifest; duckdb-emit emits `register_scalars()`.
 ### D4. Magic-prefix wit-value lift survives the migration
 
 The 36-byte header `WTV\x01 + type_id + canonical-CBOR` (#559) is
-host-side convention used by sqlink-loader. It's per-loader, not per-
+host-side convention used by sqlink-extension. It's per-loader, not per-
 database. ducklink-loader (or its equivalent) needs the same lift on
 its side. Both inherit the convention from `datalink-loader-core`
 when that crate exists (Tier 2 / `datalink-runtime` per CONSOLIDATION.md).
@@ -274,5 +274,5 @@ round-trips.
   shim_duckdb! macro (301 LoC; precedent for per-DB delta).
 - `~/git/sqlink/docs/plans/PLAN-shim-tooling-residue.md` — captures the
   current state of the codegen (W1-W5, #557fix, #563, #565, etc.).
-- `~/git/sqlink/sqlink-loader/` — sqlite:extension loader, the SQLite
+- `~/git/sqlink/sqlink-extension/` — sqlite:extension loader, the SQLite
   pole of the per-host adapter.

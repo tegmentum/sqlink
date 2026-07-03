@@ -9,7 +9,7 @@
 //! That feature is mutually exclusive with `bundled`, which the
 //! rest of the workspace (`sqlite-component-core`, `sqlink-host`,
 //! `sqlink-native`) needs. Cargo unifies features across the
-//! workspace, so picking it on `sqlink-loader` would break every
+//! workspace, so picking it on `sqlink-extension` would break every
 //! other crate's link against the bundled sqlite3.c. The pApi
 //! indirection is the standard escape hatch for this exact
 //! conflict — see DESIGN.md for the full reasoning.

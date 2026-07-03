@@ -1436,7 +1436,7 @@ confirm + get a fresh number.
 
 - `cargo mutants -p sqlite-cas-cache --output mutants-out-cas-cache
   --timeout-multiplier 3 --in-place` — ~22 min runtime.
-- `cargo mutants -p sqlink-loader` — ~6 min runtime.
+- `cargo mutants -p sqlink-extension` — ~6 min runtime.
 - Report the actual caught/missed counts.
 - Close any new mutants that surfaced from the architectural
   work.
