@@ -774,7 +774,11 @@ async fn resolve_bundle_launch(
                 m.extension_name,
             )
         })?;
-        host.load_extension_from_bytes(bytes, &m.extension_name, policy.clone())
+        // #220: the bespoke loader is retired; route bundle members through
+        // the provider-only instantiation path (a bundled member is an
+        // `<ext>-provider.wasm`). Capabilities are enforced at call time.
+        let _ = &policy;
+        host.instantiate_provider_from_bytes(&m.extension_name, &bytes)
             .await
             .map_err(|e| anyhow!("bundle '{resolved_name}': load {}: {e}", m.extension_name))?;
         eprintln!(
