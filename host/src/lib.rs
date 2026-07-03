@@ -12057,13 +12057,18 @@ impl Host {
     }
 
     pub fn unload(&self, name: &str) -> Result<()> {
-        if self.components.write().remove(name).is_some() {
+        // #220: extensions are provider-backed. Unload removes the ext
+        // from the provider registries + drops its compose provider so
+        // the host stops dispatching to it. (The bespoke `self.components`
+        // registry has been retired.)
+        if self.provider_backed.write().remove(name).is_some() {
+            self.provider_manifests.write().remove(name);
+            if let Some(inner) = self.compose_providers.write().get_mut(DEFAULT_TENANT) {
+                inner.remove(&format!("ext:{name}"));
+            }
             // PLAN-wit-value-extension.md Phase B: clear typed-value
             // bindings owned by this extension so a re-load with a
-            // re-hashed type set doesn't deadlock on the conflict
-            // check. Codecs are removed alongside since they hold
-            // wasmtime instance handles into the (now dropped)
-            // LoadedExtension.
+            // re-hashed type set doesn't deadlock on the conflict check.
             let to_remove: Vec<[u8; 32]> = self
                 .typed_values
                 .snapshot()
@@ -12082,11 +12087,11 @@ impl Host {
     }
 
     pub fn list(&self) -> Vec<String> {
-        self.components.read().keys().cloned().collect()
+        self.provider_backed.read().keys().cloned().collect()
     }
 
     pub fn is_loaded(&self, name: &str) -> bool {
-        self.components.read().contains_key(name)
+        self.provider_backed.read().contains_key(name)
     }
 
     /// Register `path` as a language runtime for files with
