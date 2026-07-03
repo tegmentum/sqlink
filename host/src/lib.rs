@@ -11328,23 +11328,7 @@ impl Host {
         {
             return r;
         }
-        let mut guard = self.stateful_locked(ext_name).await?;
-        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_aggregate_function()
-                .call_step(&mut cached.store, func_id, context_id, &loaded_args)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let result = r.map_err(|e| anyhow!("call_step: {e}"))?;
-        Ok(result)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Finalize an aggregate; produces its final value and releases
@@ -11363,25 +11347,7 @@ impl Host {
         {
             return r;
         }
-        let mut guard = self.stateful_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_aggregate_function()
-                .call_finalize(&mut cached.store, func_id, context_id)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let result = r.map_err(|e| anyhow!("call_finalize: {e}"))?;
-        match result {
-            Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
-            Err(s) => Ok(Err(s)),
-        }
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Window-function path: produce the current intermediate
@@ -11405,25 +11371,7 @@ impl Host {
         {
             return r;
         }
-        let mut guard = self.stateful_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_aggregate_function()
-                .call_value(&mut cached.store, func_id, context_id)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let result = r.map_err(|e| anyhow!("call_value: {e}"))?;
-        match result {
-            Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
-            Err(s) => Ok(Err(s)),
-        }
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Window-function path: undo one row's contribution to the
@@ -11446,23 +11394,7 @@ impl Host {
         {
             return r;
         }
-        let mut guard = self.stateful_locked(ext_name).await?;
-        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_aggregate_function()
-                .call_inverse(&mut cached.store, func_id, context_id, &loaded_args)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let result = r.map_err(|e| anyhow!("call_inverse: {e}"))?;
-        Ok(result)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Shared helper: look up the extension and return a locked
