@@ -2195,9 +2195,9 @@ impl loaded::sqlite::extension::wal_frames::Host for crate::compose_provider::Pr
 // path) when the extension was granted the capability; deny-by-default
 // (`CapabilityNotGranted`) otherwise — the same fail-closed shape as
 // `http`/`dns`. Under the `native-s3` feature the resident module is swapped
-// out for the native `crate::s3` fallback, which is wired separately; this
-// impl denies there until that lands. (Threading the manifest-granted value
-// into `s3_granted` is the shared http/dns/s3 grant-threading follow-up.)
+// out for the native `crate::s3` fallback (aws-sigv4 + reqwest), which each op
+// forwards to once the capability is granted. (Threading the manifest-granted
+// value into `s3_granted` is the shared http/dns/s3 grant-threading follow-up.)
 macro_rules! s3_denied {
     () => {
         Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
@@ -2221,10 +2221,7 @@ impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::Provi
         #[cfg(not(feature = "native-s3"))]
         return crate::s3_resident::get_object(endpoint, credentials, bucket, key, options).await;
         #[cfg(feature = "native-s3")]
-        {
-            let _ = (endpoint, credentials, bucket, key, options);
-            s3_denied!()
-        }
+        return crate::s3::op_get_object(endpoint, credentials, bucket, key, options);
     }
     async fn put_object(
         &mut self,
@@ -2245,10 +2242,7 @@ impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::Provi
         return crate::s3_resident::put_object(endpoint, credentials, bucket, key, body, options)
             .await;
         #[cfg(feature = "native-s3")]
-        {
-            let _ = (endpoint, credentials, bucket, key, body, options);
-            s3_denied!()
-        }
+        return crate::s3::op_put_object(endpoint, credentials, bucket, key, body, options);
     }
     async fn delete_object(
         &mut self,
@@ -2263,10 +2257,7 @@ impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::Provi
         #[cfg(not(feature = "native-s3"))]
         return crate::s3_resident::delete_object(endpoint, credentials, bucket, key).await;
         #[cfg(feature = "native-s3")]
-        {
-            let _ = (endpoint, credentials, bucket, key);
-            s3_denied!()
-        }
+        return crate::s3::op_delete_object(endpoint, credentials, bucket, key);
     }
     async fn head_object(
         &mut self,
@@ -2284,10 +2275,7 @@ impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::Provi
         #[cfg(not(feature = "native-s3"))]
         return crate::s3_resident::head_object(endpoint, credentials, bucket, key).await;
         #[cfg(feature = "native-s3")]
-        {
-            let _ = (endpoint, credentials, bucket, key);
-            s3_denied!()
-        }
+        return crate::s3::op_head_object(endpoint, credentials, bucket, key);
     }
     async fn list_objects(
         &mut self,
@@ -2305,10 +2293,7 @@ impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::Provi
         #[cfg(not(feature = "native-s3"))]
         return crate::s3_resident::list_objects(endpoint, credentials, bucket, options).await;
         #[cfg(feature = "native-s3")]
-        {
-            let _ = (endpoint, credentials, bucket, options);
-            s3_denied!()
-        }
+        return crate::s3::op_list_objects(endpoint, credentials, bucket, options);
     }
     async fn copy_object(
         &mut self,
@@ -2336,10 +2321,14 @@ impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::Provi
         )
         .await;
         #[cfg(feature = "native-s3")]
-        {
-            let _ = (endpoint, credentials, source_bucket, source_key, dest_bucket, dest_key);
-            s3_denied!()
-        }
+        return crate::s3::op_copy_object(
+            endpoint,
+            credentials,
+            source_bucket,
+            source_key,
+            dest_bucket,
+            dest_key,
+        );
     }
 }
 
