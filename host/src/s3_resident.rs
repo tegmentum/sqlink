@@ -1,3 +1,4 @@
+#![allow(dead_code)] // #220 follow-up: S3 resident provider not yet wired
 //! Resident `s3-endpoint` provider routing for `sqlite:extension/s3-base`.
 //!
 //! This is the resident-provider replacement for the native, in-host S3 path

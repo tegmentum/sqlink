@@ -1755,6 +1755,7 @@ pub const PARSER_ENTRY_FN: &str = "__sqlink_parse";
 /// `LoadedExtension` so they survive across the per-call Stores
 /// that each dispatch builds; the retired bespoke loader clones the `Arc` into
 /// its store-local state.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 type SharedKv = Arc<Mutex<HashMap<String, loaded::sqlite::extension::types::SqlValue>>>;
 
 
@@ -1764,6 +1765,7 @@ type SharedKv = Arc<Mutex<HashMap<String, loaded::sqlite::extension::types::SqlV
 /// calls inside the same wasm Store so they can share
 /// thread_local state (e.g. vec0's NAME_TO_INSTANCE registry,
 /// or wal-archive's start({opts})  wal-hook ring buffer).
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 enum ScalarRoute {
     Minimal,
     Tabular,
@@ -1810,6 +1812,7 @@ enum ScalarRoute {
 /// no `HttpPolicy` block in its manifest is in a misconfigured state,
 /// and silent open-internet access is the wrong default.
 #[derive(Default)]
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 struct SqlinkWasiHttpHooks {
     policy: Option<HttpPolicy>,
 }
@@ -2232,6 +2235,7 @@ impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::Provi
 
 
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn db_err_to_spi(
     e: sqlite_component_core::db::Error,
 ) -> loaded::sqlite::extension::types::SqliteError {
@@ -2276,6 +2280,7 @@ fn type_id_from_wit(v: &[u8]) -> [u8; 32] {
     out
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn spi_value_to_db(
     v: loaded::sqlite::extension::types::SqlValue,
 ) -> sqlite_component_core::db::Value {
@@ -2306,6 +2311,7 @@ fn spi_value_to_db(
 /// per-key without knowing the SqlValue variants. Strings become
 /// JSON strings; booleans never appear here (extensions emit them
 /// as Integer 0/1). NaN/Inf collapse to JSON null.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn sql_value_to_json(v: loaded::sqlite::extension::types::SqlValue) -> String {
     use loaded::sqlite::extension::types::SqlValue as V;
     match v {
@@ -2365,6 +2371,7 @@ fn sql_value_to_json(v: loaded::sqlite::extension::types::SqlValue) -> String {
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn db_value_to_spi(
     v: sqlite_component_core::db::Value,
 ) -> loaded::sqlite::extension::types::SqlValue {
@@ -3936,14 +3943,18 @@ unsafe fn sqlite3_value_to_string(v: *mut libsqlite3_sys::sqlite3_value) -> Stri
 
 /// SQLite primary-result-code shortcuts. Kept inline to dodge a
 /// cross-module import in the bundles dispatcher.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 const SQLITE_ROW_NOT_TEXT: i32 = libsqlite3_sys::SQLITE_ERROR;
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 const SQLITE_ROW_NOT_INT: i32 = libsqlite3_sys::SQLITE_ERROR;
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 const SQLITE_ROW_MISSING_COL: i32 = libsqlite3_sys::SQLITE_ERROR;
 
 /// Pull an INTEGER column out of a `cas_execute_inner` row at
 /// position `idx`. Used by every bundles-CRUD parser below.
 /// Errors carry a precise `bundles.{method}` prefix so the user
 /// can trace which method's row decode tripped.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn row_int(
     row: &[loaded::sqlite::extension::types::SqlValue],
     idx: usize,
@@ -3965,6 +3976,7 @@ fn row_int(
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn row_text(
     row: &[loaded::sqlite::extension::types::SqlValue],
     idx: usize,
@@ -3986,6 +3998,7 @@ fn row_text(
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn row_text_opt(
     row: &[loaded::sqlite::extension::types::SqlValue],
     idx: usize,
@@ -4011,6 +4024,7 @@ fn row_text_opt(
 /// Read a 5-column `__cas_bundle` row into a partially-populated
 /// `BundleSummary` (member_count + binary_count zero-filled — fill
 /// them with `fill_summary_counts` if the caller needs them).
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn read_summary_row(
     row: &[loaded::sqlite::extension::types::SqlValue],
     method: &str,
@@ -4029,6 +4043,7 @@ fn read_summary_row(
     })
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn fill_summary_counts(
     cache: &crate::cache::Cache,
     s: &mut loaded::sqlite::extension::bundles::BundleSummary,
@@ -4064,6 +4079,7 @@ fn fill_summary_counts(
     Ok(())
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn unix_now_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -4075,6 +4091,7 @@ fn unix_now_secs() -> i64 {
 /// points at `bundle_id`; alias-conflict if it points elsewhere.
 /// Used by both `bundle_save` (during step-1 / step-2 attach) and
 /// `bundle_add_alias` itself.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn save_add_alias_inner(
     cache: &crate::cache::Cache,
     bundle_id: u64,
@@ -4132,6 +4149,7 @@ fn save_add_alias_inner(
 /// `sqlite_cas_cache::bundles_exec::*_SQL` constants — single
 /// source of truth across native, composed binary, and (until
 /// 533.6) the browser polyfill.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn cas_execute_inner(
     cache: &crate::cache::Cache,
     sql: &str,
@@ -4162,6 +4180,7 @@ fn cas_execute_inner(
 
 /// Tail of a captured stream  bounded so error messages stay
 /// reasonable.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn tail_lines(s: &str, n: usize) -> String {
     let lines: Vec<&str> = s.lines().collect();
     let start = lines.len().saturating_sub(n);
@@ -4181,6 +4200,7 @@ fn tail_lines(s: &str, n: usize) -> String {
 ///   * The compile-time workspace root baked into the host crate
 ///     (`env!("CARGO_MANIFEST_DIR")`'s parent) — covers the default
 ///     dev-install case where the operator built sqlink in-tree.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn allowed_crate_root_prefixes() -> Vec<std::path::PathBuf> {
     let mut prefixes = Vec::new();
     if let Some(home) = std::env::var_os("HOME") {
@@ -4225,6 +4245,7 @@ fn allowed_crate_root_prefixes() -> Vec<std::path::PathBuf> {
 /// Pure prefix-comparison step delegates to
 /// `sqlink_parsers::spawn_build_validation::check_canonical_under_prefix`
 /// so the fuzz harness can exercise the same code path.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn validate_spawn_build_crate_root(
     crate_root: &std::path::Path,
 ) -> std::result::Result<(), String> {
@@ -4239,13 +4260,16 @@ fn validate_spawn_build_crate_root(
 /// extension-names are operator-facing handles; 256 bytes is more
 /// than enough. set/content hashes are hex SHA-256/blake3 strings;
 /// 128 chars covers SHA-512 hex with headroom.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 const BUNDLE_NAME_MAX: usize = 256;
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 const BUNDLE_SET_HASH_MAX: usize = 128;
 
 /// MEDIUM-severity defensive fix: cap + sanitize string args coming
 /// from extensions through `bundle_save`. Rejects oversize values
 /// (would alloc unboundedly downstream), control chars (corrupt
 /// terminal output), and NUL bytes (truncate sqlite bind_text).
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn validate_bundle_str(
     s: &str,
     field: &'static str,
@@ -4266,6 +4290,7 @@ fn validate_bundle_str(
     Ok(())
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn bundle_arg_err(msg: String) -> loaded::sqlite::extension::types::SqliteError {
     loaded::sqlite::extension::types::SqliteError {
         code: libsqlite3_sys::SQLITE_RANGE,
@@ -4278,6 +4303,7 @@ fn bundle_arg_err(msg: String) -> loaded::sqlite::extension::types::SqliteError 
 /// (cargo OR wasm-tools) may take. Hardcoded for v1; making this
 /// per-call configurable would let extensions request arbitrarily
 /// long jobs.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 const SPAWN_BUILD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
 
 /// HIGH-severity defensive fix: clear the subprocess's environment
@@ -4298,6 +4324,7 @@ const SPAWN_BUILD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 /// Then any `(k, v)` pairs the extension supplied via the SPI `env`
 /// argument are appended on top. The extension can override the
 /// curated minimum but cannot READ the host's other env values.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn apply_spawn_build_env(cmd: &mut std::process::Command, extra: &[(String, String)]) {
     cmd.env_clear();
     for k in &["PATH", "HOME", "USER", "CARGO_HOME", "RUSTUP_HOME"] {
@@ -4321,6 +4348,7 @@ fn apply_spawn_build_env(cmd: &mut std::process::Command, extra: &[(String, Stri
 /// Polls the child up to `timeout`; on expiry SIGKILLs and returns
 /// a clear SQLITE_ERROR. Runs synchronously inside `spawn_blocking`
 /// so std `Child::wait_timeout` semantics are correct.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn run_with_timeout(
     cmd: &mut std::process::Command,
     timeout: std::time::Duration,
@@ -4387,6 +4415,7 @@ fn run_with_timeout(
 ///
 /// Allowed chars: ASCII lowercase letters, digits, `_`, `-`. Empty
 /// triple (None) is fine; that path uses the default release dir.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn validate_spawn_build_target_triple(
     triple: Option<&str>,
 ) -> std::result::Result<(), &'static str> {
@@ -4400,6 +4429,7 @@ fn validate_spawn_build_target_triple(
 /// extension. Cargo emits the main binary at the top level of
 /// `target/<triple>/release/` alongside `.d` / `.rlib` / `.rmeta`
 /// artifacts; we pick the first one that looks executable.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn find_release_binary(
     release_dir: &std::path::Path,
     package_hint: Option<&str>,
@@ -4472,6 +4502,7 @@ fn wal_perm_err(method: &str) -> loaded::sqlite::extension::types::SqliteError {
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn wal_io_err(
     op: &str,
     path: &std::path::Path,
@@ -4487,6 +4518,7 @@ fn wal_io_err(
 
 
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn lookup_session_loaded(
     host: &Host,
     name: &str,
@@ -4502,6 +4534,7 @@ fn lookup_session_loaded(
         .ok_or_else(|| loaded_session_err(format!("no session named {name:?}")))
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn loaded_session_err(msg: String) -> loaded::sqlite::extension::types::SqliteError {
     loaded::sqlite::extension::types::SqliteError {
         code: 1,
@@ -4512,6 +4545,7 @@ fn loaded_session_err(msg: String) -> loaded::sqlite::extension::types::SqliteEr
 
 /// Open shared_spi_conn from a the bespoke loader context. Same logic as
 /// shared_spi_ensure_open but returns the the bespoke loader error type.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn shared_spi_ensure_open_loaded(
     host: &Host,
 ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
@@ -4526,6 +4560,7 @@ fn shared_spi_ensure_open_loaded(
 /// (extensions) view. The HostWrap view uses
 /// `execute_multi_impl_bindings`  same logic, different type
 /// universes.
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn execute_multi_impl_loaded(
     conn: &sqlite_component_core::db::Connection,
     sql: &str,
@@ -8944,6 +8979,7 @@ fn index_plan_from_parts(
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn convert_vtab_constraint_op_to_loaded(
     op: bindings::sqlite::extension::vtab::ConstraintOp,
 ) -> loaded_tabular::exports::sqlite::extension::vtab::ConstraintOp {
@@ -8977,6 +9013,7 @@ fn convert_vtab_constraint_op_to_loaded(
 // we duplicate the converter. The arms in `dispatch_vtab_best_index`
 // pick the right pair.
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn convert_vtab_constraint_op_to_loaded_mut(
     op: bindings::sqlite::extension::vtab::ConstraintOp,
 ) -> loaded_tabular_mutating::exports::sqlite::extension::vtab::ConstraintOp {
@@ -9001,6 +9038,7 @@ fn convert_vtab_constraint_op_to_loaded_mut(
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn convert_vtab_index_info_to_loaded(
     info: bindings::sqlite::extension::vtab::IndexInfo,
 ) -> loaded_tabular::exports::sqlite::extension::vtab::IndexInfo {
@@ -9027,6 +9065,7 @@ fn convert_vtab_index_info_to_loaded(
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn convert_vtab_index_plan_from_loaded(
     plan: loaded_tabular::exports::sqlite::extension::vtab::IndexPlan,
 ) -> bindings::sqlite::extension::vtab::IndexPlan {
@@ -9048,6 +9087,7 @@ fn convert_vtab_index_plan_from_loaded(
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn convert_vtab_index_info_to_loaded_mut(
     info: bindings::sqlite::extension::vtab::IndexInfo,
 ) -> loaded_tabular_mutating::exports::sqlite::extension::vtab::IndexInfo {
@@ -9074,6 +9114,7 @@ fn convert_vtab_index_info_to_loaded_mut(
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn convert_vtab_index_plan_from_loaded_mut(
     plan: loaded_tabular_mutating::exports::sqlite::extension::vtab::IndexPlan,
 ) -> bindings::sqlite::extension::vtab::IndexPlan {
@@ -9095,6 +9136,7 @@ fn convert_vtab_index_plan_from_loaded_mut(
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn convert_auth_action_to_loaded(
     a: bindings::sqlite::extension::types::AuthAction,
 ) -> loaded::sqlite::extension::types::AuthAction {
@@ -9137,6 +9179,7 @@ fn convert_auth_action_to_loaded(
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn convert_auth_result_from_loaded(
     r: loaded::sqlite::extension::types::AuthResult,
 ) -> bindings::sqlite::extension::types::AuthResult {
@@ -9149,6 +9192,7 @@ fn convert_auth_result_from_loaded(
     }
 }
 
+#[allow(dead_code)] // #220: orphaned by loaded::* loader retirement; unwired
 fn convert_update_op_to_loaded(
     op: bindings::sqlite::extension::types::UpdateOperation,
 ) -> loaded::sqlite::extension::types::UpdateOperation {
