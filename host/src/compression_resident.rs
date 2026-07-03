@@ -26,15 +26,131 @@ use tokio::sync::OnceCell;
 /// The process-global resident compression provider, warmed on first use.
 static PROVIDER: OnceCell<CompressionResidentProvider> = OnceCell::const_new();
 
-/// Resolve the path to the `compression-endpoint` provider component wasm.
-fn provider_wasm_path() -> PathBuf {
-    if let Ok(p) = std::env::var("SQLINK_COMPRESSION_ENDPOINT_WASM") {
-        return PathBuf::from(p);
-    }
+/// The default catalog manifest URL (override via `SQLINK_PROVIDERS_MANIFEST_URL`).
+/// Its `residents.compression-endpoint` entry carries the content-addressed
+/// artifact url + sha256.
+const DEFAULT_MANIFEST_URL: &str = "https://ext.sqlink.dev/providers/manifest.json";
+
+/// The in-tree datalink build output, tried before fetching (developer machines).
+fn dev_wasm_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_default();
     PathBuf::from(home).join(
         "git/datalink/components/compression-endpoint/target/wasm32-wasip2/release/compression_endpoint.wasm",
     )
+}
+
+/// Resolve the compression-endpoint provider wasm:
+///   1. `SQLINK_COMPRESSION_ENDPOINT_WASM` (explicit path)
+///   2. the in-tree datalink build output (developer machines)
+///   3. fetch from the catalog `residents.compression-endpoint` and cache under
+///      `~/.cache/sqlink/residents` (content-addressed, sha256-verified)
+///
+/// Blocking (HTTP + fs); call under `spawn_blocking` from the async `build`.
+fn resolve_or_fetch() -> Result<PathBuf, String> {
+    if let Ok(p) = std::env::var("SQLINK_COMPRESSION_ENDPOINT_WASM") {
+        let p = PathBuf::from(p);
+        if !p.exists() {
+            return Err(format!(
+                "SQLINK_COMPRESSION_ENDPOINT_WASM points at a missing file: {}",
+                p.display()
+            ));
+        }
+        return Ok(p);
+    }
+    let dev = dev_wasm_path();
+    if dev.exists() {
+        return Ok(dev);
+    }
+    fetch_from_catalog()
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write;
+    let digest = Sha256::digest(bytes);
+    let mut s = String::with_capacity(64);
+    for b in digest {
+        let _ = write!(s, "{b:02x}");
+    }
+    s
+}
+
+/// Fetch the compression-endpoint from the catalog `residents` entry and cache
+/// it under `~/.cache/sqlink/residents`, verified against the manifest sha256.
+fn fetch_from_catalog() -> Result<PathBuf, String> {
+    let manifest_url = std::env::var("SQLINK_PROVIDERS_MANIFEST_URL")
+        .unwrap_or_else(|_| DEFAULT_MANIFEST_URL.to_string());
+    let client = reqwest::blocking::Client::builder()
+        .build()
+        .map_err(|e| format!("compression fetch: http client: {e}"))?;
+    // reqwest's `.json()` needs the `json` feature (not enabled here), so fetch
+    // bytes and parse with serde_json.
+    let manifest_bytes = client
+        .get(&manifest_url)
+        .send()
+        .and_then(|r| r.error_for_status())
+        .map_err(|e| format!("compression fetch: GET manifest {manifest_url}: {e}"))?
+        .bytes()
+        .map_err(|e| format!("compression fetch: read manifest: {e}"))?;
+    let manifest: serde_json::Value = serde_json::from_slice(&manifest_bytes)
+        .map_err(|e| format!("compression fetch: parse manifest: {e}"))?;
+    let entry = manifest
+        .get("residents")
+        .and_then(|r| r.get("compression-endpoint"))
+        .ok_or_else(|| {
+            format!(
+                "catalog manifest ({manifest_url}) has no residents.compression-endpoint; \
+                 build datalink/components/compression-endpoint or set \
+                 SQLINK_COMPRESSION_ENDPOINT_WASM"
+            )
+        })?;
+    let url = entry
+        .get("url")
+        .and_then(|u| u.as_str())
+        .ok_or("residents.compression-endpoint missing url")?;
+    let want_sha = entry
+        .get("sha256")
+        .and_then(|s| s.as_str())
+        .ok_or("residents.compression-endpoint missing sha256")?;
+
+    let home = std::env::var("HOME").unwrap_or_default();
+    let cache_dir = PathBuf::from(&home).join(".cache/sqlink/residents");
+    let sha12 = want_sha.get(..12).unwrap_or(want_sha);
+    let cached = cache_dir.join(format!("compression-endpoint-{sha12}.wasm"));
+
+    // Cache hit — re-verify to guard against a truncated/corrupt file.
+    if let Ok(bytes) = std::fs::read(&cached) {
+        if sha256_hex(&bytes) == want_sha {
+            return Ok(cached);
+        }
+    }
+
+    // Download + verify.
+    let bytes = client
+        .get(url)
+        .send()
+        .and_then(|r| r.error_for_status())
+        .map_err(|e| format!("compression fetch: GET {url}: {e}"))?
+        .bytes()
+        .map_err(|e| format!("compression fetch: read body: {e}"))?;
+    let got = sha256_hex(&bytes);
+    if got != want_sha {
+        return Err(format!(
+            "compression-endpoint sha256 mismatch (got {got}, want {want_sha}) from {url}"
+        ));
+    }
+    std::fs::create_dir_all(&cache_dir)
+        .map_err(|e| format!("compression fetch: mkdir {}: {e}", cache_dir.display()))?;
+    // Write to a per-process temp sibling then rename (atomic within the dir).
+    let tmp = cache_dir.join(format!(
+        "compression-endpoint-{sha12}.{}.tmp",
+        std::process::id()
+    ));
+    std::fs::write(&tmp, &bytes)
+        .map_err(|e| format!("compression fetch: write {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, &cached)
+        .map_err(|e| format!("compression fetch: rename to {}: {e}", cached.display()))?;
+    Ok(cached)
 }
 
 /// A warm-once resident `compression-endpoint` provider: a plain (no-network)
@@ -46,15 +162,11 @@ struct CompressionResidentProvider {
 
 impl CompressionResidentProvider {
     async fn build() -> Result<Self, String> {
-        let path = provider_wasm_path();
-        if !path.exists() {
-            return Err(format!(
-                "compression-endpoint provider wasm not found at {} (build \
-                 datalink/components/compression-endpoint or set \
-                 SQLINK_COMPRESSION_ENDPOINT_WASM)",
-                path.display()
-            ));
-        }
+        // Resolve (env / dev build / catalog fetch+cache) off the async runtime
+        // — the fetch does blocking HTTP + fs.
+        let path = tokio::task::spawn_blocking(resolve_or_fetch)
+            .await
+            .map_err(|e| format!("compression resident resolve task: {e}"))??;
         let mut config = wasmtime::Config::new();
         config.wasm_component_model(true);
         // The resident backend materializes the provider store on an async

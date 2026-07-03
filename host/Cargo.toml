@@ -137,6 +137,9 @@ compose-core = { git = "https://github.com/tegmentum/webassembly-component-orche
 # Hash primitive  shared with sqlite-cas-cache so hex decoders
 # in this crate don't need to round-trip through the store.
 blake3 = "1.5"
+# sha256 to verify catalog-fetched resident artifacts against the manifest's
+# sha256 field (the CAS store is blake3; the published manifest is sha256).
+sha2 = "0.10"
 tempfile = "3.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
