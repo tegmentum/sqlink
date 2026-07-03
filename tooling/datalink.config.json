@@ -3,7 +3,7 @@
   "db_name": "sqlite",
   "registration_abi": "manifest",
   "wit": {
-    "$comment": "The sqlink:wasm contract package. source_dir is the flat wit/ dir (top-level *.wit; wit/deps/ excluded by the non-recursive glob). witcanon_digest over these == b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119.",
+    "$comment": "The sqlink:wasm contract package. source_dir is the flat wit/ dir (top-level *.wit; wit/deps/ excluded by the non-recursive glob). witcanon_digest over these == 88bbf8e30da137ec84583f4a2ed4464d40fb1fbc3b962c05ca490bfba813cbdf.",
     "package": "sqlink:wasm",
     "source_dir": "wit",
     "world": "sqlink:wasm/unified-world"
@@ -61,7 +61,7 @@
     "entries_key": "extensions"
   },
   "identity": {
-    "$comment": "sqlink's content-addressed identity. wit_source_dir is the flat wit/ dir (top-level *.wit; wit/deps/ excluded by the non-recursive glob); witcanon_digest over it == b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119. contract_major 0 (sqlink:wasm@0.1.0). artifacts_dir is the deployed-.wasm location for content_digest (the OCI-published artifacts whose hash is also recorded as each entry's `checksum`); content_digest is stamped only where the artifact is present locally. exclude drops the builtin sample/manager entries from identity checks (no per-extension WIT contract of their own).",
+    "$comment": "sqlink's content-addressed identity. wit_source_dir is the flat wit/ dir (top-level *.wit; wit/deps/ excluded by the non-recursive glob); witcanon_digest over it == 88bbf8e30da137ec84583f4a2ed4464d40fb1fbc3b962c05ca490bfba813cbdf. contract_major 0 (sqlink:wasm@0.1.0). artifacts_dir is the deployed-.wasm location for content_digest (the OCI-published artifacts whose hash is also recorded as each entry's `checksum`); content_digest is stamped only where the artifact is present locally. exclude drops the builtin sample/manager entries from identity checks (no per-extension WIT contract of their own).",
     "wit_source_dir": "wit",
     "contract_package": "sqlink:wasm",
     "contract_major": "0",
