@@ -7705,53 +7705,7 @@ fn make_loaded_linker(engine: &Engine, http_granted: bool) -> Result<Linker<Load
     Ok(linker)
 }
 
-/// Build a Linker pre-wired for a `minimal-http`-world loaded
-/// extension. Same imports as minimal, plus the http interface
-/// (gated by manifest http-policy at the per-call boundary).
-fn make_loaded_minimal_http_linker(
-    engine: &Engine,
-    http_granted: bool,
-) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685); see `make_loaded_linker` for the
-    // full rationale on why `add_only_http_to_linker_async` is used.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded_minimal_http::MinimalHttp::add_to_linker::<_, LoadedHostData>(&mut linker, |state| {
-        state
-    })
-    .map_err(|e| anyhow!("loaded-ext minimal-http: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `minimal-dns`-world loaded
-/// extension: WASI + the minimal imports + dns. Used when an
-/// extension declares `Capability::Dns`.
-fn make_loaded_minimal_dns_linker(
-    engine: &Engine,
-    http_granted: bool,
-) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685); see `make_loaded_linker` for the
-    // full rationale on why `add_only_http_to_linker_async` is used.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded_minimal_dns::MinimalDns::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext minimal-dns: {e}"))?;
-    Ok(linker)
-}
 
 /// Build a Linker pre-wired for a `stateful`-world loaded extension:
 /// WASI + the minimal imports + state + cache. Used when dispatching
@@ -7835,81 +7789,9 @@ fn make_loaded_dotcmd_aware_linker(
     Ok(linker)
 }
 
-/// Build a Linker pre-wired for a `collating`-world loaded
-/// extension: same imports as minimal. Used when dispatching
-/// collation comparisons.
-fn make_loaded_collating_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    loaded_collating::Collating::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext collating: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `tabular`-world loaded
-/// extension. Used when dispatching vtab callbacks. Uses
-/// async WASI because vtab extensions like csv touch the
-/// filesystem and the cli already runs under an async runtime —
-/// sync WASI would `block_on` and trip the "runtime within a
-/// runtime" panic.
-fn make_loaded_tabular_linker(
-    engine: &Engine,
-    http_granted: bool,
-) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685); see `make_loaded_linker` for the
-    // full rationale on why `add_only_http_to_linker_async` is used.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded_tabular::Tabular::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext tabular: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `tabular-mutating`-world loaded
-/// extension. Same imports as `tabular`; the additional `vtab-update`
-/// export needs nothing on the import side beyond what `tabular`
-/// already wires.
-fn make_loaded_tabular_mutating_linker(
-    engine: &Engine,
-    http_granted: bool,
-) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685); see `make_loaded_linker` for the
-    // full rationale on why `add_only_http_to_linker_async` is used.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded_tabular_mutating::TabularMutating::add_to_linker::<_, LoadedHostData>(
-        &mut linker,
-        |state| state,
-    )
-    .map_err(|e| anyhow!("loaded-ext tabular-mutating: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for an `authorizing`-world loaded
-/// extension. Used when dispatching authorizer callbacks.
-fn make_loaded_authorizing_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    loaded_authorizing::Authorizing::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext authorizing: {e}"))?;
-    Ok(linker)
-}
 
 /// Build a Linker pre-wired for a `resolving`-world loaded extension.
 fn make_loaded_resolving_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
@@ -7921,16 +7803,6 @@ fn make_loaded_resolving_linker(engine: &Engine) -> Result<Linker<LoadedState>> 
     Ok(linker)
 }
 
-/// Build a Linker pre-wired for a `hooked`-world loaded extension.
-/// Used when dispatching update / commit / rollback hook callbacks.
-fn make_loaded_hooked_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    loaded_hooked::Hooked::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext hooked: {e}"))?;
-    Ok(linker)
-}
 
 /// Construct a fresh Store + LoadedState for one dispatch into a
 /// loaded extension. Each dispatch gets its own Store so per-call
@@ -11397,39 +11269,6 @@ impl Host {
         Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
-    /// Shared helper: look up the extension and return a locked
-    /// guard over its cached `stateful`-world (Store, Instance).
-    /// Lazy-instantiates on first call; subsequent calls reuse
-    /// the same Store so aggregator state (per-context
-    /// accumulators) survives across step / value / inverse /
-    /// finalize. See `cached_tabular` for the parallel pattern
-    /// on the vtab world.
-    async fn stateful_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedStateful>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_stateful.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker =
-                make_loaded_stateful_linker(&self.engine, ext.policy.is_granted(Capability::Http))?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance =
-                loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
-                    .await
-                    .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
-            *guard = Some(CachedStateful { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
     /// Forward a collation compare to a loaded extension's
     /// `collation.compare`. Returns < 0 / 0 / > 0 per SQLite's
@@ -12059,249 +11898,12 @@ impl Host {
         Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
-    /// Shared helper: look up the extension and return a locked
-    /// guard over its cached `minimal`-world Store + Instance.
-    /// Mirrors `tabular_locked` / `stateful_locked` — lazy first
-    /// instantiation, then per-extension serial reuse. Caching
-    /// here is purely a perf win for scalar dispatch (no
-    /// correctness dependency on Store identity across calls).
-    async fn minimal_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedMinimal>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_minimal.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker =
-                make_loaded_linker(&self.engine, ext.policy.is_granted(Capability::Http))?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded::Minimal::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as minimal: {e}"))?;
-            *guard = Some(CachedMinimal { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// `minimal-http`-world variant of `minimal_locked`. Same
-    /// lazy-instantiate + cache shape; uses the linker that
-    /// wires the http interface.
-    async fn minimal_http_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedMinimalHttp>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_minimal_http.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_minimal_http_linker(
-                &self.engine,
-                ext.policy.is_granted(Capability::Http),
-            )?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_minimal_http::MinimalHttp::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as minimal-http: {e}"))?;
-            *guard = Some(CachedMinimalHttp { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// `hooked`-world variant of `minimal_locked`. Same
-    /// lazy-instantiate + cache shape; uses the linker that
-    /// wires the update / commit / rollback / wal hook exports.
-    /// The `wal-aware` world has an identical export shape, so
-    /// this single cache covers both. Backs every hook
-    /// dispatcher AND scalar dispatch for extensions that
-    /// declare any hook (so guest-side `thread_local!` set by
-    /// scalar calls is visible to subsequent hook callbacks —
-    /// the wal-archive substrate's invariant).
-    async fn hooked_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedHooked>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_hooked.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_hooked_linker(&self.engine)?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance =
-                loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
-                    .await
-                    .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
-            *guard = Some(CachedHooked { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// `authorizing`-world variant of `minimal_locked`. Built
-    /// lazily on first `dispatch_authorize` against extensions
-    /// declaring `has_authorizer`. The `authorizing` world does
-    /// not export hooks, so this is held separately from
-    /// `cached_hooked`.
-    async fn authorizing_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedAuthorizing>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_authorizing.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_authorizing_linker(&self.engine)?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_authorizing::Authorizing::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as authorizing: {e}"))?;
-            *guard = Some(CachedAuthorizing { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// `minimal-dns`-world variant of `minimal_locked`. Same
-    /// lazy-instantiate + cache shape; uses the linker that
-    /// wires the dns interface.
-    async fn minimal_dns_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedMinimalDns>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_minimal_dns.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_minimal_dns_linker(
-                &self.engine,
-                ext.policy.is_granted(Capability::Http),
-            )?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_minimal_dns::MinimalDns::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as minimal-dns: {e}"))?;
-            *guard = Some(CachedMinimalDns { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// Shared helper: look up the extension and return a locked
-    /// guard over its cached `tabular`-world Store + Instance.
-    /// Lazily instantiates on first call; subsequent calls reuse
-    /// the same Store so vtab state (parsed files, cursors,
-    /// thread_local maps) survives across dispatch boundaries.
-    async fn tabular_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedTabular>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_tabular.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_tabular_linker(
-                &self.engine,
-                ext.policy.is_granted(Capability::Http),
-            )?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance =
-                loaded_tabular::Tabular::instantiate_async(&mut store, &ext.component, &linker)
-                    .await
-                    .map_err(|e| anyhow!("instantiate {ext_name} as tabular: {e}"))?;
-            *guard = Some(CachedTabular { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// `tabular-mutating`-world variant of `tabular_locked`. Used
-    /// when the extension declared `mutable: true` on any vtab —
-    /// the wider world's instance services both the read surface
-    /// (xCreate/xConnect/xBestIndex/cursor calls) AND xUpdate /
-    /// transactional callbacks, keeping all dispatches inside one
-    /// wasm Store so the cursor sees writes the same xUpdate just
-    /// committed.
-    async fn tabular_mutating_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedTabularMutating>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_tabular_mutating.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_tabular_mutating_linker(
-                &self.engine,
-                ext.policy.is_granted(Capability::Http),
-            )?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_tabular_mutating::TabularMutating::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as tabular-mutating: {e}"))?;
-            *guard = Some(CachedTabularMutating { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
     /// Returns true if any vtab declared in the extension's
     /// manifest set `mutable: true`. Routes the read-side dispatch
@@ -12316,21 +11918,6 @@ impl Host {
         Ok(ext.vtabs.iter().any(|v| v.mutable))
     }
 
-    /// Picks the right cache for a read-side vtab dispatch. The
-    /// enum lets the per-method arms switch on the variant without
-    /// duplicating the lookup / refresh logic. We don't try to
-    /// share the call site itself — `sqlite_extension_vtab()`
-    /// returns a per-world export proxy type, so each arm calls
-    /// the same export under a different proxy.
-    async fn tabular_guard(&self, ext_name: &str) -> Result<TabularGuard> {
-        if self.ext_has_mutable_vtab(ext_name)? {
-            Ok(TabularGuard::Mutating(
-                self.tabular_mutating_locked(ext_name).await?,
-            ))
-        } else {
-            Ok(TabularGuard::ReadOnly(self.tabular_locked(ext_name).await?))
-        }
-    }
 
     /// Route a SQLite authorizer callback to the loaded extension's
     /// `authorizer.authorize` export. Errors bubble as anyhow; the
