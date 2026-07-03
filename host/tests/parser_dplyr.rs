@@ -1,9 +1,10 @@
 //! End-to-end test for the `dplyr` parser extension in sqlink — the same
-//! host parse-failure intercept ggsql rides (see `parser.rs`), driven from
-//! the shared datalink `dplyr-core` the ducklink port also consumes.
+//! host parse-failure intercept ggsql rides (see `parser_provider.rs`),
+//! driven from the shared datalink `dplyr-core` the ducklink port also
+//! consumes.
 //!
-//!   1. load the dplyr extension (a plain `minimal`-world scalar component
-//!      generated from dplyr-core by `sqlite_shim!`);
+//!   1. load the dplyr extension PROVIDER artifact (compose:dynlink
+//!      `dplyr-provider.wasm`; #220 retired the bespoke loader);
 //!   2. `dispatch_parse("dplyr( mtcars |> filter(..) |> .. )")` returns a
 //!      SQLite-dialect SQL rewrite;
 //!   3. running that rewrite against an mtcars table produces the expected
@@ -11,25 +12,21 @@
 //!   4. a non-dplyr statement DECLINES (`None`); a malformed dplyr is a
 //!      clean parse error (`Err`).
 //!
-//! Silently skips if the dplyr component isn't built (build it with
-//! `make ext NAME=dplyr`) so the suite stays green without the wasm
-//! toolchain.
+//! Silently skips if the dplyr provider artifact isn't staged (build the
+//! ext + `wac plug` it into the scalar shape → tests/fixtures/providers/
+//! dplyr-provider.wasm) so the suite stays green without the wasm toolchain.
 
 use std::path::PathBuf;
 
 use sqlink_host::{Host, Policy};
 use sqlite_component_core::db::{self, StepResult, Value};
 
-fn dplyr_component_path() -> Option<PathBuf> {
+fn dplyr_provider_path() -> Option<PathBuf> {
+    // #220: the bespoke `load_extension_from_bytes` path is retired; load the
+    // compose:dynlink provider artifact through the resolver/router instead.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let base = manifest_dir.join("../extensions/dplyr/target/wasm32-wasip2/release");
-    for n in ["dplyr_extension.component.wasm", "dplyr_extension.wasm"] {
-        let p = base.join(n);
-        if p.exists() {
-            return Some(p);
-        }
-    }
-    None
+    let p = manifest_dir.join("tests/fixtures/providers/dplyr-provider.wasm");
+    p.exists().then_some(p)
 }
 
 const MTCARS: &str = "CREATE TABLE mtcars(model TEXT, mpg REAL, cyl INTEGER, hp INTEGER); \
@@ -42,15 +39,14 @@ const DPLYR: &str =
 
 #[tokio::test]
 async fn dplyr_pipeline_parses_and_executes_in_sqlink() {
-    let Some(path) = dplyr_component_path() else {
-        eprintln!("skipping: dplyr component not built (run `make ext NAME=dplyr`)");
+    let Some(path) = dplyr_provider_path() else {
+        eprintln!("skipping: dplyr-provider.wasm not staged");
         return;
     };
 
     let host = Host::new().expect("engine");
-    let bytes = std::fs::read(&path).expect("read dplyr component");
     let name = host
-        .load_extension_from_bytes(bytes, "dplyr", Policy::deny_all())
+        .load_extension(path, Policy::deny_all())
         .await
         .expect("load dplyr");
     assert_eq!(name, "dplyr");
@@ -92,13 +88,12 @@ async fn dplyr_pipeline_parses_and_executes_in_sqlink() {
 
 #[tokio::test]
 async fn non_dplyr_declines() {
-    let Some(path) = dplyr_component_path() else {
-        eprintln!("skipping: dplyr component not built");
+    let Some(path) = dplyr_provider_path() else {
+        eprintln!("skipping: dplyr-provider.wasm not staged");
         return;
     };
     let host = Host::new().expect("engine");
-    let bytes = std::fs::read(&path).expect("read");
-    host.load_extension_from_bytes(bytes, "dplyr", Policy::deny_all())
+    host.load_extension(path, Policy::deny_all())
         .await
         .expect("load");
     let out = host.dispatch_parse("SELECT 1").await.expect("ok");
@@ -107,13 +102,12 @@ async fn non_dplyr_declines() {
 
 #[tokio::test]
 async fn malformed_dplyr_is_clean_error() {
-    let Some(path) = dplyr_component_path() else {
-        eprintln!("skipping: dplyr component not built");
+    let Some(path) = dplyr_provider_path() else {
+        eprintln!("skipping: dplyr-provider.wasm not staged");
         return;
     };
     let host = Host::new().expect("engine");
-    let bytes = std::fs::read(&path).expect("read");
-    host.load_extension_from_bytes(bytes, "dplyr", Policy::deny_all())
+    host.load_extension(path, Policy::deny_all())
         .await
         .expect("load");
     let err = host

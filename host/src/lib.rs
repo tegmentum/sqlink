@@ -80,8 +80,8 @@ pub mod bindings {
 /// Used to instantiate a dynamically-loaded extension component and
 /// call into its `metadata.describe` and `scalar-function.call`
 /// exports. The loaded extension's Store has a distinct state type
-/// (`LoadedState`) and gets the minimal world's `types/spi/logging/
-/// config` imports satisfied by `LoadedState` impls below.
+/// (the retired bespoke loader) and gets the minimal world's `types/spi/logging/
+/// config` imports satisfied by the retired bespoke loader impls below.
 pub mod loaded {
     wasmtime::component::bindgen!({
         path: "../sqlite-loader-wit/wit",
@@ -1469,116 +1469,16 @@ fn policy_from_load_options(opts: &bindings::sqlite::extension::policy::LoadOpti
     policy
 }
 
-/// Materialize the Manifest the extension-loader returns to the
-/// in-WASM caller from a LoadedExtension's recorded function specs.
-/// Now that load_extension calls describe() at load time and stores
-/// the scalar_functions, this returns the real names/ids/arities.
-fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
-    use bindings::sqlite::extension::metadata::{
-        AggregateFunctionSpec, CollationSpec, ScalarFunctionSpec,
-    };
-    use bindings::sqlite::extension::types::FunctionFlags;
-    Manifest {
-        name: ext.name.clone(),
-        version: ext.version.clone(),
-        scalar_functions: ext
-            .scalar_functions
-            .iter()
-            .map(|f| ScalarFunctionSpec {
-                id: f.id,
-                name: f.name.clone(),
-                num_args: f.num_args,
-                func_flags: if f.deterministic {
-                    FunctionFlags::DETERMINISTIC
-                } else {
-                    FunctionFlags::empty()
-                },
-            })
-            .collect(),
-        aggregate_functions: ext
-            .aggregate_functions
-            .iter()
-            .map(|f| AggregateFunctionSpec {
-                id: f.id,
-                name: f.name.clone(),
-                num_args: f.num_args,
-                func_flags: if f.deterministic {
-                    FunctionFlags::DETERMINISTIC
-                } else {
-                    FunctionFlags::empty()
-                },
-                is_window: f.is_window,
-            })
-            .collect(),
-        collations: ext
-            .collations
-            .iter()
-            .map(|c| CollationSpec {
-                id: c.id,
-                name: c.name.clone(),
-            })
-            .collect(),
-        vtabs: ext
-            .vtabs
-            .iter()
-            .map(|v| bindings::sqlite::extension::metadata::VtabSpec {
-                id: v.id,
-                name: v.name.clone(),
-                eponymous: v.eponymous,
-                mutable: v.mutable,
-                batched: v.batched,
-            })
-            .collect(),
-        dot_commands: ext
-            .dot_commands
-            .iter()
-            .map(|d| bindings::sqlite::extension::metadata::DotCommandSpec {
-                id: d.id,
-                name: d.name.clone(),
-                version: d.version.clone(),
-                summary: d.summary.clone(),
-                usage: d.usage.clone(),
-                help: d.help.clone(),
-                examples: d
-                    .examples
-                    .iter()
-                    .map(
-                        |(desc, cmd)| bindings::sqlite::extension::metadata::DotCommandExample {
-                            description: desc.clone(),
-                            command: cmd.clone(),
-                        },
-                    )
-                    .collect(),
-                requires_write: d.requires_write,
-                no_args: d.no_args,
-            })
-            .collect(),
-        has_authorizer: ext.has_authorizer,
-        has_update_hook: ext.has_update_hook,
-        has_commit_hook: ext.has_commit_hook,
-        has_wal_hook: ext.has_wal_hook,
-        wal_hook_id: ext.wal_hook_id,
-        declared_capabilities: vec![],
-        optional_capabilities: vec![],
-        preferred_prefix: ext.preferred_prefix.clone(),
-        prefix_expansion: ext.prefix_expansion.clone(),
-        // PLAN-wit-value-extension.md Phase A: the contract gained
-        // `typed-values` for record-typed shim functions to declare
-        // their decoder/encoder imports. Phase C codegen will start
-        // populating this; for now the host re-emits an empty list
-        // (the manifest pass-through from describe() into the
-        // extension-loader's bridged manifest carries the bridge's
-        // own typed-values separately if/when it ever has any).
-        typed_values: vec![],
-    }
-}
 
 /// Task #226: build the WIT extension-loader `Manifest` from a provider
 /// (woco) manifest so the cli registers a provider-backed extension's
 /// scalar/collation tiers exactly as for a bespoke-loaded one. Only
 /// scalar + collation are populated — the safety gate guarantees a
 /// provider-backed extension has no other tiers.
-fn manifest_for_provider(m: &provider_envelope::Manifest) -> Manifest {
+fn manifest_for_provider(
+    m: &provider_envelope::Manifest,
+    conn: Option<&sqlite_component_core::db::Connection>,
+) -> Manifest {
     use bindings::sqlite::extension::metadata::{
         AggregateFunctionSpec, CollationSpec, DotCommandSpec, ScalarFunctionSpec, VtabSpec,
     };
@@ -1586,14 +1486,31 @@ fn manifest_for_provider(m: &provider_envelope::Manifest) -> Manifest {
     Manifest {
         name: m.name.clone(),
         version: m.version.clone(),
+        // #220 collision-prefix on the provider path: the cli registers the
+        // SQL name from this manifest, so resolve each scalar name against the
+        // connection here — a scalar that would clobber a builtin (or a
+        // prior extension's function) is exposed as `<ext>_<name>`, exactly
+        // as the bespoke `register_scalar` path does via the same helper.
+        // Dispatch is keyed by func_id, not name, so only the registered SQL
+        // name changes. `conn == None` (e.g. shared_spi_conn not open) keeps
+        // the bare name — no worse than the pre-#220 behavior.
         scalar_functions: m
             .scalar_specs
             .iter()
-            .map(|(name, id, num_args)| ScalarFunctionSpec {
-                id: *id,
-                name: name.clone(),
-                num_args: *num_args,
-                func_flags: FunctionFlags::empty(),
+            .map(|(name, id, num_args)| {
+                let sql_name = conn
+                    .and_then(|c| {
+                        prefix_registry::resolve_collision_free_name(c, &m.name, name, *num_args)
+                            .ok()
+                    })
+                    .map(|res| res.name)
+                    .unwrap_or_else(|| name.clone());
+                ScalarFunctionSpec {
+                    id: *id,
+                    name: sql_name,
+                    num_args: *num_args,
+                    func_flags: FunctionFlags::empty(),
+                }
             })
             .collect(),
         // Task #227: populate every tier so the cli's do_load registers
@@ -1768,7 +1685,19 @@ fn resolve_catalog_artifact(name: &str) -> Option<PathBuf> {
         });
 
     let norm = name.replace('-', "_");
+    // Task #227/#220 (loader retirement): PREFER the `<ext>-provider.wasm`
+    // compose:dynlink provider artifact when one is present. `.load`
+    // (see `load_extension`) detects the `endpoint` export and routes such
+    // an artifact onto the WARM-ONCE RESIDENT provider path — every tier
+    // (scalar/collation/aggregate/vtab/hook/dotcmd) then dispatches through
+    // the provider, with spi/http/dns imports satisfied host-side. This is
+    // the default-resolution flip that lets the bespoke `loaded::*` loader
+    // eventually retire. Fully backward-compatible: absent a provider
+    // artifact the resolver falls through to the plain extension component
+    // below (bespoke path), so nothing regresses until artifacts ship.
     let filenames = [
+        format!("{name}-provider.wasm"),
+        format!("{norm}_provider.wasm"),
         format!("{norm}_extension.component.wasm"),
         format!("{norm}.component.wasm"),
         format!("{norm}_extension.wasm"),
@@ -1824,141 +1753,10 @@ pub const PARSER_ENTRY_FN: &str = "__sqlink_parse";
 /// Per-extension key/value backing for the `state` + `cache`
 /// imports. Both are stored as `Arc<Mutex<HashMap<…>>>` on the
 /// `LoadedExtension` so they survive across the per-call Stores
-/// that each dispatch builds; `LoadedState` clones the `Arc` into
+/// that each dispatch builds; the retired bespoke loader clones the `Arc` into
 /// its store-local state.
 type SharedKv = Arc<Mutex<HashMap<String, loaded::sqlite::extension::types::SqlValue>>>;
 
-/// A loaded extension component, retained for subsequent dispatch.
-pub struct LoadedExtension {
-    pub name: String,
-    pub version: String,
-    pub component: Component,
-    pub policy: Policy,
-    /// blake3-hex of provider bytes, computed in
-    /// `load_extension_from_bytes`. Surfaced in the manifest so
-    /// grants persistence in the cli can pin trust to specific
-    /// bytes without round-tripping a wasi-fs read.
-    pub digest: String,
-    /// Function specs declared in the manifest, indexed by func-id.
-    /// Populated from `metadata.describe()` at load time and used
-    /// when the host routes a SQL function call back into the
-    /// component's `scalar-function.call`.
-    pub scalar_functions: Vec<ScalarFunctionEntry>,
-    /// Aggregate function specs, mirror of `scalar_functions` shape.
-    pub aggregate_functions: Vec<AggregateFunctionEntry>,
-    /// Collation specs declared in the manifest.
-    pub collations: Vec<CollationEntry>,
-    /// Vtab module specs declared in the manifest. Populated by
-    /// `load_extension_from_bytes` when the guest reports vtabs;
-    /// the cli uses these to register the modules with SQLite.
-    pub vtabs: Vec<VtabEntry>,
-    /// Whether the extension declared an `authorizer` export. Used by
-    /// the in-WASM CLI to decide whether to install a sqlite3_set_
-    /// authorizer trampoline pointing at this extension.
-    pub has_authorizer: bool,
-    /// Whether the extension exports an `update-hook`.
-    pub has_update_hook: bool,
-    /// Whether the extension exports a `commit-hook` (rollback hook is
-    /// paired with commit on the wasm side; SQLite separates them but
-    /// our WIT keeps them together).
-    pub has_commit_hook: bool,
-    /// Whether the extension exports a `wal-hook`. The host's spi-
-    /// loader installs a wal_hook trampoline on the shared connection
-    /// when this is true.
-    pub has_wal_hook: bool,
-    /// Identifier the host echoes back to the extension's
-    /// `wal-hook.on-wal-hook` callback. Only meaningful when
-    /// `has_wal_hook` is true; the extension picked it in
-    /// `manifest.wal-hook-id`.
-    pub wal_hook_id: u64,
-    /// Persistent per-extension state backing the `state` interface.
-    pub state: SharedKv,
-    /// In-memory cache backing the `cache` interface. TTLs from the
-    /// guest are accepted but not enforced for v1.
-    pub cache: SharedKv,
-    /// Pooled core::db::Connection for this extension's spi calls.
-    /// Opened lazily on first spi.execute against the cli's db file;
-    /// reused across subsequent calls until the extension is
-    /// unloaded. Dropped when the LoadedExtension's Arc count hits
-    /// zero. core::db::Connection is Send (not Sync) per the
-    /// `unsafe impl Send` on the type; Mutex serializes per-extension
-    /// concurrent SPI calls.
-    pub spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlite_component_core::db::Connection>>>>,
-    /// Cached `tabular`-world (Store, Instance) for vtab dispatch.
-    /// Vtab semantics require per-instance / per-cursor state to
-    /// persist across xCreate  xOpen  xColumn — a fresh
-    /// instantiation per dispatch resets that state. We share a
-    /// single instantiation across every `dispatch_vtab_*` call
-    /// on this extension, serialized by `TokioMutex` so concurrent
-    /// SQL paths don't trample each other's wasm linear memory.
-    /// Lazy-init: built on the first vtab dispatch, dropped when
-    /// the `LoadedExtension`'s `Arc` count hits zero.
-    pub cached_tabular: Arc<tokio::sync::Mutex<Option<CachedTabular>>>,
-    /// `tabular-mutating`-world cache. Built lazily on the first
-    /// vtab dispatch when the extension declared `mutable: true`
-    /// on any vtab. Routing in `tabular_guard` picks this over
-    /// `cached_tabular` so the same instance services the read
-    /// surface AND xUpdate / transactional callbacks — keeping
-    /// xUpdate's writes visible to the cursor xRead path inside
-    /// the same wasm Store.
-    pub cached_tabular_mutating: Arc<tokio::sync::Mutex<Option<CachedTabularMutating>>>,
-    /// Same idea for the `stateful` world (aggregate-function
-    /// dispatch). Aggregator state keyed by `context-id` lives
-    /// inside the loaded extension — a fresh instantiation per
-    /// step/finalize would reset it, so we cache and reuse.
-    pub cached_stateful: Arc<tokio::sync::Mutex<Option<CachedStateful>>>,
-    /// Same pattern for the `minimal` (scalar) world. Caching
-    /// here is purely a perf win — eliminates per-call
-    /// instantiation of large bundles (e.g. ~100MB postgis).
-    /// Side benefit: bridge thread_locals (handle registries
-    /// like STRtree / TOPO_HANDLES / TOPOGEOM_HANDLES) survive
-    /// across SQL calls deterministically rather than by
-    /// accidentally-reused-Store.
-    pub cached_minimal: Arc<tokio::sync::Mutex<Option<CachedMinimal>>>,
-    /// `minimal-http` Store cache for http-capable scalars.
-    /// Populated lazily when an extension declaring
-    /// `capability::http` first dispatches a scalar call.
-    pub cached_minimal_http: Arc<tokio::sync::Mutex<Option<CachedMinimalHttp>>>,
-    /// `minimal-dns` Store cache for dns-capable scalars. Same
-    /// shape as `cached_minimal_http`; populated lazily on first
-    /// dispatch for extensions declaring `capability::dns`.
-    pub cached_minimal_dns: Arc<tokio::sync::Mutex<Option<CachedMinimalDns>>>,
-    /// `hooked` (and `wal-aware` — identical export shape) Store
-    /// cache backing every hook dispatcher (update / commit /
-    /// rollback / wal). Built lazily on the first hook firing or
-    /// (when the extension declares any hook) on the first scalar
-    /// call routed here for cross-world coherence. Mirrors
-    /// `cached_minimal` but holds the wider instance so guest-side
-    /// `thread_local!` / `OnceLock` / `static AtomicU64` state
-    /// survives across hook firings AND scalar calls on the same
-    /// extension — the substrate the wal-archive extension needs.
-    pub cached_hooked: Arc<tokio::sync::Mutex<Option<CachedHooked>>>,
-    /// `authorizing`-world Store cache for the authorize
-    /// dispatcher. Same shape as `cached_hooked`; populated lazily
-    /// on first `dispatch_authorize` for an extension declaring
-    /// `has_authorizer`. The `authorizing` world does not export
-    /// hooks, so this is held separately from `cached_hooked`.
-    pub cached_authorizing: Arc<tokio::sync::Mutex<Option<CachedAuthorizing>>>,
-    /// Dot-command specs declared in the manifest. The cli's
-    /// repl dispatcher walks this on every `.NAME` parse to
-    /// route the call into the extension's `dot-command.invoke`.
-    pub dot_commands: Vec<DotCommandEntry>,
-    /// Cached `dotcmd-aware`-world (Store, Instance) for dot-cmd
-    /// dispatch. Built lazily on first `.NAME` against this
-    /// extension; persists for the cli session.
-    pub cached_dotcmd_aware: Arc<tokio::sync::Mutex<Option<CachedDotcmdAware>>>,
-    /// Extension's declared short prefix (PLAN-prefixes.md). Set
-    /// from manifest.preferred-prefix at load time. None means the
-    /// manifest didn't declare one; the loader synthesizes a
-    /// fallback at registration time.
-    pub preferred_prefix: Option<String>,
-    /// Extension's declared expansion (PLAN-prefixes.md). Set from
-    /// manifest.prefix-expansion at load time. None means the
-    /// manifest didn't declare one; the loader synthesizes a
-    /// `sqlink-internal://<crate-name>` fallback at registration
-    /// time.
-    pub prefix_expansion: Option<String>,
-}
 
 /// Which cached Store should handle a scalar call. See
 /// `dispatch_scalar` for the routing rule  the goal is to
@@ -1981,216 +1779,18 @@ enum ScalarRoute {
     Hooked,
 }
 
-/// Long-lived `Tabular`-world instance backing a vtab module.
-/// See `LoadedExtension.cached_tabular`.
-pub struct CachedTabular {
-    pub store: wasmtime::Store<LoadedState>,
-    pub instance: loaded_tabular::Tabular,
-}
 
-/// Long-lived `TabularMutating`-world instance backing a vtab
-/// module that declared `mutable: true`. See
-/// `LoadedExtension.cached_tabular_mutating`.
-pub struct CachedTabularMutating {
-    pub store: wasmtime::Store<LoadedState>,
-    pub instance: loaded_tabular_mutating::TabularMutating,
-}
 
-/// Picks the cache used by a read-side `dispatch_vtab_*` call.
-/// `Host::tabular_guard` consults `ext_has_mutable_vtab` and
-/// returns the matching variant; each `dispatch_vtab_*` matches
-/// on it and dispatches through the appropriate per-world export
-/// proxy. Shared types (`SqlValue`, `IndexInfo`, …) flow without
-/// translation because both worlds bind them via `with:`.
-enum TabularGuard {
-    ReadOnly(tokio::sync::OwnedMutexGuard<Option<CachedTabular>>),
-    Mutating(tokio::sync::OwnedMutexGuard<Option<CachedTabularMutating>>),
-}
 
-/// Long-lived `Stateful`-world instance backing aggregate
-/// dispatch. See `LoadedExtension.cached_stateful`.
-pub struct CachedStateful {
-    pub store: wasmtime::Store<LoadedState>,
-    pub instance: loaded_stateful::Stateful,
-}
 
-/// Long-lived `Minimal`-world instance backing scalar
-/// dispatch. See `LoadedExtension.cached_minimal`.
-pub struct CachedMinimal {
-    pub store: wasmtime::Store<LoadedState>,
-    pub instance: loaded::Minimal,
-}
 
-/// Long-lived `MinimalHttp`-world instance backing scalar
-/// dispatch for http-capable extensions.
-pub struct CachedMinimalHttp {
-    pub store: wasmtime::Store<LoadedState>,
-    pub instance: loaded_minimal_http::MinimalHttp,
-}
 
-/// Long-lived `MinimalDns`-world instance backing scalar
-/// dispatch for dns-capable extensions.
-pub struct CachedMinimalDns {
-    pub store: wasmtime::Store<LoadedState>,
-    pub instance: loaded_minimal_dns::MinimalDns,
-}
 
-/// Long-lived `Hooked`-world instance backing hook dispatch
-/// (update / commit / rollback / wal) AND scalar dispatch for
-/// extensions that declare any hook. Caching is a CORRECTNESS
-/// requirement here, not just a perf win: hookprobe's
-/// `thread_local!` LOG and wal-archive's `OnceLock<Mutex<...>>`
-/// ring buffer must survive across firings on the same loaded-
-/// extension lifetime, and state set by a scalar call must be
-/// visible to subsequent hook callbacks.
-pub struct CachedHooked {
-    pub store: wasmtime::Store<LoadedState>,
-    pub instance: loaded_hooked::Hooked,
-}
 
-/// Long-lived `Authorizing`-world instance backing the
-/// authorize dispatcher. Same lifetime contract as
-/// `CachedHooked` — guest-side state across authorize
-/// firings must survive.
-pub struct CachedAuthorizing {
-    pub store: wasmtime::Store<LoadedState>,
-    pub instance: loaded_authorizing::Authorizing,
-}
 
-/// Long-lived `DotcmdAware`-world instance backing dot-command
-/// dispatch for extensions that register one or more dot
-/// commands. Same pattern as the other cached worlds  one
-/// instance per extension, serialized by `TokioMutex` so
-/// concurrent `.foo` calls on different extensions don't
-/// trample each other's wasm linear memory.
-pub struct CachedDotcmdAware {
-    pub store: wasmtime::Store<LoadedState>,
-    pub instance: loaded_dotcmd_aware::DotcmdAware,
-}
 
-/// State carried by the per-call Store when dispatching into a
-/// loaded extension. The minimal world imports types/spi/logging/
-/// config; LoadedState satisfies them with stubs (real impls can
-/// follow when the dispatched extensions need real SPI). The
-/// stateful world additionally imports `state` + `cache`, backed by
-/// the `Arc<Mutex<…>>` handles cloned in from the owning extension.
-pub struct LoadedState {
-    wasi: wasmtime_wasi::WasiCtx,
-    table: wasmtime_wasi::ResourceTable,
-    state: SharedKv,
-    cache: SharedKv,
-    /// Path to the cli's database, propagated from Host so spi.execute
-    /// can open its own core::db::Connection against the same file.
-    /// Empty string => `:memory:` (SPI returns an error in that case
-    /// since in-memory dbs aren't sharable across connections).
-    db_path: String,
-    /// Pooled connection borrowed from the owning LoadedExtension.
-    /// Cloned Arc<Mutex<…>> so it survives across the per-call
-    /// Stores each dispatch builds (mirror of state/cache).
-    spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlite_component_core::db::Connection>>>>,
-    /// Outbound HTTP policy cloned from `ext.policy.http`. The
-    /// `http::Host::handle` impl gates every request on this:
-    /// `allowed_hosts` (with `*.suffix` wildcard support) and the
-    /// optional `allowed_methods` list. `None` here means the
-    /// extension wasn't granted any HTTP policy at load time, so
-    /// `handle` denies every request unconditionally — which is
-    /// the right default: an extension without an `http` capability
-    /// grant has no policy and shouldn't be able to make requests.
-    http_policy: Option<HttpPolicy>,
-    /// DNS policy granted at load time, same shape as http_policy
-    /// but for dns::resolve. None means the extension wasn't granted
-    /// `Capability::Dns`; the resolver denies every query.
-    dns_policy: Option<DnsPolicy>,
-    /// Whether `Capability::WalFrames` was in the policy grant list
-    /// at load time. The wal-frames::Host dispatcher fails closed
-    /// (capability-not-granted) when this is false. There is no
-    /// rich policy here  the WAL file path is derived from the
-    /// already-attached database, so once the bit is set the
-    /// extension can read every WAL the spi_conn knows about.
-    wal_frames_granted: bool,
-    /// Whether `Capability::S3` was in the policy grant list at
-    /// load time. The s3-base::Host dispatcher fails closed
-    /// (S3Error::CapabilityNotGranted) when this is false. Same
-    /// pattern as wal_frames_granted  there is no rich policy
-    /// (no per-bucket allowlist in v1); the endpoint URL +
-    /// credentials are arguments to each call so the extension
-    /// chooses what to hit, and the operator's grant is the
-    /// allow-the-surface bit.
-    s3_granted: bool,
-    /// Whether `Capability::SpawnBuild` was in the policy grant
-    /// list at load time. The build::Host dispatcher fails
-    /// closed (SQLITE_PERM with a "spawn-build capability not
-    /// granted" message) when this is false. No rich policy
-    /// the cargo invocation is described by the extension's
-    /// arguments at call time, and the operator's grant is the
-    /// allow-the-surface bit.
-    spawn_build_granted: bool,
-    /// Whether `Capability::Bundles` was in the policy grant list
-    /// at load time. The bundles::Host dispatcher fails closed
-    /// (SQLITE_PERM with a "bundles capability not granted"
-    /// message) when this is false. Pairs with `spawn_build_granted`
-    /// for the with-build path; metadata-only `.bundle save
-    /// --no-build` / `.bundle list` / etc. need only this bit.
-    bundles_granted: bool,
-    /// Optional back-reference to the owning Host. Set when the
-    /// Store is built for the `dotcmd-aware` world so extensions
-    /// reaching the `loader-bridge` import can delegate to the
-    /// host's existing extension-loader paths. None for every
-    /// other world (those extensions don't import loader-bridge).
-    /// Host is `Clone`-able via Arc<...>, so the clone is just
-    /// Arc bumps; no deep copy.
-    host_ref: Option<Host>,
-    /// Snapshot of the cli's session state, pushed via
-    /// `dispatch-dot-command(... , cli-state)` immediately
-    /// before the wasm invoke runs. Values are JSON-encoded
-    /// using the same conventions as state-deltas. Read-side
-    /// of the cli-state surface: `cli-state.get-*` reads from
-    /// this map. Defaults to empty for non-dotcmd-aware Stores
-    /// (their cli-state Host impl returns stubs anyway).
-    cli_state_snapshot: HashMap<String, String>,
-    /// Per-Store `wasi:http` context for extensions composed with
-    /// upstream `wasi:http`-using components (e.g.
-    /// tiger-geocoder-sqlink-bridge → tiger-geocoder-wasm).
-    /// `WasiHttpCtx` itself is a thin config struct (field-size
-    /// limit + a `Default` of `wasmtime_wasi_http::DEFAULT_FIELD_SIZE_LIMIT`);
-    /// the actual request-dispatch hooks live in `http_hooks` below.
-    /// The `Capability::Http` bit (#685) controls whether the
-    /// `wasi:http` surface is wired into the linker at all; the
-    /// hooks add per-domain gating on top of that (#688).
-    http_ctx: wasmtime_wasi_http::WasiHttpCtx,
-    /// Per-Store `wasi:http` hooks that gate outgoing requests
-    /// against the loaded extension's `HttpPolicy`. Mirrors the
-    /// per-call gate that `check_http_policy` enforces on the
-    /// custom `sqlite:extension/http` surface so an extension
-    /// composing `wasi:http` upstream is held to the same
-    /// per-domain allowlist (#688). `Capability::Http` controls
-    /// surface availability; this controls per-call shape.
-    http_hooks: SqlinkWasiHttpHooks,
-}
 
-impl wasmtime_wasi::WasiView for LoadedState {
-    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
-        wasmtime_wasi::WasiCtxView {
-            ctx: &mut self.wasi,
-            table: &mut self.table,
-        }
-    }
-}
 
-impl wasmtime_wasi_http::p2::WasiHttpView for LoadedState {
-    fn http(&mut self) -> wasmtime_wasi_http::p2::WasiHttpCtxView<'_> {
-        wasmtime_wasi_http::p2::WasiHttpCtxView {
-            ctx: &mut self.http_ctx,
-            table: &mut self.table,
-            // Per-Store hooks that gate outgoing requests against
-            // the loaded extension's `HttpPolicy.allowed_hosts` /
-            // `allowed_methods`. Falls through to `default_send_request`
-            // (tokio-rustls / webpki-roots) on the same async runtime
-            // the host already drives WASI on once the gate clears.
-            hooks: &mut self.http_hooks,
-        }
-    }
-}
 
 /// Per-Store `WasiHttpHooks` impl that mirrors `check_http_policy`'s
 /// per-domain / per-method gate onto the standard `wasi:http` surface
@@ -2200,7 +1800,7 @@ impl wasmtime_wasi_http::p2::WasiHttpView for LoadedState {
 /// into the linker at all; this hook controls per-call shape. The
 /// policy field is cloned from the loaded extension's `policy.http`
 /// at Store-build time so the hook can be inspected without reaching
-/// back into the rest of `LoadedState` (the trait gives us only
+/// back into the rest of the retired bespoke loader (the trait gives us only
 /// `&mut self`).
 ///
 /// Fail-closed default: `None` policy means the extension wasn't
@@ -2288,10 +1888,111 @@ fn check_http_policy(
     Ok(())
 }
 
-/// Empty markers for the type-only imports the minimal world declares.
-impl loaded::sqlite::extension::types::Host for LoadedState {}
-impl loaded::sqlite::extension::policy::Host for LoadedState {}
-impl loaded::sqlite::extension::http::Host for LoadedState {
+/// Task #220: the http host surface for the compose:dynlink resident provider
+/// (`compose_provider::ProviderState`), parameterized by policy. Same policy
+/// gate + reqwest/http-resident dispatch as the bespoke loader's
+/// the retired bespoke loader impl below; the only change is the policy comes in as a param
+/// instead of `self.http_policy`. (Transitional: the retired bespoke loader's impl still
+/// carries its own copy — fold it onto this fn when the `loaded::*` path is
+/// retired, to avoid touching the working loader in this additive change.)
+pub(crate) async fn net_http_handle(
+    http_policy: Option<&HttpPolicy>,
+    req: loaded::sqlite::extension::http::Request,
+) -> std::result::Result<
+    loaded::sqlite::extension::http::Response,
+    loaded::sqlite::extension::http::HttpError,
+> {
+    use loaded::sqlite::extension::http::{HttpError, Method, Scheme};
+    let scheme_str = match req.scheme.unwrap_or(Scheme::Https) {
+        Scheme::Http => "http",
+        Scheme::Https => "https",
+        Scheme::Other(s) => return Err(HttpError::InvalidUrl(format!("unsupported scheme {s}"))),
+    };
+    let authority = req
+        .authority
+        .ok_or_else(|| HttpError::InvalidUrl("missing authority".to_string()))?;
+    let path_q = req.path_with_query.unwrap_or_else(|| "/".to_string());
+    let url = format!("{scheme_str}://{authority}{path_q}");
+
+    let method = match req.method {
+        Method::Get => reqwest::Method::GET,
+        Method::Head => reqwest::Method::HEAD,
+        Method::Post => reqwest::Method::POST,
+        Method::Put => reqwest::Method::PUT,
+        Method::Delete => reqwest::Method::DELETE,
+        Method::Connect => reqwest::Method::CONNECT,
+        Method::Options => reqwest::Method::OPTIONS,
+        Method::Trace => reqwest::Method::TRACE,
+        Method::Patch => reqwest::Method::PATCH,
+        Method::Other(s) => reqwest::Method::from_bytes(s.as_bytes())
+            .map_err(|e| HttpError::Other(e.to_string()))?,
+    };
+
+    // Policy gate stays HOST-SIDE, BEFORE any dispatch (native or resident).
+    check_http_policy(http_policy, &authority, method.as_str())?;
+
+    #[cfg(feature = "native-http")]
+    {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(
+                req.timeout_ms
+                    .map(|ms| std::time::Duration::from_millis(ms as u64))
+                    .unwrap_or(std::time::Duration::from_secs(30)),
+            )
+            .build()
+            .map_err(|e| HttpError::Other(e.to_string()))?;
+
+        let mut builder = client.request(method, &url);
+        for (k, v) in &req.headers {
+            builder = builder.header(k, v.as_slice());
+        }
+        if let Some(body) = req.body {
+            builder = builder.body(body);
+        }
+        let resp = match builder.send() {
+            Ok(r) => r,
+            Err(e) => {
+                let msg = e.to_string();
+                if e.is_timeout() {
+                    return Err(HttpError::TimedOut);
+                }
+                if e.is_connect() {
+                    return Err(HttpError::ConnectionError(msg));
+                }
+                return Err(HttpError::Other(msg));
+            }
+        };
+        let status = resp.status().as_u16();
+        let headers: Vec<(String, Vec<u8>)> = resp
+            .headers()
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.as_bytes().to_vec()))
+            .collect();
+        let body = resp
+            .bytes()
+            .map_err(|e| HttpError::Other(e.to_string()))?
+            .to_vec();
+        Ok(loaded::sqlite::extension::http::Response {
+            status,
+            headers,
+            body,
+        })
+    }
+    #[cfg(not(feature = "native-http"))]
+    {
+        let _ = &method; // used only for the policy check above.
+        crate::http_resident::request(
+            method.as_str().to_string(),
+            url,
+            req.headers,
+            req.body,
+            req.timeout_ms,
+        )
+        .await
+    }
+}
+
+impl loaded::sqlite::extension::http::Host for crate::compose_provider::ProviderState {
     async fn handle(
         &mut self,
         req: loaded::sqlite::extension::http::Request,
@@ -2299,103 +2000,10 @@ impl loaded::sqlite::extension::http::Host for LoadedState {
         loaded::sqlite::extension::http::Response,
         loaded::sqlite::extension::http::HttpError,
     > {
-        use loaded::sqlite::extension::http::{HttpError, Method, Scheme};
-        let scheme_str = match req.scheme.unwrap_or(Scheme::Https) {
-            Scheme::Http => "http",
-            Scheme::Https => "https",
-            Scheme::Other(s) => {
-                return Err(HttpError::InvalidUrl(format!("unsupported scheme {s}")))
-            }
-        };
-        let authority = req
-            .authority
-            .ok_or_else(|| HttpError::InvalidUrl("missing authority".to_string()))?;
-        let path_q = req.path_with_query.unwrap_or_else(|| "/".to_string());
-        let url = format!("{scheme_str}://{authority}{path_q}");
-
-        let method = match req.method {
-            Method::Get => reqwest::Method::GET,
-            Method::Head => reqwest::Method::HEAD,
-            Method::Post => reqwest::Method::POST,
-            Method::Put => reqwest::Method::PUT,
-            Method::Delete => reqwest::Method::DELETE,
-            Method::Connect => reqwest::Method::CONNECT,
-            Method::Options => reqwest::Method::OPTIONS,
-            Method::Trace => reqwest::Method::TRACE,
-            Method::Patch => reqwest::Method::PATCH,
-            Method::Other(s) => reqwest::Method::from_bytes(s.as_bytes())
-                .map_err(|e| HttpError::Other(e.to_string()))?,
-        };
-
-        // Policy gate stays HOST-SIDE, BEFORE any dispatch (native or resident).
-        check_http_policy(self.http_policy.as_ref(), &authority, method.as_str())?;
-
-        #[cfg(feature = "native-http")]
-        {
-            // Build the request. Use the blocking client to avoid an
-            // additional executor handoff inside the already-async
-            // Host trait method body. tokio::task::spawn_blocking would
-            // be more correct under heavy load; v1 just calls.
-            let client = reqwest::blocking::Client::builder()
-                .timeout(
-                    req.timeout_ms
-                        .map(|ms| std::time::Duration::from_millis(ms as u64))
-                        .unwrap_or(std::time::Duration::from_secs(30)),
-                )
-                .build()
-                .map_err(|e| HttpError::Other(e.to_string()))?;
-
-            let mut builder = client.request(method, &url);
-            for (k, v) in &req.headers {
-                builder = builder.header(k, v.as_slice());
-            }
-            if let Some(body) = req.body {
-                builder = builder.body(body);
-            }
-            let resp = match builder.send() {
-                Ok(r) => r,
-                Err(e) => {
-                    let msg = e.to_string();
-                    if e.is_timeout() {
-                        return Err(HttpError::TimedOut);
-                    }
-                    if e.is_connect() {
-                        return Err(HttpError::ConnectionError(msg));
-                    }
-                    return Err(HttpError::Other(msg));
-                }
-            };
-            let status = resp.status().as_u16();
-            let headers: Vec<(String, Vec<u8>)> = resp
-                .headers()
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.as_bytes().to_vec()))
-                .collect();
-            let body = resp
-                .bytes()
-                .map_err(|e| HttpError::Other(e.to_string()))?
-                .to_vec();
-            Ok(loaded::sqlite::extension::http::Response {
-                status,
-                headers,
-                body,
-            })
-        }
-        #[cfg(not(feature = "native-http"))]
-        {
-            // Route through the warm-once resident http-endpoint provider.
-            let _ = &method; // `method` (reqwest::Method) used only for the policy check above.
-            crate::http_resident::request(
-                method.as_str().to_string(),
-                url,
-                req.headers,
-                req.body,
-                req.timeout_ms,
-            )
-            .await
-        }
+        net_http_handle(self.http_policy.as_ref(), req).await
     }
 }
+
 
 /// Same fail-closed shape as `check_http_policy`: a missing dns_policy
 /// is a hard deny. Wildcard / suffix matching delegates to DnsPolicy.
@@ -2415,164 +2023,214 @@ fn check_dns_policy(
     Ok(())
 }
 
-impl loaded_minimal_dns::sqlite::extension::dns::Host for LoadedState {
+/// Task #220: the dns host surface for the resident provider, parameterized by
+/// policy. Same policy gate + hickory resolve as the the retired bespoke loader impl below.
+/// (Transitional duplication — same rationale as `net_http_handle`.)
+pub(crate) async fn net_dns_resolve(
+    dns_policy: Option<&DnsPolicy>,
+    name: String,
+    record_type: loaded_minimal_dns::sqlite::extension::dns::RecordType,
+) -> std::result::Result<Vec<String>, loaded_minimal_dns::sqlite::extension::dns::DnsError> {
+    use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+    use hickory_resolver::proto::rr::RecordType as HRecordType;
+    use hickory_resolver::TokioAsyncResolver;
+    use loaded_minimal_dns::sqlite::extension::dns::{DnsError, RecordType};
+
+    check_dns_policy(dns_policy, &name)?;
+
+    let rtype = match record_type {
+        RecordType::A => HRecordType::A,
+        RecordType::Aaaa => HRecordType::AAAA,
+        RecordType::Cname => HRecordType::CNAME,
+        RecordType::Mx => HRecordType::MX,
+        RecordType::Ns => HRecordType::NS,
+        RecordType::Txt => HRecordType::TXT,
+        RecordType::Ptr => HRecordType::PTR,
+        RecordType::Soa => HRecordType::SOA,
+        RecordType::Srv => HRecordType::SRV,
+        RecordType::Other(s) => match s.to_uppercase().parse::<HRecordType>() {
+            Ok(rt) => rt,
+            Err(_) => return Err(DnsError::Other(format!("unknown record type {s:?}"))),
+        },
+    };
+
+    let timeout = dns_policy
+        .and_then(|p| p.timeout_ms)
+        .map(|ms| std::time::Duration::from_millis(ms as u64))
+        .unwrap_or(std::time::Duration::from_secs(5));
+
+    let mut opts = ResolverOpts::default();
+    opts.timeout = timeout;
+    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), opts);
+
+    let lookup = match resolver.lookup(name.as_str(), rtype).await {
+        Ok(l) => l,
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("NXDomain") || msg.contains("no record found") {
+                return Err(DnsError::Nxdomain);
+            }
+            if msg.contains("timed out") || msg.contains("timeout") {
+                return Err(DnsError::TimedOut);
+            }
+            return Err(DnsError::Other(msg));
+        }
+    };
+
+    let mut out: Vec<String> = Vec::with_capacity(lookup.record_iter().size_hint().0);
+    for record in lookup.iter() {
+        use hickory_resolver::proto::rr::RData;
+        let s = match record {
+            RData::A(ip) => ip.to_string(),
+            RData::AAAA(ip) => ip.to_string(),
+            RData::CNAME(name) => name.to_string(),
+            RData::NS(name) => name.to_string(),
+            RData::PTR(name) => name.to_string(),
+            RData::MX(mx) => format!("{} {}", mx.preference(), mx.exchange()),
+            RData::TXT(txt) => txt
+                .iter()
+                .map(|chunk| String::from_utf8_lossy(chunk).to_string())
+                .collect::<Vec<_>>()
+                .join(";"),
+            RData::SOA(soa) => format!(
+                "{} {} {} {} {} {} {}",
+                soa.mname(),
+                soa.rname(),
+                soa.serial(),
+                soa.refresh(),
+                soa.retry(),
+                soa.expire(),
+                soa.minimum()
+            ),
+            RData::SRV(srv) => format!(
+                "{} {} {} {}",
+                srv.priority(),
+                srv.weight(),
+                srv.port(),
+                srv.target()
+            ),
+            other => format!("{other:?}"),
+        };
+        out.push(s);
+    }
+    Ok(out)
+}
+
+impl loaded_minimal_dns::sqlite::extension::dns::Host for crate::compose_provider::ProviderState {
     async fn resolve(
         &mut self,
         name: String,
         record_type: loaded_minimal_dns::sqlite::extension::dns::RecordType,
     ) -> std::result::Result<Vec<String>, loaded_minimal_dns::sqlite::extension::dns::DnsError>
     {
-        use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-        use hickory_resolver::proto::rr::RecordType as HRecordType;
-        use hickory_resolver::TokioAsyncResolver;
-        use loaded_minimal_dns::sqlite::extension::dns::{DnsError, RecordType};
-
-        check_dns_policy(self.dns_policy.as_ref(), &name)?;
-
-        let rtype = match record_type {
-            RecordType::A => HRecordType::A,
-            RecordType::Aaaa => HRecordType::AAAA,
-            RecordType::Cname => HRecordType::CNAME,
-            RecordType::Mx => HRecordType::MX,
-            RecordType::Ns => HRecordType::NS,
-            RecordType::Txt => HRecordType::TXT,
-            RecordType::Ptr => HRecordType::PTR,
-            RecordType::Soa => HRecordType::SOA,
-            RecordType::Srv => HRecordType::SRV,
-            RecordType::Other(s) => match s.to_uppercase().parse::<HRecordType>() {
-                Ok(rt) => rt,
-                Err(_) => return Err(DnsError::Other(format!("unknown record type {s:?}"))),
-            },
-        };
-
-        let timeout = self
-            .dns_policy
-            .as_ref()
-            .and_then(|p| p.timeout_ms)
-            .map(|ms| std::time::Duration::from_millis(ms as u64))
-            .unwrap_or(std::time::Duration::from_secs(5));
-
-        let mut opts = ResolverOpts::default();
-        opts.timeout = timeout;
-        let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), opts);
-
-        let lookup = match resolver.lookup(name.as_str(), rtype).await {
-            Ok(l) => l,
-            Err(e) => {
-                let msg = e.to_string();
-                if msg.contains("NXDomain") || msg.contains("no record found") {
-                    return Err(DnsError::Nxdomain);
-                }
-                if msg.contains("timed out") || msg.contains("timeout") {
-                    return Err(DnsError::TimedOut);
-                }
-                return Err(DnsError::Other(msg));
-            }
-        };
-
-        let mut out: Vec<String> = Vec::with_capacity(lookup.record_iter().size_hint().0);
-        for record in lookup.iter() {
-            use hickory_resolver::proto::rr::RData;
-            let s = match record {
-                RData::A(ip) => ip.to_string(),
-                RData::AAAA(ip) => ip.to_string(),
-                RData::CNAME(name) => name.to_string(),
-                RData::NS(name) => name.to_string(),
-                RData::PTR(name) => name.to_string(),
-                RData::MX(mx) => format!("{} {}", mx.preference(), mx.exchange()),
-                RData::TXT(txt) => txt
-                    .iter()
-                    .map(|chunk| String::from_utf8_lossy(chunk).to_string())
-                    .collect::<Vec<_>>()
-                    .join(";"),
-                RData::SOA(soa) => format!(
-                    "{} {} {} {} {} {} {}",
-                    soa.mname(),
-                    soa.rname(),
-                    soa.serial(),
-                    soa.refresh(),
-                    soa.retry(),
-                    soa.expire(),
-                    soa.minimum()
-                ),
-                RData::SRV(srv) => format!(
-                    "{} {} {} {}",
-                    srv.priority(),
-                    srv.weight(),
-                    srv.port(),
-                    srv.target()
-                ),
-                other => format!("{other:?}"),
-            };
-            out.push(s);
-        }
-        Ok(out)
+        net_dns_resolve(self.dns_policy.as_ref(), name, record_type).await
     }
 }
 
-/// SPI surface the host exposes to loaded extensions. Sits on top of
-/// `core::db` (raw libsqlite3-sys wrapper). The per-extension
-/// connection is pooled inside LoadedExtension; spi_ensure_open
-/// opens it lazily against the cli's db file.
-fn spi_ensure_open(
-    state: &LoadedState,
-) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-    use sqlite_component_core::db;
-    let g = state.spi_conn.lock();
-    // Fast path: if a connection is already open, exit without
-    // mutably borrowing the RefCell. SQL callbacks re-enter here
-    // while an outer .borrow() is alive  borrow_mut() would
-    // panic. The first call opens the connection; subsequent
-    // calls see it already populated and return.
-    if g.borrow().is_some() {
-        return Ok(());
+// Task #220: `sqlite:extension/{wal-frames,s3-base}` on the RESIDENT provider
+// store, so the WAL-introspection / s3 exts (`hookprobe`, `wal-archive`)
+// instantiate provider-only. Both are CAPABILITY-gated: a resident provider
+// gets them DENY-BY-DEFAULT (exactly as a `.load`ed ext gets them ungranted —
+// `the bespoke loader's {wal_frames_granted,s3_granted}` default false). The provider
+// instantiates; every call is refused until the capability is granted.
+// Threading manifest-granted capabilities into resident registration (to make
+// the calls actually succeed) is the documented follow-up — same posture as
+// the http/dns policies above.
+impl loaded::sqlite::extension::wal_frames::Host for crate::compose_provider::ProviderState {
+    async fn get_wal_header(
+        &mut self,
+        _db_name: String,
+    ) -> std::result::Result<Option<Vec<u8>>, loaded::sqlite::extension::types::SqliteError> {
+        Err(wal_perm_err("get-wal-header"))
     }
-    let mut r = g.borrow_mut();
-    if r.is_none() {
-        // `:memory:` (or empty) opens an isolated in-memory db for
-        // this extension. Each loaded extension's spi_conn is
-        // independent  the cli's wasm-internal sqlite3 sees a
-        // different db, but every SPI call this extension makes
-        // through `state.spi_conn` sees a coherent view across the
-        // session. Tests that don't care about cross-instance
-        // sharing (the common case for unit fixtures) now run
-        // without forcing the caller to pass a tempfile.
-        let conn = if state.db_path.is_empty() || state.db_path == ":memory:" {
-            db::Connection::open_in_memory().map_err(|e| {
-                loaded::sqlite::extension::types::SqliteError {
-                    code: 1,
-                    extended_code: 1,
-                    message: format!("open :memory:: {}", e.message),
-                }
-            })?
-        } else {
-            db::Connection::open(&state.db_path, db::OpenFlags::DEFAULT).map_err(|e| {
-                loaded::sqlite::extension::types::SqliteError {
-                    code: 1,
-                    extended_code: 1,
-                    message: format!("open {}: {}", state.db_path, e.message),
-                }
-            })?
-        };
-        // PLAN-prefixes.md substrate: install the __sqlink_prefix*
-        // tables on this extension's view of the user db so that
-        // `spi.execute` calls from prefix-cli and any other
-        // registry-aware extension see the schema. install_schema
-        // uses CREATE TABLE IF NOT EXISTS  idempotent, cheap on
-        // subsequent opens. Failures are logged but non-fatal: the
-        // extension can still operate, just without prefix
-        // qualification visibility.
-        if let Err(e) = prefix_registry::install_schema(&conn) {
-            tracing::warn!(
-                db_path = %state.db_path,
-                err = %e,
-                "spi_ensure_open: prefix-registry schema install failed; continuing"
-            );
-        }
-        *r = Some(conn);
+    async fn read_frames(
+        &mut self,
+        _db_name: String,
+        _start_frame: u32,
+        _n_frames: u32,
+    ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
+        Err(wal_perm_err("read-frames"))
     }
-    Ok(())
 }
+
+impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::ProviderState {
+    async fn get_object(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _bucket: String,
+        _key: String,
+        _options: Option<loaded::sqlite::extension::s3_base::S3GetObjectOptions>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3GetObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+    async fn put_object(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _bucket: String,
+        _key: String,
+        _body: Vec<u8>,
+        _options: Option<loaded::sqlite::extension::s3_base::S3PutObjectOptions>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3PutObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+    async fn delete_object(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _bucket: String,
+        _key: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::s3_base::S3Error> {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+    async fn head_object(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _bucket: String,
+        _key: String,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3HeadObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+    async fn list_objects(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _bucket: String,
+        _options: Option<loaded::sqlite::extension::s3_base::S3ListObjectsOptions>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3ListObjectsOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+    async fn copy_object(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _source_bucket: String,
+        _source_key: String,
+        _dest_bucket: String,
+        _dest_key: String,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3PutObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+}
+
+
 
 fn db_err_to_spi(
     e: sqlite_component_core::db::Error,
@@ -2734,7 +2392,7 @@ fn db_value_to_spi(
 /// PLAN-cli-shared-conn.md Stage 3 helpers: same conversions as
 /// `spi_value_to_db` / `db_value_to_spi` / `db_err_to_spi` but
 /// against the host's `bindings::sqlite::extension::types`. The
-/// cli's spi imports live on that side; LoadedState's impls
+/// cli's spi imports live on that side; the bespoke loader's impls
 /// stay on the `loaded` side.
 fn bindings_value_to_db(
     v: bindings::sqlite::extension::types::SqlValue,
@@ -2787,7 +2445,7 @@ fn db_err_to_bindings(
 }
 
 /// Ensure the shared spi connection is open; same lazy-open
-/// semantics as `spi_ensure_open` on LoadedState but the
+/// semantics as `spi_ensure_open` on the bespoke loader but the
 /// connection lives on Host (one per cli session).
 ///
 /// `:memory:` (or an empty path) now opens a real in-memory
@@ -4270,1352 +3928,11 @@ unsafe fn sqlite3_value_to_string(v: *mut libsqlite3_sys::sqlite3_value) -> Stri
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-impl loaded::sqlite::extension::spi::Host for LoadedState {
-    async fn execute(
-        &mut self,
-        sql: String,
-        params: Vec<loaded::sqlite::extension::types::SqlValue>,
-    ) -> std::result::Result<
-        loaded::sqlite::extension::types::QueryResult,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
-        spi_ensure_open(self)?;
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        let mut stmt = conn.prepare(&sql).map_err(db_err_to_spi)?;
-        let columns: Vec<String> = stmt.column_names();
-        let bound: Vec<_> = params.into_iter().map(spi_value_to_db).collect();
-        stmt.bind_all(&bound).map_err(db_err_to_spi)?;
-        let rows = stmt.collect_rows().map_err(db_err_to_spi)?;
-        drop(stmt);
-        let out_rows: Vec<Vec<loaded::sqlite::extension::types::SqlValue>> = rows
-            .into_iter()
-            .map(|r| r.into_iter().map(db_value_to_spi).collect())
-            .collect();
-        Ok(loaded::sqlite::extension::types::QueryResult {
-            columns,
-            rows: out_rows,
-            changes: conn.changes(),
-            last_insert_rowid: conn.last_insert_rowid(),
-        })
-    }
 
-    async fn execute_scalar(
-        &mut self,
-        sql: String,
-        params: Vec<loaded::sqlite::extension::types::SqlValue>,
-    ) -> std::result::Result<
-        loaded::sqlite::extension::types::SqlValue,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
-        spi_ensure_open(self)?;
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        let mut stmt = conn.prepare(&sql).map_err(db_err_to_spi)?;
-        let bound: Vec<_> = params.into_iter().map(spi_value_to_db).collect();
-        stmt.bind_all(&bound).map_err(db_err_to_spi)?;
-        let rows = stmt.collect_rows().map_err(db_err_to_spi)?;
-        let v = rows
-            .into_iter()
-            .next()
-            .and_then(|r| r.into_iter().next())
-            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
-                code: 1,
-                extended_code: 1,
-                message: "execute_scalar: no rows".to_string(),
-            })?;
-        Ok(db_value_to_spi(v))
-    }
 
-    async fn execute_batch(
-        &mut self,
-        sql: String,
-    ) -> std::result::Result<i64, loaded::sqlite::extension::types::SqliteError> {
-        spi_ensure_open(self)?;
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        conn.execute_batch(&sql).map_err(db_err_to_spi)?;
-        Ok(conn.changes())
-    }
 
-    async fn list_vfs(&mut self) -> Vec<String> {
-        sqlite_component_core::db::Connection::list_vfses()
-    }
 
-    async fn vfs_name(
-        &mut self,
-        db_name: String,
-    ) -> std::result::Result<String, loaded::sqlite::extension::types::SqliteError> {
-        spi_ensure_open(self)?;
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        conn.vfs_name(&db_name).map_err(db_err_to_spi)
-    }
 
-    async fn serialize_db(
-        &mut self,
-        db_name: String,
-    ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
-        spi_ensure_open(self)?;
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        conn.serialize_db(&db_name).map_err(db_err_to_spi)
-    }
-
-    async fn changes(&mut self) -> i64 {
-        let _ = spi_ensure_open(self);
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        r.as_ref().map(|c| c.changes()).unwrap_or(0)
-    }
-
-    async fn total_changes(&mut self) -> i64 {
-        let _ = spi_ensure_open(self);
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        r.as_ref().map(|c| c.total_changes()).unwrap_or(0)
-    }
-
-    async fn last_insert_rowid(&mut self) -> i64 {
-        let _ = spi_ensure_open(self);
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        r.as_ref().map(|c| c.last_insert_rowid()).unwrap_or(0)
-    }
-
-    async fn current_memory_used(&mut self) -> i64 {
-        sqlite_component_core::db::Connection::current_memory_used()
-    }
-
-    async fn backup_into(
-        &mut self,
-        src_db: String,
-        dst_path: String,
-        dst_db: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        spi_ensure_open(self)?;
-        let src_g = self.spi_conn.lock();
-        let src_r = src_g.borrow();
-        let src = src_r.as_ref().expect("ensured open");
-        let dst = sqlite_component_core::db::Connection::open(
-            &dst_path,
-            sqlite_component_core::db::OpenFlags::DEFAULT,
-        )
-        .map_err(db_err_to_spi)?;
-        src.backup_into(&src_db, &dst, &dst_db)
-            .map_err(db_err_to_spi)
-    }
-
-    async fn restore_from(
-        &mut self,
-        src_path: String,
-        src_db: String,
-        dst_db: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        spi_ensure_open(self)?;
-        let src = sqlite_component_core::db::Connection::open(
-            &src_path,
-            sqlite_component_core::db::OpenFlags::READONLY,
-        )
-        .map_err(db_err_to_spi)?;
-        let dst_g = self.spi_conn.lock();
-        let dst_r = dst_g.borrow();
-        let dst = dst_r.as_ref().expect("ensured open");
-        src.backup_into(&src_db, dst, &dst_db)
-            .map_err(db_err_to_spi)
-    }
-
-    async fn set_busy_timeout(
-        &mut self,
-        ms: i32,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        spi_ensure_open(self)?;
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        conn.busy_timeout(ms).map_err(db_err_to_spi)
-    }
-
-    async fn limit(&mut self, category: i32, value: i32) -> i32 {
-        let _ = spi_ensure_open(self);
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        r.as_ref().map(|c| c.limit(category, value)).unwrap_or(-1)
-    }
-
-    async fn db_config_bool(
-        &mut self,
-        op: i32,
-        set: bool,
-        value: bool,
-    ) -> std::result::Result<bool, loaded::sqlite::extension::types::SqliteError> {
-        spi_ensure_open(self)?;
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        if set {
-            conn.db_config_set_bool(op, value).map_err(db_err_to_spi)
-        } else {
-            conn.db_config_get_bool(op).map_err(db_err_to_spi)
-        }
-    }
-
-    async fn deserialize_db(
-        &mut self,
-        db_name: String,
-        bytes: Vec<u8>,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        spi_ensure_open(self)?;
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        conn.deserialize_db(&db_name, &bytes).map_err(db_err_to_spi)
-    }
-
-    async fn execute_multi(
-        &mut self,
-        sql: String,
-        named_params: Vec<loaded::sqlite::extension::spi::NamedParam>,
-    ) -> std::result::Result<
-        Vec<loaded::sqlite::extension::types::QueryResult>,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
-        spi_ensure_open(self)?;
-        let g = self.spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        execute_multi_impl_loaded(conn, &sql, &named_params)
-    }
-
-    async fn open_db(
-        &mut self,
-        _path: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        // Extensions can't swap the cli's shared db target  the
-        // LoadedState spi connection is per-extension and tied to
-        // the db_path the host opened with. Stage 5e.7 surface
-        // is for the cli (HostWrap) only.
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.open-db is only available on the cli's shared connection".to_string(),
-        })
-    }
-}
-
-/// `sqlite:extension/wal-frames` host dispatcher. Both methods
-/// look up the on-disk filename of the named database via
-/// `sqlite3_db_filename` on the extension's spi connection, then
-/// read the `<db_path>-wal` sidecar with a synchronous `std::fs`
-/// open. The wal file is opened on every call (no fd cache)
-/// the wal-archive cadence is coarse (seconds-to-hours) so the
-/// open syscall cost is negligible.
-///
-/// Both methods fail closed: when the extension was loaded
-/// without `Capability::WalFrames` in the grant set, every call
-/// returns `SQLITE_PERM` with a "wal-frames capability not
-/// granted" message. The bit is captured in
-/// `LoadedState::wal_frames_granted` at Store-build time so the
-/// check is one bool compare per call.
-///
-/// Substrate for PLAN-wal-archive-extension.md (#439).
-impl loaded::sqlite::extension::wal_frames::Host for LoadedState {
-    async fn get_wal_header(
-        &mut self,
-        db_name: String,
-    ) -> std::result::Result<Option<Vec<u8>>, loaded::sqlite::extension::types::SqliteError> {
-        if !self.wal_frames_granted {
-            return Err(wal_perm_err("get-wal-header"));
-        }
-        let Some(wal_path) = wal_sidecar_path(self, &db_name)? else {
-            return Ok(None);
-        };
-        match tokio::fs::metadata(&wal_path).await {
-            Ok(m) if m.len() < 32 => return Ok(None),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(wal_io_err("stat wal", &wal_path, &e)),
-            _ => {}
-        }
-        let bytes = tokio::fs::read(&wal_path)
-            .await
-            .map_err(|e| wal_io_err("read wal", &wal_path, &e))?;
-        if bytes.len() < 32 {
-            return Ok(None);
-        }
-        Ok(Some(bytes[..32].to_vec()))
-    }
-
-    async fn read_frames(
-        &mut self,
-        db_name: String,
-        start_frame: u32,
-        n_frames: u32,
-    ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
-        if !self.wal_frames_granted {
-            return Err(wal_perm_err("read-frames"));
-        }
-        if start_frame == 0 {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_RANGE,
-                extended_code: libsqlite3_sys::SQLITE_RANGE,
-                message: "wal-frames.read-frames: start-frame is 1-based; 0 is invalid".to_string(),
-            });
-        }
-        let wal_path = wal_sidecar_path(self, &db_name)?.ok_or_else(|| {
-            loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_NOTFOUND,
-                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
-                message: format!("wal-frames.read-frames: no WAL file for db {db_name:?}"),
-            }
-        })?;
-        let bytes = tokio::fs::read(&wal_path)
-            .await
-            .map_err(|e| wal_io_err("read wal", &wal_path, &e))?;
-        if bytes.len() < 32 {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_CORRUPT,
-                extended_code: libsqlite3_sys::SQLITE_CORRUPT,
-                message: format!(
-                    "wal-frames.read-frames: WAL at {wal_path:?} truncated ({} bytes)",
-                    bytes.len()
-                ),
-            });
-        }
-        // WAL header layout (https://www.sqlite.org/walformat.html):
-        // 0..4   magic 0x377F0682 or 0x377F0683
-        // 4..8   format version (3007000)
-        // 8..12  page_size (big-endian u32)
-        // 12..16 checkpoint sequence
-        // 16..32 salts + checksum
-        let page_size = u32::from_be_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
-        if page_size == 0 || page_size > 1 << 16 {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_CORRUPT,
-                extended_code: libsqlite3_sys::SQLITE_CORRUPT,
-                message: format!(
-                    "wal-frames.read-frames: invalid page_size {page_size} in WAL header"
-                ),
-            });
-        }
-        let frame_size = 24u64 + page_size as u64;
-        let start_off = 32u64 + (start_frame as u64 - 1) * frame_size;
-        let length = n_frames as u64 * frame_size;
-        let end_off = start_off.checked_add(length).ok_or_else(|| {
-            loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_RANGE,
-                extended_code: libsqlite3_sys::SQLITE_RANGE,
-                message: "wal-frames.read-frames: range overflow".to_string(),
-            }
-        })?;
-        if end_off > bytes.len() as u64 {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_RANGE,
-                extended_code: libsqlite3_sys::SQLITE_RANGE,
-                message: format!(
-                    "wal-frames.read-frames: range {start_off}..{end_off} exceeds WAL size {}",
-                    bytes.len()
-                ),
-            });
-        }
-        Ok(bytes[start_off as usize..end_off as usize].to_vec())
-    }
-}
-
-/// `sqlite:extension/s3-base` host dispatcher. Bridges every WIT
-/// method into the in-host `crate::s3::*` helpers (aws-sigv4 +
-/// reqwest). Each call is capability-gated via
-/// `LoadedState::s3_granted`; without the grant we return
-/// `S3Error::CapabilityNotGranted`. Substrate for PLAN-wal-
-/// archive-extension.md (#440).
-///
-/// The reqwest blocking client is spun up per call rather than
-/// cached because (a) we're inside an async trait method and the
-/// pool-keepalive semantics under tokio + a per-Store
-/// re-instantiation get fiddly, and (b) wal-archive's cadence is
-/// coarse (seconds-to-minutes) so a TCP setup cost per call is
-/// negligible. Future iteration may cache the client on Host.
-impl loaded::sqlite::extension::s3_base::Host for LoadedState {
-    async fn get_object(
-        &mut self,
-        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        bucket: String,
-        key: String,
-        options: Option<loaded::sqlite::extension::s3_base::S3GetObjectOptions>,
-    ) -> std::result::Result<
-        loaded::sqlite::extension::s3_base::S3GetObjectOutput,
-        loaded::sqlite::extension::s3_base::S3Error,
-    > {
-        if !self.s3_granted {
-            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
-        }
-        #[cfg(feature = "native-s3")]
-        {
-            tokio::task::spawn_blocking(move || {
-                crate::s3::op_get_object(endpoint, credentials, bucket, key, options)
-            })
-            .await
-            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
-        }
-        #[cfg(not(feature = "native-s3"))]
-        {
-            crate::s3_resident::get_object(endpoint, credentials, bucket, key, options).await
-        }
-    }
-
-    async fn put_object(
-        &mut self,
-        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        bucket: String,
-        key: String,
-        body: Vec<u8>,
-        options: Option<loaded::sqlite::extension::s3_base::S3PutObjectOptions>,
-    ) -> std::result::Result<
-        loaded::sqlite::extension::s3_base::S3PutObjectOutput,
-        loaded::sqlite::extension::s3_base::S3Error,
-    > {
-        if !self.s3_granted {
-            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
-        }
-        #[cfg(feature = "native-s3")]
-        {
-            tokio::task::spawn_blocking(move || {
-                crate::s3::op_put_object(endpoint, credentials, bucket, key, body, options)
-            })
-            .await
-            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
-        }
-        #[cfg(not(feature = "native-s3"))]
-        {
-            crate::s3_resident::put_object(endpoint, credentials, bucket, key, body, options).await
-        }
-    }
-
-    async fn delete_object(
-        &mut self,
-        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        bucket: String,
-        key: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::s3_base::S3Error> {
-        if !self.s3_granted {
-            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
-        }
-        #[cfg(feature = "native-s3")]
-        {
-            tokio::task::spawn_blocking(move || {
-                crate::s3::op_delete_object(endpoint, credentials, bucket, key)
-            })
-            .await
-            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
-        }
-        #[cfg(not(feature = "native-s3"))]
-        {
-            crate::s3_resident::delete_object(endpoint, credentials, bucket, key).await
-        }
-    }
-
-    async fn head_object(
-        &mut self,
-        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        bucket: String,
-        key: String,
-    ) -> std::result::Result<
-        loaded::sqlite::extension::s3_base::S3HeadObjectOutput,
-        loaded::sqlite::extension::s3_base::S3Error,
-    > {
-        if !self.s3_granted {
-            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
-        }
-        #[cfg(feature = "native-s3")]
-        {
-            tokio::task::spawn_blocking(move || {
-                crate::s3::op_head_object(endpoint, credentials, bucket, key)
-            })
-            .await
-            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
-        }
-        #[cfg(not(feature = "native-s3"))]
-        {
-            crate::s3_resident::head_object(endpoint, credentials, bucket, key).await
-        }
-    }
-
-    async fn list_objects(
-        &mut self,
-        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        bucket: String,
-        options: Option<loaded::sqlite::extension::s3_base::S3ListObjectsOptions>,
-    ) -> std::result::Result<
-        loaded::sqlite::extension::s3_base::S3ListObjectsOutput,
-        loaded::sqlite::extension::s3_base::S3Error,
-    > {
-        if !self.s3_granted {
-            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
-        }
-        #[cfg(feature = "native-s3")]
-        {
-            tokio::task::spawn_blocking(move || {
-                crate::s3::op_list_objects(endpoint, credentials, bucket, options)
-            })
-            .await
-            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
-        }
-        #[cfg(not(feature = "native-s3"))]
-        {
-            crate::s3_resident::list_objects(endpoint, credentials, bucket, options).await
-        }
-    }
-
-    async fn copy_object(
-        &mut self,
-        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        source_bucket: String,
-        source_key: String,
-        dest_bucket: String,
-        dest_key: String,
-    ) -> std::result::Result<
-        loaded::sqlite::extension::s3_base::S3PutObjectOutput,
-        loaded::sqlite::extension::s3_base::S3Error,
-    > {
-        if !self.s3_granted {
-            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
-        }
-        #[cfg(feature = "native-s3")]
-        {
-            tokio::task::spawn_blocking(move || {
-                crate::s3::op_copy_object(
-                    endpoint,
-                    credentials,
-                    source_bucket,
-                    source_key,
-                    dest_bucket,
-                    dest_key,
-                )
-            })
-            .await
-            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
-        }
-        #[cfg(not(feature = "native-s3"))]
-        {
-            crate::s3_resident::copy_object(
-                endpoint,
-                credentials,
-                source_bucket,
-                source_key,
-                dest_bucket,
-                dest_key,
-            )
-            .await
-        }
-    }
-}
-
-/// `sqlite:extension/build` host dispatcher. Native impl: spawns
-/// `cargo build --release` against the supplied crate-root via
-/// `std::process::Command`. Captures stdout/stderr; on success
-/// resolves the produced binary path under
-/// `target/<triple-or-default>/release/` by looking for the first
-/// regular executable file there.
-///
-/// For wasm-component targets (target triple contains
-/// `wasm32-wasi`) the cargo step produces a core wasm module; we
-/// then run `wasm-tools component new` to wrap it as a wasi-
-/// preview2 component and return that path instead. spawn-build's
-/// contract is "produce the buildable artifact for the requested
-/// target" (Gap F resolution in PLAN-bundles.md).
-///
-/// Capability-gated via `LoadedState::spawn_build_granted`; without
-/// the grant we return `SQLITE_PERM` with a clear "spawn-build
-/// capability not granted" message. Substrate for
-/// PLAN-bundles.md (#445/#446).
-///
-/// The path-validation hook the WIT contract mentions is intentionally
-/// minimal in v1  cargo itself rejects nonexistent crate roots with
-/// a clear error, and the operator's capability grant is the
-/// gating bit. A future iteration may add a workdir grant
-/// (cas-cache prefix only) once the bundle-cli surface lands.
-impl loaded::sqlite::extension::build::Host for LoadedState {
-    async fn spawn_build(
-        &mut self,
-        crate_root: String,
-        target_triple: Option<String>,
-        env: Vec<(String, String)>,
-        cargo_package: Option<String>,
-        features: Vec<String>,
-    ) -> std::result::Result<
-        loaded::sqlite::extension::build::BuildOut,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
-        if !self.spawn_build_granted {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_PERM,
-                extended_code: libsqlite3_sys::SQLITE_PERM,
-                message: "build.spawn-build: capability not granted at load time \
-                     (add `spawn-build` to the load --grant list)"
-                    .to_string(),
-            });
-        }
-
-        let crate_root_path = std::path::PathBuf::from(&crate_root);
-        if !crate_root_path.exists() {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_CANTOPEN,
-                extended_code: libsqlite3_sys::SQLITE_CANTOPEN,
-                message: format!(
-                    "build.spawn-build: crate-root {crate_root:?} does not exist on host"
-                ),
-            });
-        }
-        if let Err(why) = validate_spawn_build_crate_root(&crate_root_path) {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_PERM,
-                extended_code: libsqlite3_sys::SQLITE_PERM,
-                message: format!(
-                    "build.spawn-build: crate-root {crate_root:?} not under an \
-                     allowed prefix ({why})"
-                ),
-            });
-        }
-        if let Err(why) = validate_spawn_build_target_triple(target_triple.as_deref()) {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_PERM,
-                extended_code: libsqlite3_sys::SQLITE_PERM,
-                message: format!("build.spawn-build: target_triple {:?} {why}", target_triple),
-            });
-        }
-
-        let triple = target_triple.clone();
-        let env_clone = env.clone();
-        let package_clone = cargo_package.clone();
-        let features_clone = features.clone();
-        let join: std::result::Result<
-            std::result::Result<
-                loaded::sqlite::extension::build::BuildOut,
-                loaded::sqlite::extension::types::SqliteError,
-            >,
-            tokio::task::JoinError,
-        > = tokio::task::spawn_blocking(move || {
-            let mut cmd = std::process::Command::new("cargo");
-            cmd.arg("build").arg("--release");
-            if let Some(p) = package_clone.as_deref() {
-                cmd.arg("-p").arg(p);
-            }
-            if !features_clone.is_empty() {
-                cmd.arg("--features").arg(features_clone.join(","));
-            }
-            if let Some(t) = triple.as_deref() {
-                cmd.arg("--target").arg(t);
-            }
-            cmd.current_dir(&crate_root_path);
-            apply_spawn_build_env(&mut cmd, &env_clone);
-            let output = run_with_timeout(&mut cmd, SPAWN_BUILD_TIMEOUT, "cargo")?;
-            let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-            let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-            if !output.status.success() {
-                return Err(loaded::sqlite::extension::types::SqliteError {
-                    code: libsqlite3_sys::SQLITE_ERROR,
-                    extended_code: libsqlite3_sys::SQLITE_ERROR,
-                    message: format!(
-                        "build.spawn-build: cargo exited {} \nstderr tail:\n{}",
-                        output.status,
-                        tail_lines(&stderr, 40),
-                    ),
-                });
-            }
-            // Resolve binary path. We honor the explicit target if
-            // one was provided; otherwise we look under the default
-            // `target/release/` directory. When `package` was set,
-            // prefer the binary whose stem matches the package name
-            // (cargo uses underscores in the artifact name when the
-            // package has a hyphen, so try both).
-            let release_dir = match triple.as_deref() {
-                Some(t) => crate_root_path.join("target").join(t).join("release"),
-                None => crate_root_path.join("target").join("release"),
-            };
-            let binary_path = find_release_binary(&release_dir, package_clone.as_deref())
-                .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
-                    code: libsqlite3_sys::SQLITE_NOTFOUND,
-                    extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
-                    message: format!(
-                        "build.spawn-build: cargo succeeded but no binary found under {}",
-                        release_dir.display()
-                    ),
-                })?;
-            // Gap F: for wasm-component targets, cargo produces a
-            // core wasm module; the canonical embed/load pipeline
-            // expects a wasi-preview2 component. Run `wasm-tools
-            // component new` here so spawn-build's contract is
-            // "produce the buildable artifact for the requested
-            // target" rather than "wrap cargo verbatim".
-            let is_wasm_component_target = triple
-                .as_deref()
-                .map(|t| t.contains("wasm32-wasi"))
-                .unwrap_or(false);
-            let (final_path, mut combined_stdout, mut combined_stderr) =
-                (binary_path, stdout, stderr);
-            if is_wasm_component_target {
-                let component_path = final_path.with_extension("component.wasm");
-                let mut wt = std::process::Command::new("wasm-tools");
-                wt.arg("component")
-                    .arg("new")
-                    .arg(&final_path)
-                    .arg("-o")
-                    .arg(&component_path);
-                apply_spawn_build_env(&mut wt, &env_clone);
-                let wt_out = run_with_timeout(&mut wt, SPAWN_BUILD_TIMEOUT, "wasm-tools")?;
-                combined_stdout.push_str("\n--- wasm-tools stdout ---\n");
-                combined_stdout.push_str(&String::from_utf8_lossy(&wt_out.stdout));
-                combined_stderr.push_str("\n--- wasm-tools stderr ---\n");
-                combined_stderr.push_str(&String::from_utf8_lossy(&wt_out.stderr));
-                if !wt_out.status.success() {
-                    return Err(loaded::sqlite::extension::types::SqliteError {
-                        code: libsqlite3_sys::SQLITE_ERROR,
-                        extended_code: libsqlite3_sys::SQLITE_ERROR,
-                        message: format!(
-                            "build.spawn-build: wasm-tools component new exited {}\n\
-                             stderr tail:\n{}",
-                            wt_out.status,
-                            tail_lines(&String::from_utf8_lossy(&wt_out.stderr), 40),
-                        ),
-                    });
-                }
-                return Ok(loaded::sqlite::extension::build::BuildOut {
-                    binary_path: component_path.to_string_lossy().into_owned(),
-                    stdout: combined_stdout,
-                    stderr: combined_stderr,
-                });
-            }
-            Ok(loaded::sqlite::extension::build::BuildOut {
-                binary_path: final_path.to_string_lossy().into_owned(),
-                stdout: combined_stdout,
-                stderr: combined_stderr,
-            })
-        })
-        .await;
-        match join {
-            Ok(res) => res,
-            Err(e) => Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_INTERNAL,
-                extended_code: libsqlite3_sys::SQLITE_INTERNAL,
-                message: format!("build.spawn-build: join: {e}"),
-            }),
-        }
-    }
-}
-
-/// `sqlite:extension/bundles` host dispatcher. v1.5 round 2 unify
-/// cutover: every call routes through
-/// `sqlite_cas_cache::bundles_exec::{bundle_*}` free functions
-/// against the cas-cache's Connection. The browser polyfill mirrors
-/// the same `bundles_exec::{*_SQL}` constants, so native + browser
-/// share one SQL surface; the only difference is which Connection
-/// the SQL runs against (`~/.cache/sqlink/cas.db` here vs the in-
-/// memory cas conn the dispatch-bridge maintains in the browser).
-///
-/// Pre-cutover (round 1) this delegated to `SqliteCasStore::bundle_*`,
-/// the high-level wrapper. The wrapper's bundle methods inlined the
-/// same SQL but in a code path browser tests couldn't reach; round
-/// 2's free functions are the single source of truth.
-///
-/// **#533 (round 6, path δ)**: each typed method now also flows
-/// through the shared `cas_execute_inner` helper for the SQL
-/// statements it issues, the same helper
-/// `dispatch_bridge_cas::Host::bridged_execute_cas` reaches
-/// through. Single-statement methods (`bundle_delete`,
-/// `bundle_touch`, `bundle_remove_alias`, `bundle_aliases`) are
-/// thin delegates that build SQL+params and parse rows directly
-/// here. Multi-statement methods with non-trivial idempotency
-/// logic (`bundle_save`, `bundle_add_alias`, `bundle_show`,
-/// `bundle_gc`, `bundle_record_binary`, `bundle_find_by_name`,
-/// `bundle_find_by_hash_prefix`, `bundle_list`) still call
-/// `bundles_exec::*` for now — those free functions internally
-/// use `Cache::with_bundles_conn` against the same Connection
-/// so path-δ unification holds at the cas-conn level. Further
-/// lift to `cas_execute_inner` is mechanical and tracked as a
-/// followup.
-///
-/// Other consumers (`.cache *` dot commands, artifact CRUD) keep
-/// using `SqliteCasStore` directly via `Cache::store()` since
-/// non-bundle surfaces have different shapes per consumer.
-///
-/// Capability-gated on `LoadedState::bundles_granted`; without the
-/// grant every method fails closed with SQLITE_PERM. The cas-cache
-/// db is host-managed (one connection per Cache, behind a
-/// parking_lot::Mutex). The dispatch holds the mutex for the
-/// duration of each call  every method is a single SQLite statement
-/// or a small transaction, so contention with `.cache *` dot commands
-/// or other bundle calls is bounded.
-impl loaded::sqlite::extension::bundles::Host for LoadedState {
-    async fn bundle_save(
-        &mut self,
-        name: Option<String>,
-        set_hash: String,
-        members: Vec<loaded::sqlite::extension::bundles::BundleMember>,
-    ) -> std::result::Result<u64, loaded::sqlite::extension::types::SqliteError> {
-        // MEDIUM-severity defensive fix: cap + sanitize all
-        // extension-supplied string args before they reach the
-        // cas-cache.
-        if let Some(n) = name.as_deref() {
-            validate_bundle_str(n, "name", BUNDLE_NAME_MAX).map_err(bundle_arg_err)?;
-        }
-        validate_bundle_str(&set_hash, "set_hash", BUNDLE_SET_HASH_MAX).map_err(bundle_arg_err)?;
-        for m in &members {
-            validate_bundle_str(&m.extension_name, "extension_name", BUNDLE_NAME_MAX)
-                .map_err(bundle_arg_err)?;
-            validate_bundle_str(&m.content_hash, "content_hash", BUNDLE_SET_HASH_MAX)
-                .map_err(bundle_arg_err)?;
-        }
-
-        // Path δ delegate: open-coded version of
-        // `bundles_exec::bundle_save`. Same idempotency rules:
-        //   1. If `name` resolves to an existing bundle with the
-        //      same set_hash, bump touch + return its id.
-        //   2. If `name` resolves to a different set_hash, fail
-        //      with the alias-conflict shape.
-        //   3. If no name-match, look up by set_hash; on hit,
-        //      attach name as alias if provided, bump touch,
-        //      return its id.
-        //   4. Otherwise INSERT the bundle row + each member row.
-        let cache = bundles_open_cache(self)?;
-
-        // Step 1: name lookup.
-        if let Some(n) = name.as_deref() {
-            let existing_q = cas_execute_inner(
-                &cache,
-                sqlite_cas_cache::bundles_exec::FIND_BY_NAME_SQL,
-                vec![loaded::sqlite::extension::types::SqlValue::Text(n.to_string())],
-            )?;
-            if let Some(row) = existing_q.rows.into_iter().next() {
-                let mut existing = read_summary_row(&row, "save")?;
-                if existing.set_hash != set_hash {
-                    return Err(loaded::sqlite::extension::types::SqliteError {
-                        code: libsqlite3_sys::SQLITE_CONSTRAINT,
-                        extended_code: libsqlite3_sys::SQLITE_CONSTRAINT,
-                        message: format!(
-                            "bundles.save: alias conflict: name {n:?} already bound to \
-                             set_hash={old} (new attempt: set_hash={new})",
-                            old = existing.set_hash,
-                            new = set_hash
-                        ),
-                    });
-                }
-                // Touch + return.
-                let _ = cas_execute_inner(
-                    &cache,
-                    sqlite_cas_cache::bundles_exec::TOUCH_SQL,
-                    vec![
-                        loaded::sqlite::extension::types::SqlValue::Integer(existing.id as i64),
-                        loaded::sqlite::extension::types::SqlValue::Integer(unix_now_secs()),
-                    ],
-                );
-                existing.last_used_at = unix_now_secs() as u64;
-                return Ok(existing.id);
-            }
-        }
-
-        // Step 2: set_hash lookup.
-        let hash_q = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::FIND_FIRST_BY_HASH_SQL,
-            vec![loaded::sqlite::extension::types::SqlValue::Text(set_hash.clone())],
-        )?;
-        if let Some(row) = hash_q.rows.into_iter().next() {
-            let existing = read_summary_row(&row, "save")?;
-            if let Some(n) = name.as_deref() {
-                save_add_alias_inner(&cache, existing.id, n)?;
-            }
-            let _ = cas_execute_inner(
-                &cache,
-                sqlite_cas_cache::bundles_exec::TOUCH_SQL,
-                vec![
-                    loaded::sqlite::extension::types::SqlValue::Integer(existing.id as i64),
-                    loaded::sqlite::extension::types::SqlValue::Integer(unix_now_secs()),
-                ],
-            );
-            return Ok(existing.id);
-        }
-
-        // Step 3: fresh insert + members.
-        let now = unix_now_secs();
-        let insert_q = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::BUNDLE_INSERT_SQL,
-            vec![
-                match name.as_deref() {
-                    Some(n) => loaded::sqlite::extension::types::SqlValue::Text(n.to_string()),
-                    None => loaded::sqlite::extension::types::SqlValue::Null,
-                },
-                loaded::sqlite::extension::types::SqlValue::Text(set_hash),
-                loaded::sqlite::extension::types::SqlValue::Integer(now),
-            ],
-        )?;
-        let id = insert_q.last_insert_rowid as u64;
-        if let Some(n) = name.as_deref() {
-            save_add_alias_inner(&cache, id, n)?;
-        }
-        for m in members {
-            cas_execute_inner(
-                &cache,
-                sqlite_cas_cache::bundles_exec::MEMBER_INSERT_SQL,
-                vec![
-                    loaded::sqlite::extension::types::SqlValue::Integer(id as i64),
-                    loaded::sqlite::extension::types::SqlValue::Text(m.extension_name),
-                    loaded::sqlite::extension::types::SqlValue::Text(m.content_hash),
-                ],
-            )?;
-        }
-        Ok(id)
-    }
-
-    async fn bundle_find_by_name(
-        &mut self,
-        name: String,
-    ) -> std::result::Result<
-        Option<loaded::sqlite::extension::bundles::BundleSummary>,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
-        // Path δ delegate: FIND_BY_NAME_SQL is a LEFT JOIN
-        // through __cas_bundle_alias so the lookup resolves
-        // both direct names and alias names. 0-or-1 row of the
-        // standard 5-col summary shape.
-        let cache = bundles_open_cache(self)?;
-        let result = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::FIND_BY_NAME_SQL,
-            vec![loaded::sqlite::extension::types::SqlValue::Text(name)],
-        )?;
-        match result.rows.into_iter().next() {
-            Some(row) => {
-                let mut s = read_summary_row(&row, "find-by-name")?;
-                fill_summary_counts(&cache, &mut s)?;
-                Ok(Some(s))
-            }
-            None => Ok(None),
-        }
-    }
-
-    async fn bundle_find_by_hash_prefix(
-        &mut self,
-        prefix: String,
-    ) -> std::result::Result<
-        Vec<loaded::sqlite::extension::bundles::BundleSummary>,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
-        // Path δ delegate. Defensive prefix validation mirrors
-        // the v1.5 round 2 free function: reject empty + non-hex
-        // input so the LIKE pattern can't get exploited.
-        if prefix.is_empty() {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_ERROR,
-                extended_code: libsqlite3_sys::SQLITE_ERROR,
-                message: "bundles.find-by-hash-prefix: empty prefix \
-                          (use bundle-list for all)"
-                    .into(),
-            });
-        }
-        if let Some(bad) = prefix.chars().find(|c| !c.is_ascii_hexdigit()) {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_ERROR,
-                extended_code: libsqlite3_sys::SQLITE_ERROR,
-                message: format!(
-                    "bundles.find-by-hash-prefix: non-hex char {bad:?} in prefix \
-                     (LIKE wildcards / other metacharacters are not allowed)"
-                ),
-            });
-        }
-        let pattern = format!("{prefix}%");
-        let cache = bundles_open_cache(self)?;
-        let result = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::FIND_BY_HASH_PREFIX_SQL,
-            vec![loaded::sqlite::extension::types::SqlValue::Text(pattern)],
-        )?;
-        let mut out = Vec::with_capacity(result.rows.len());
-        for row in result.rows {
-            let mut s = read_summary_row(&row, "find-by-hash-prefix")?;
-            fill_summary_counts(&cache, &mut s)?;
-            out.push(s);
-        }
-        Ok(out)
-    }
-
-    async fn bundle_list(
-        &mut self,
-    ) -> std::result::Result<
-        Vec<loaded::sqlite::extension::bundles::BundleSummary>,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
-        // Path δ delegate: LIST_SQL → N rows of the standard
-        // 5-col summary; populate counts per-row.
-        let cache = bundles_open_cache(self)?;
-        let result = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::LIST_SQL,
-            vec![],
-        )?;
-        let mut out = Vec::with_capacity(result.rows.len());
-        for row in result.rows {
-            let mut s = read_summary_row(&row, "list")?;
-            fill_summary_counts(&cache, &mut s)?;
-            out.push(s);
-        }
-        Ok(out)
-    }
-
-    async fn bundle_show(
-        &mut self,
-        id: u64,
-    ) -> std::result::Result<
-        loaded::sqlite::extension::bundles::BundleDetail,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
-        // Path δ delegate: SHOW_SUMMARY_SQL (0-or-1 row) +
-        // MEMBERS_SQL + BINARIES_SQL. NOTFOUND when summary
-        // missing.
-        let cache = bundles_open_cache(self)?;
-        let summary_q = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::SHOW_SUMMARY_SQL,
-            vec![loaded::sqlite::extension::types::SqlValue::Integer(id as i64)],
-        )?;
-        let Some(summary_row) = summary_q.rows.into_iter().next() else {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_NOTFOUND,
-                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
-                message: format!("bundles.show: id {id} not found"),
-            });
-        };
-        let mut summary = read_summary_row(&summary_row, "show")?;
-
-        let members_q = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::MEMBERS_SQL,
-            vec![loaded::sqlite::extension::types::SqlValue::Integer(id as i64)],
-        )?;
-        let mut members = Vec::with_capacity(members_q.rows.len());
-        for row in members_q.rows {
-            members.push(loaded::sqlite::extension::bundles::BundleMember {
-                extension_name: row_text(&row, 0, "show", "extension_name")?,
-                content_hash: row_text(&row, 1, "show", "content_hash")?,
-            });
-        }
-
-        let binaries_q = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::BINARIES_SQL,
-            vec![loaded::sqlite::extension::types::SqlValue::Integer(id as i64)],
-        )?;
-        let mut binaries = Vec::with_capacity(binaries_q.rows.len());
-        for row in binaries_q.rows {
-            binaries.push(loaded::sqlite::extension::bundles::BundleBinary {
-                target_triple: row_text(&row, 0, "show", "target_triple")?,
-                binary_path: row_text(&row, 1, "show", "binary_path")?,
-                built_at: row_int(&row, 2, "show", "built_at")? as u64,
-            });
-        }
-
-        summary.member_count = members.len() as u32;
-        summary.binary_count = binaries.len() as u32;
-        Ok(loaded::sqlite::extension::bundles::BundleDetail {
-            summary,
-            members,
-            binaries,
-        })
-    }
-
-    async fn bundle_delete(
-        &mut self,
-        id: u64,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        // Path δ delegate: build SQL + params from the
-        // single source of truth (`bundles_exec::DELETE_SQL`),
-        // route through the shared cas-execute helper.
-        let cache = bundles_open_cache(self)?;
-        let result = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::DELETE_SQL,
-            vec![loaded::sqlite::extension::types::SqlValue::Integer(id as i64)],
-        )?;
-        if result.changes > 0 {
-            Ok(())
-        } else {
-            Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_NOTFOUND,
-                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
-                message: format!("bundles.delete: id {id} not found"),
-            })
-        }
-    }
-
-    async fn bundle_gc(
-        &mut self,
-        policy: loaded::sqlite::extension::bundles::GcPolicy,
-    ) -> std::result::Result<Vec<u64>, loaded::sqlite::extension::types::SqliteError> {
-        // Path δ delegate: pick victims via GC_AGE_SQL +
-        // GC_KEEP_SQL (one or both, depending on policy fields),
-        // dedupe, DELETE each, return the list of ids dropped.
-        let cache = bundles_open_cache(self)?;
-        let now = unix_now_secs();
-        let mut victims: Vec<u64> = Vec::new();
-
-        if let Some(older) = policy.older_than_secs {
-            let cutoff = (now as u64).saturating_sub(older);
-            let q = cas_execute_inner(
-                &cache,
-                sqlite_cas_cache::bundles_exec::GC_AGE_SQL,
-                vec![loaded::sqlite::extension::types::SqlValue::Integer(cutoff as i64)],
-            )?;
-            for row in q.rows {
-                victims.push(row_int(&row, 0, "gc", "id")? as u64);
-            }
-        }
-
-        if let Some(keep) = policy.keep_last {
-            let q = cas_execute_inner(
-                &cache,
-                sqlite_cas_cache::bundles_exec::GC_KEEP_SQL,
-                vec![loaded::sqlite::extension::types::SqlValue::Integer(keep as i64)],
-            )?;
-            for row in q.rows {
-                let id = row_int(&row, 0, "gc", "id")? as u64;
-                if !victims.contains(&id) {
-                    victims.push(id);
-                }
-            }
-        }
-
-        for id in &victims {
-            cas_execute_inner(
-                &cache,
-                sqlite_cas_cache::bundles_exec::DELETE_SQL,
-                vec![loaded::sqlite::extension::types::SqlValue::Integer(*id as i64)],
-            )?;
-        }
-        Ok(victims)
-    }
-
-    async fn bundle_record_binary(
-        &mut self,
-        id: u64,
-        target_triple: String,
-        binary_path: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        // v1.1: copy the cargo target output into a per-bundle
-        // managed dir (`~/.cache/sqlink/builds/<set_hash>/<basename>`)
-        // before recording so different bundles for the same target
-        // don't trample each other.
-        let cache = bundles_open_cache(self)?;
-
-        // Lookup set_hash via SHOW_SUMMARY_SQL (path δ delegate).
-        let summary_q = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::SHOW_SUMMARY_SQL,
-            vec![loaded::sqlite::extension::types::SqlValue::Integer(id as i64)],
-        )?;
-        let Some(summary_row) = summary_q.rows.into_iter().next() else {
-            return Err(loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_NOTFOUND,
-                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
-                message: format!("bundles.record-binary: bundle {id} not found"),
-            });
-        };
-        let set_hash = row_text(&summary_row, 2, "record-binary", "set_hash")?;
-
-        let src = std::path::PathBuf::from(&binary_path);
-        let basename =
-            src.file_name()
-                .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
-                    code: libsqlite3_sys::SQLITE_ERROR,
-                    extended_code: libsqlite3_sys::SQLITE_ERROR,
-                    message: format!(
-                        "bundles.record-binary: src path {binary_path:?} has no filename"
-                    ),
-                })?;
-        let dest_dir =
-            sqlite_cas_cache::SqliteCasStore::default_builds_dir(&set_hash);
-        let dest = dest_dir.join(basename);
-        std::fs::create_dir_all(&dest_dir).map_err(|e| {
-            loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_IOERR,
-                extended_code: libsqlite3_sys::SQLITE_IOERR,
-                message: format!(
-                    "bundles.record-binary: mkdir -p {}: {e}",
-                    dest_dir.display()
-                ),
-            }
-        })?;
-        std::fs::copy(&src, &dest).map_err(|e| loaded::sqlite::extension::types::SqliteError {
-            code: libsqlite3_sys::SQLITE_IOERR,
-            extended_code: libsqlite3_sys::SQLITE_IOERR,
-            message: format!(
-                "bundles.record-binary: copy {} -> {}: {e}",
-                src.display(),
-                dest.display()
-            ),
-        })?;
-        let dest_str = dest.to_string_lossy().into_owned();
-
-        // UPSERT via RECORD_BINARY_SQL (path δ delegate).
-        cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::RECORD_BINARY_SQL,
-            vec![
-                loaded::sqlite::extension::types::SqlValue::Integer(id as i64),
-                loaded::sqlite::extension::types::SqlValue::Text(target_triple),
-                loaded::sqlite::extension::types::SqlValue::Text(dest_str),
-                loaded::sqlite::extension::types::SqlValue::Integer(unix_now_secs()),
-            ],
-        )?;
-        Ok(())
-    }
-
-    async fn bundle_touch(&mut self, id: u64) {
-        // Path δ delegate: build SQL + params from
-        // `bundles_exec::TOUCH_SQL` (?1 = id, ?2 = now), route
-        // through the shared cas-execute helper. Errors are
-        // swallowed (bundle_touch is best-effort housekeeping
-        // and cannot return an error per the WIT signature).
-        let Ok(cache) = bundles_open_cache(self) else {
-            return;
-        };
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
-        let _ = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::TOUCH_SQL,
-            vec![
-                loaded::sqlite::extension::types::SqlValue::Integer(id as i64),
-                loaded::sqlite::extension::types::SqlValue::Integer(now),
-            ],
-        );
-    }
-
-    async fn bundle_add_alias(
-        &mut self,
-        bundle_id: u64,
-        alias: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        // Path δ delegate via `save_add_alias_inner` (the same
-        // helper `bundle_save` uses for its step-1 / step-2
-        // alias attach).
-        let cache = bundles_open_cache(self)?;
-        save_add_alias_inner(&cache, bundle_id, &alias)
-    }
-
-    async fn bundle_remove_alias(
-        &mut self,
-        alias: String,
-    ) -> std::result::Result<bool, loaded::sqlite::extension::types::SqliteError> {
-        // Path δ delegate: build SQL + params from
-        // `bundles_exec::ALIAS_DELETE_SQL` (?1 = alias). Returns
-        // true iff the statement removed at least one row.
-        let cache = bundles_open_cache(self)?;
-        let result = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::ALIAS_DELETE_SQL,
-            vec![loaded::sqlite::extension::types::SqlValue::Text(alias)],
-        )?;
-        Ok(result.changes > 0)
-    }
-
-    async fn bundle_aliases(
-        &mut self,
-        bundle_id: u64,
-    ) -> std::result::Result<Vec<String>, loaded::sqlite::extension::types::SqliteError> {
-        // Path δ delegate: run `bundles_exec::ALIASES_LIST_SQL`
-        // (?1 = bundle_id) through the shared cas-execute helper
-        // and parse the single-column text rows into Vec<String>.
-        let cache = bundles_open_cache(self)?;
-        let result = cas_execute_inner(
-            &cache,
-            sqlite_cas_cache::bundles_exec::ALIASES_LIST_SQL,
-            vec![loaded::sqlite::extension::types::SqlValue::Integer(bundle_id as i64)],
-        )?;
-        let mut out = Vec::with_capacity(result.rows.len());
-        for row in result.rows {
-            match row.into_iter().next() {
-                Some(loaded::sqlite::extension::types::SqlValue::Text(s)) => out.push(s),
-                Some(other) => {
-                    return Err(loaded::sqlite::extension::types::SqliteError {
-                        code: libsqlite3_sys::SQLITE_ERROR,
-                        extended_code: libsqlite3_sys::SQLITE_ERROR,
-                        message: format!("bundles.aliases: name not text: {other:?}"),
-                    });
-                }
-                None => {
-                    return Err(loaded::sqlite::extension::types::SqliteError {
-                        code: libsqlite3_sys::SQLITE_ERROR,
-                        extended_code: libsqlite3_sys::SQLITE_ERROR,
-                        message: "bundles.aliases: empty row".into(),
-                    });
-                }
-            }
-        }
-        Ok(out)
-    }
-}
-
-/// Resolve the cas-cache `Cache` handle from the LoadedState,
-/// applying the bundles capability gate first. Centralized so
-/// every bundle dispatch has the same gate + same error shape.
-///
-/// Returns the `Cache` itself (not the raw `SqliteCasStore`
-/// handle) so callers reach the cas-cache Connection via
-/// `Cache::with_bundles_conn` and run `bundles_exec`'s free-
-/// function CRUD directly. v1.5 round 2 unify cutover: pre-round-
-/// 2 this returned `Arc<Mutex<SqliteCasStore>>` and callers
-/// invoked `SqliteCasStore::bundle_*` methods; the round 2 cutover
-/// dropped that high-level wrapper in favor of the SQL-strings-
-/// + free-functions surface the browser polyfill mirrors.
-fn bundles_open_cache(
-    state: &LoadedState,
-) -> std::result::Result<crate::cache::Cache, loaded::sqlite::extension::types::SqliteError>
-{
-    if !state.bundles_granted {
-        return Err(loaded::sqlite::extension::types::SqliteError {
-            code: libsqlite3_sys::SQLITE_PERM,
-            extended_code: libsqlite3_sys::SQLITE_PERM,
-            message: "bundles: capability not granted at load time \
-                      (add `bundles` to the load --grant list)"
-                .into(),
-        });
-    }
-    let host =
-        state
-            .host_ref
-            .as_ref()
-            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_INTERNAL,
-                extended_code: libsqlite3_sys::SQLITE_INTERNAL,
-                message: "bundles: host_ref not wired (extension must \
-                      run under dotcmd-aware world to access bundles)"
-                    .into(),
-            })?;
-    let cache_guard = host.cache.read();
-    let cache =
-        cache_guard
-            .as_ref()
-            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_CANTOPEN,
-                extended_code: libsqlite3_sys::SQLITE_CANTOPEN,
-                message: "bundles: cas-cache not initialized on host \
-                      (run a `.cache use-*` first or pass --cache-dir)"
-                    .into(),
-            })?;
-    Ok(cache.clone())
-}
 
 /// SQLite primary-result-code shortcuts. Kept inline to dodge a
 /// cross-module import in the bundles dispatcher.
@@ -5842,41 +4159,6 @@ fn cas_execute_inner(
     })
 }
 
-/// `sqlite:extension/dispatch-bridge-cas` host dispatcher. v1.5
-/// round 6 (path δ) cutover. Routes every call to
-/// `Cache::with_bundles_conn` so extensions that target the
-/// `bundle-cli` world can drive arbitrary CRUD against
-/// `~/.cache/sqlink/cas.db` without going through the typed
-/// `bundles::Host` surface.
-///
-/// Body delegates to `cas_execute_inner`, the same helper the
-/// typed `bundles::Host` impl reaches through. The browser
-/// composed binary's `sqlink:wasm/dispatch-bridge-cas` (in
-/// `sqlite-wasm/sqlite-lib/src/lib.rs`) does the equivalent
-/// against sqlite-lib's in-WASM `cas_with`, so native + browser
-/// callers see identical SQL semantics.
-///
-/// Capability-gated on `bundles_granted`. Schema bootstrap is
-/// owned by `Cache::with_bundles_conn` itself (the cas store
-/// initializes the schema during `SqliteCasStore::open*`); the
-/// caller can assume the cas tables exist.
-///
-/// Only the `loaded_bundle_cli` bindgen module emits this trait
-/// (the `bundle-cli` world is the only world that imports
-/// `dispatch-bridge-cas`), so this is the only impl block needed.
-impl loaded_bundle_cli::sqlite::extension::dispatch_bridge_cas::Host for LoadedState {
-    async fn bridged_execute_cas(
-        &mut self,
-        sql: String,
-        params: Vec<loaded::sqlite::extension::types::SqlValue>,
-    ) -> std::result::Result<
-        loaded::sqlite::extension::types::QueryResult,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
-        let cache = bundles_open_cache(self)?;
-        cas_execute_inner(&cache, &sql, params)
-    }
-}
 
 /// Tail of a captured stream  bounded so error messages stay
 /// reasonable.
@@ -6202,204 +4484,8 @@ fn wal_io_err(
     }
 }
 
-/// Look up `<db_name>`'s on-disk filename via the spi connection
-/// and return the WAL sidecar path (`<db_path>-wal`). Returns
-/// `Ok(None)` if the database is in-memory or temp (empty
-/// filename string from `sqlite3_db_filename`).
-fn wal_sidecar_path(
-    state: &LoadedState,
-    db_name: &str,
-) -> std::result::Result<Option<std::path::PathBuf>, loaded::sqlite::extension::types::SqliteError>
-{
-    spi_ensure_open(state)?;
-    let g = state.spi_conn.lock();
-    let r = g.borrow();
-    let conn = r.as_ref().expect("ensured open");
-    let db_path = match conn.db_filename(db_name).map_err(db_err_to_spi)? {
-        Some(p) if !p.is_empty() => p,
-        _ => return Ok(None),
-    };
-    let mut wal = std::path::PathBuf::from(&db_path);
-    let file_name = wal
-        .file_name()
-        .map(|s| s.to_os_string())
-        .unwrap_or_default();
-    let mut file_name = file_name
-        .into_string()
-        .unwrap_or_else(|os| os.to_string_lossy().into_owned());
-    file_name.push_str("-wal");
-    wal.set_file_name(file_name);
-    Ok(Some(wal))
-}
 
-/// Stage 6: LoadedState (extension callers) delegates to the
-/// host's session_handles map when `host_ref` is wired (dotcmd-aware
-/// Stores get one). The cli's session-cli extension is the primary
-/// consumer; other extensions that import session but don't have
-/// host_ref see the "session is cli-only" error.
-impl loaded::sqlite::extension::session::Host for LoadedState {
-    async fn session_create(
-        &mut self,
-        name: String,
-        db_name: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        let host = host_ref_required(self)?;
-        if host.session_handles.lock().contains_key(&name) {
-            return Err(loaded_session_err(format!(
-                "session {name:?} already exists"
-            )));
-        }
-        shared_spi_ensure_open_loaded(host)?;
-        let db_c = std::ffi::CString::new(db_name.clone())
-            .map_err(|_| loaded_session_err(format!("db name {db_name:?} has interior NUL")))?;
-        let raw_db = {
-            let g = host.shared_spi_conn.lock();
-            let r = g.borrow();
-            r.as_ref().expect("ensured open").raw_handle()
-        };
-        let mut sess: *mut session_ffi::sqlite3_session = std::ptr::null_mut();
-        let rc = unsafe { session_ffi::sqlite3session_create(raw_db, db_c.as_ptr(), &mut sess) };
-        if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(loaded_session_err(format!(
-                "sqlite3session_create returned {rc}"
-            )));
-        }
-        host.session_handles.lock().insert(name, sess as usize);
-        Ok(())
-    }
 
-    async fn session_attach(
-        &mut self,
-        name: String,
-        table: Option<String>,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        let host = host_ref_required(self)?;
-        let sess = lookup_session_loaded(host, &name)?;
-        let table_c = match table {
-            Some(t) if !t.is_empty() && t != "*" => Some(
-                std::ffi::CString::new(t.clone())
-                    .map_err(|_| loaded_session_err(format!("table {t:?} has interior NUL")))?,
-            ),
-            _ => None,
-        };
-        let ptr = table_c
-            .as_ref()
-            .map(|c| c.as_ptr())
-            .unwrap_or(std::ptr::null());
-        let rc = unsafe { session_ffi::sqlite3session_attach(sess, ptr) };
-        if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(loaded_session_err(format!(
-                "sqlite3session_attach returned {rc}"
-            )));
-        }
-        Ok(())
-    }
-
-    async fn session_enable(
-        &mut self,
-        name: String,
-        on: bool,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        let host = host_ref_required(self)?;
-        let sess = lookup_session_loaded(host, &name)?;
-        let _ = unsafe { session_ffi::sqlite3session_enable(sess, if on { 1 } else { 0 }) };
-        Ok(())
-    }
-
-    async fn session_indirect(
-        &mut self,
-        name: String,
-        on: bool,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        let host = host_ref_required(self)?;
-        let sess = lookup_session_loaded(host, &name)?;
-        let _ = unsafe { session_ffi::sqlite3session_indirect(sess, if on { 1 } else { 0 }) };
-        Ok(())
-    }
-
-    async fn session_isempty(
-        &mut self,
-        name: String,
-    ) -> std::result::Result<bool, loaded::sqlite::extension::types::SqliteError> {
-        let host = host_ref_required(self)?;
-        let sess = lookup_session_loaded(host, &name)?;
-        let n = unsafe { session_ffi::sqlite3session_isempty(sess) };
-        Ok(n != 0)
-    }
-
-    async fn session_changeset(
-        &mut self,
-        name: String,
-    ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
-        let host = host_ref_required(self)?;
-        let sess = lookup_session_loaded(host, &name)?;
-        let mut n: std::os::raw::c_int = 0;
-        let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
-        let rc = unsafe { session_ffi::sqlite3session_changeset(sess, &mut n, &mut p) };
-        if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(loaded_session_err(format!(
-                "sqlite3session_changeset returned {rc}"
-            )));
-        }
-        let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
-        unsafe { libsqlite3_sys::sqlite3_free(p) };
-        Ok(bytes)
-    }
-
-    async fn session_patchset(
-        &mut self,
-        name: String,
-    ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
-        let host = host_ref_required(self)?;
-        let sess = lookup_session_loaded(host, &name)?;
-        let mut n: std::os::raw::c_int = 0;
-        let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
-        let rc = unsafe { session_ffi::sqlite3session_patchset(sess, &mut n, &mut p) };
-        if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(loaded_session_err(format!(
-                "sqlite3session_patchset returned {rc}"
-            )));
-        }
-        let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
-        unsafe { libsqlite3_sys::sqlite3_free(p) };
-        Ok(bytes)
-    }
-
-    async fn session_delete(
-        &mut self,
-        name: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        let host = host_ref_required(self)?;
-        let raw = host
-            .session_handles
-            .lock()
-            .remove(&name)
-            .ok_or_else(|| loaded_session_err(format!("no session named {name:?}")))?;
-        unsafe { session_ffi::sqlite3session_delete(raw as *mut session_ffi::sqlite3_session) };
-        Ok(())
-    }
-
-    async fn session_list(&mut self) -> Vec<String> {
-        match self.host_ref.as_ref() {
-            Some(host) => {
-                let mut names: Vec<String> = host.session_handles.lock().keys().cloned().collect();
-                names.sort();
-                names
-            }
-            None => Vec::new(),
-        }
-    }
-}
-
-fn host_ref_required(
-    state: &LoadedState,
-) -> std::result::Result<&Host, loaded::sqlite::extension::types::SqliteError> {
-    state.host_ref.as_ref().ok_or_else(|| {
-        loaded_session_err(
-            "spi.session-* requires the dotcmd-aware host_ref (cli auto-embed only)".into(),
-        )
-    })
-}
 
 fn lookup_session_loaded(
     host: &Host,
@@ -6424,8 +4510,8 @@ fn loaded_session_err(msg: String) -> loaded::sqlite::extension::types::SqliteEr
     }
 }
 
-/// Open shared_spi_conn from a LoadedState context. Same logic as
-/// shared_spi_ensure_open but returns the LoadedState error type.
+/// Open shared_spi_conn from a the bespoke loader context. Same logic as
+/// shared_spi_ensure_open but returns the the bespoke loader error type.
 fn shared_spi_ensure_open_loaded(
     host: &Host,
 ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
@@ -6436,7 +4522,7 @@ fn shared_spi_ensure_open_loaded(
     })
 }
 
-/// Shared implementation of spi.execute_multi for the LoadedState
+/// Shared implementation of spi.execute_multi for the the bespoke loader
 /// (extensions) view. The HostWrap view uses
 /// `execute_multi_impl_bindings`  same logic, different type
 /// universes.
@@ -6498,85 +4584,9 @@ fn execute_multi_impl_loaded(
     Ok(results)
 }
 
-impl loaded::sqlite::extension::logging::Host for LoadedState {
-    async fn log(&mut self, _level: loaded::sqlite::extension::types::LogLevel, message: String) {
-        eprintln!("[loaded-ext] {message}");
-    }
-    async fn error(&mut self, msg: String) {
-        eprintln!("[loaded-ext ERROR] {msg}");
-    }
-    async fn warn(&mut self, msg: String) {
-        eprintln!("[loaded-ext WARN] {msg}");
-    }
-    async fn info(&mut self, msg: String) {
-        eprintln!("[loaded-ext INFO] {msg}");
-    }
-    async fn debug(&mut self, msg: String) {
-        eprintln!("[loaded-ext DEBUG] {msg}");
-    }
-}
 
-/// Persistent key/value state. Backed by the per-extension
-/// `Arc<Mutex<HashMap<…>>>` cloned in from `LoadedExtension`, so
-/// writes survive across the per-call Stores each dispatch builds.
-impl loaded_stateful::sqlite::extension::state::Host for LoadedState {
-    async fn get(&mut self, key: String) -> Option<loaded::sqlite::extension::types::SqlValue> {
-        self.state.lock().get(&key).cloned()
-    }
-    async fn set(&mut self, key: String, value: loaded::sqlite::extension::types::SqlValue) {
-        self.state.lock().insert(key, value);
-    }
-    async fn delete(&mut self, key: String) -> bool {
-        self.state.lock().remove(&key).is_some()
-    }
-    async fn keys(&mut self) -> Vec<String> {
-        self.state.lock().keys().cloned().collect()
-    }
-    async fn clear(&mut self) {
-        self.state.lock().clear();
-    }
-}
 
-/// Bounded in-memory cache. v1 accepts TTLs but does not enforce
-/// expiry; loaded extensions are typically short-lived enough that
-/// this is acceptable as a starting point.
-impl loaded_stateful::sqlite::extension::cache::Host for LoadedState {
-    async fn get(&mut self, key: String) -> Option<loaded::sqlite::extension::types::SqlValue> {
-        self.cache.lock().get(&key).cloned()
-    }
-    async fn set(
-        &mut self,
-        key: String,
-        value: loaded::sqlite::extension::types::SqlValue,
-        _ttl_seconds: Option<u32>,
-    ) {
-        self.cache.lock().insert(key, value);
-    }
-    async fn delete(&mut self, key: String) -> bool {
-        self.cache.lock().remove(&key).is_some()
-    }
-    async fn exists(&mut self, key: String) -> bool {
-        self.cache.lock().contains_key(&key)
-    }
-    async fn clear(&mut self) {
-        self.cache.lock().clear();
-    }
-}
 
-impl loaded::sqlite::extension::config::Host for LoadedState {
-    async fn get(&mut self, _key: String) -> Option<String> {
-        None
-    }
-    async fn set(&mut self, _key: String, _value: String) -> bool {
-        false
-    }
-    async fn sqlite_version(&mut self) -> String {
-        String::from("0.0.0")
-    }
-    async fn extension_version(&mut self) -> String {
-        String::from("0.1.0")
-    }
-}
 
 // ─────────── dotcmd-aware imports ────────────────────────
 //
@@ -6588,88 +4598,8 @@ impl loaded::sqlite::extension::config::Host for LoadedState {
 // - cli-state returns empty/zero across the board. Phase 2 wires
 //   in the cli's actual session snapshot.
 
-impl loaded_dotcmd_aware::sqlite::extension::cli_stdout::Host for LoadedState {
-    async fn write(&mut self, text: String) {
-        use std::io::Write;
-        let _ = std::io::stdout().write_all(text.as_bytes());
-    }
-    async fn flush(&mut self) {
-        use std::io::Write;
-        let _ = std::io::stdout().flush();
-    }
-    async fn row_end(&mut self) {
-        use std::io::Write;
-        let _ = std::io::stdout().write_all(b"\n");
-    }
-}
 
-impl loaded_dotcmd_aware::sqlite::extension::cli_stderr::Host for LoadedState {
-    async fn write(&mut self, text: String) {
-        use std::io::Write;
-        let _ = std::io::stderr().write_all(text.as_bytes());
-    }
-}
 
-impl loaded_dotcmd_aware::sqlite::extension::cli_state::Host for LoadedState {
-    async fn get_text(&mut self, key: String) -> String {
-        let Some(j) = self.cli_state_snapshot.get(&key) else {
-            return String::new();
-        };
-        parse_json_text(j).unwrap_or_default()
-    }
-    async fn get_int(&mut self, key: String) -> i64 {
-        let Some(j) = self.cli_state_snapshot.get(&key) else {
-            return 0;
-        };
-        // Accept bare integer or JSON int.
-        j.trim().parse::<i64>().unwrap_or(0)
-    }
-    async fn get_bool(&mut self, key: String) -> bool {
-        let Some(j) = self.cli_state_snapshot.get(&key) else {
-            return false;
-        };
-        matches!(j.trim(), "true" | "1")
-    }
-    async fn get_real(&mut self, key: String) -> f64 {
-        let Some(j) = self.cli_state_snapshot.get(&key) else {
-            return 0.0;
-        };
-        j.trim().parse::<f64>().unwrap_or(0.0)
-    }
-    async fn get_value(&mut self, key: String) -> loaded::sqlite::extension::types::SqlValue {
-        use loaded::sqlite::extension::types::SqlValue as V;
-        let Some(j) = self.cli_state_snapshot.get(&key) else {
-            return V::Null;
-        };
-        let t = j.trim();
-        if t == "null" {
-            return V::Null;
-        }
-        if t == "true" {
-            return V::Integer(1);
-        }
-        if t == "false" {
-            return V::Integer(0);
-        }
-        if let Ok(i) = t.parse::<i64>() {
-            return V::Integer(i);
-        }
-        if let Ok(f) = t.parse::<f64>() {
-            return V::Real(f);
-        }
-        if let Some(s) = parse_json_text(t) {
-            return V::Text(s);
-        }
-        V::Null
-    }
-    async fn list_keys(&mut self, prefix: String) -> Vec<String> {
-        self.cli_state_snapshot
-            .keys()
-            .filter(|k| prefix.is_empty() || k.starts_with(&prefix))
-            .cloned()
-            .collect()
-    }
-}
 
 /// Decode a JSON string literal (minimal subset matching what the
 /// cli encodes for state-deltas). Returns None if the input
@@ -6703,13 +4633,20 @@ fn parse_json_text(json: &str) -> Option<String> {
     Some(out)
 }
 
-/// loader-bridge Host: a tightly-scoped slice of the host's
-/// extension-loader surface. Available only to extensions
-/// targeting the `dotcmd-aware` world  built today for
-/// `sqlink-meta-cli`'s `.sqlink install` path. Delegates to
-/// the owning Host (set on LoadedState by `dispatch_dot_command`
-/// at Store-build time).
-impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState {
+
+/// #220 full-port: the `sqlite:extension/loader-bridge` surface for a RESIDENT
+/// compose provider (`sqlink-meta-cli` run provider-only). Mirrors the bespoke
+/// the retired bespoke loader impl above but forwards through the threaded `Host` handle
+/// (`ProviderLoaderBridgeWrap.host`) instead of `self.host_ref`. Lives here so
+/// it can reach `Host`'s crate-private internals (`components`,
+/// `load_extension_from_bytes`). `apply_prefix_pin` is a bespoke-loader
+/// mechanism (it re-registers host-side scalar trampolines on the shared spi
+/// conn) that has no analog on the provider dispatch path, so it reports a
+/// clear error rather than silently succeeding — not a regression, the
+/// provider path never registers those trampolines.
+impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host
+    for crate::compose_provider::ProviderLoaderBridgeWrap<'_>
+{
     async fn load_extension_from_bytes(
         &mut self,
         name_hint: String,
@@ -6719,87 +4656,82 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
         loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest,
         loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
     > {
-        let Some(ref host) = self.host_ref else {
+        let Some(host) = self.host else {
             return Err(
                 loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
                     code: 1,
-                    message: "loader-bridge: host_ref not wired".into(),
+                    message: "loader-bridge: host not wired on this provider".into(),
                 },
             );
         };
-        // v1 ignores extra_grants  uses the cli's default
-        // policy. A future revision can map per-string capability
-        // tokens onto a Policy + http/dns/fs sub-policies.
-        let policy = Policy::default();
-        match host
-            .load_extension_from_bytes(bytes, &name_hint, policy)
-            .await
-        {
-            Ok(name) => {
-                let components = host.components.read();
-                let Some(ext) = components.get(&name) else {
-                    return Err(
-                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                            code: 1,
-                            message: format!("loader-bridge: {name} vanished after load"),
-                        },
-                    );
-                };
-                let dot_commands = ext
-                    .dot_commands
-                    .iter()
-                    .map(|d| {
-                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedDotCommand {
-                            id: d.id,
-                            name: d.name.clone(),
-                            summary: d.summary.clone(),
-                            usage: d.usage.clone(),
-                            help: d.help.clone(),
-                            requires_write: d.requires_write,
-                        }
-                    })
-                    .collect();
-                Ok(
-                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest {
-                        name: ext.name.clone(),
-                        version: ext.version.clone(),
-                        dot_commands,
+        // #220 loader retirement: the loader-bridge sub-load (ext-loads-ext)
+        // goes provider-only. A provider-backed ext lives in
+        // `provider_manifests`, not the bespoke `components` registry, so
+        // build the BridgedManifest from the provider manifest's dotcmd specs.
+        let name = match host.instantiate_provider_from_bytes(&name_hint, &bytes).await {
+            Ok(name) => name,
+            Err(e) => {
+                return Err(
+                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                        code: 1,
+                        message: e.to_string(),
                     },
                 )
             }
-            Err(e) => Err(
+        };
+        let manifests = host.provider_manifests.read();
+        let Some(m) = manifests.get(&name) else {
+            return Err(
                 loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
                     code: 1,
-                    message: e.to_string(),
+                    message: format!("loader-bridge: {name} not provider-backed after load"),
                 },
-            ),
-        }
+            );
+        };
+        let dot_commands = m
+            .dotcmd_specs
+            .iter()
+            .map(|d| {
+                loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedDotCommand {
+                    id: d.id,
+                    name: d.name.clone(),
+                    summary: d.summary.clone(),
+                    usage: d.usage.clone(),
+                    help: String::new(),
+                    requires_write: d.requires_write,
+                }
+            })
+            .collect();
+        Ok(
+            loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest {
+                name: m.name.clone(),
+                version: m.version.clone(),
+                dot_commands,
+            },
+        )
     }
 
-    async fn extension_digest(&mut self, name: String) -> String {
-        let Some(ref host) = self.host_ref else {
-            return String::new();
-        };
-        let components = host.components.read();
-        components
-            .get(&name)
-            .map(|e| e.digest.clone())
-            .unwrap_or_default()
+    async fn extension_digest(&mut self, _name: String) -> String {
+        // #220: digests were tracked in the retired `components` registry;
+        // provider-backed extensions don't surface one here.
+        String::new()
     }
 
     async fn list_loaded_extensions(
         &mut self,
     ) -> Vec<loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension> {
-        let Some(ref host) = self.host_ref else {
+        let Some(host) = self.host else {
             return Vec::new();
         };
-        let components = host.components.read();
-        let mut out: Vec<_> = components
-            .values()
+        // #220: provider-backed extensions live in `provider_backed`.
+        let mut out: Vec<_> = host
+            .provider_backed
+            .read()
+            .keys()
             .map(
-                |e| loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension {
-                    name: e.name.clone(),
-                    digest: e.digest.clone(),
+                |name| loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension {
+                    name: name.clone(),
+                    digest: String::new(),
                 },
             )
             .collect();
@@ -6820,15 +4752,6 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
     }
 
     async fn env_var(&mut self, name: String) -> Option<String> {
-        // HIGH-severity defensive fix: the prior implementation
-        // returned ANY host env var to the extension, letting any
-        // Spi-granted extension exfiltrate secrets like
-        // AWS_SECRET_ACCESS_KEY, GITHUB_TOKEN, etc. The Gap-pass
-        // resolution in PLAN-bundles.md intended only the narrow
-        // SQLINK_DEV_ROOT override; this allowlist enforces that.
-        //
-        // Any future env-var added to ENV_VAR_ALLOWLIST should be
-        // reviewed for sensitivity  these are extension-readable.
         if !ENV_VAR_ALLOWLIST.contains(&name.as_str()) {
             tracing::warn!(
                 requested = %name,
@@ -6842,204 +4765,25 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
 
     async fn apply_prefix_pin(
         &mut self,
-        function_name: String,
-        n_args: i32,
+        _function_name: String,
+        _n_args: i32,
     ) -> std::result::Result<
         (),
         loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
     > {
-        let Some(ref host) = self.host_ref else {
-            return Err(
-                loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                    code: 1,
-                    message: "apply-prefix-pin: host_ref not wired".into(),
-                },
-            );
-        };
-        if let Err(e) = shared_spi_ensure_open(host) {
-            return Err(
-                loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                    code: e.code,
-                    message: format!(
-                        "apply-prefix-pin: ensure shared spi open: {}",
-                        e.message
-                    ),
-                },
-            );
-        }
-        // Read pin row + the owning extension out of shared_spi_conn
-        // in one scope so we don't hold the borrow across the
-        // re-register call below.
-        let (expansion, ext_name, func_id) = {
-            let g = host.shared_spi_conn.lock();
-            let r = g.borrow();
-            let conn = r.as_ref().expect("ensured open");
-            // Step 1: pin row -> expansion.
-            let expansion = {
-                let mut stmt = conn
-                    .prepare(
-                        "SELECT expansion FROM __sqlink_prefix_pin \
-                         WHERE function_name = ?1 AND n_args = ?2",
-                    )
-                    .map_err(|e| {
-                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                            code: 1,
-                            message: format!("prepare pin lookup: {}", e.message),
-                        }
-                    })?;
-                stmt.bind_all(&[
-                    sqlite_component_core::db::Value::Text(function_name.clone()),
-                    sqlite_component_core::db::Value::Integer(n_args as i64),
-                ])
-                .map_err(|e| {
-                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                        code: 1,
-                        message: format!("bind pin lookup: {}", e.message),
-                    }
-                })?;
-                match stmt.step().map_err(|e| {
-                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                        code: 1,
-                        message: format!("step pin lookup: {}", e.message),
-                    }
-                })? {
-                    sqlite_component_core::db::StepResult::Row => {
-                        match stmt.column_value(0) {
-                            sqlite_component_core::db::Value::Text(s) => s,
-                            other => {
-                                return Err(
-                                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                                        code: 1,
-                                        message: format!(
-                                            "pin row's expansion not text: {other:?}"
-                                        ),
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    sqlite_component_core::db::StepResult::Done => {
-                        return Err(
-                            loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                                code: 1,
-                                message: format!(
-                                    "no pin row for ({function_name}, {n_args})  did the caller write __sqlink_prefix_pin first?"
-                                ),
-                            },
-                        )
-                    }
-                }
-            };
-            // Step 2: __sqlink_prefix_function row -> extension_name.
-            let ext_name = {
-                let mut stmt = conn
-                    .prepare(
-                        "SELECT extension_name FROM __sqlink_prefix_function \
-                         WHERE expansion = ?1 AND function_name = ?2 AND n_args = ?3",
-                    )
-                    .map_err(|e| {
-                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                            code: 2,
-                            message: format!("prepare prefix_function lookup: {}", e.message),
-                        }
-                    })?;
-                stmt.bind_all(&[
-                    sqlite_component_core::db::Value::Text(expansion.clone()),
-                    sqlite_component_core::db::Value::Text(function_name.clone()),
-                    sqlite_component_core::db::Value::Integer(n_args as i64),
-                ])
-                .map_err(|e| {
-                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                        code: 2,
-                        message: format!("bind prefix_function lookup: {}", e.message),
-                    }
-                })?;
-                match stmt.step().map_err(|e| {
-                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                        code: 2,
-                        message: format!("step prefix_function lookup: {}", e.message),
-                    }
-                })? {
-                    sqlite_component_core::db::StepResult::Row => {
-                        match stmt.column_value(0) {
-                            sqlite_component_core::db::Value::Text(s) => s,
-                            other => {
-                                return Err(
-                                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                                        code: 2,
-                                        message: format!(
-                                            "prefix_function row's extension_name not text: {other:?}"
-                                        ),
-                                    },
-                                )
-                            }
-                        }
-                    }
-                    sqlite_component_core::db::StepResult::Done => {
-                        return Err(
-                            loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                                code: 2,
-                                message: format!(
-                                    "stale pin: expansion {expansion:?} has no entry for ({function_name}, {n_args}) in __sqlink_prefix_function. Use .prefix unprefer + re-pin."
-                                ),
-                            },
-                        )
-                    }
-                }
-            };
-            // Step 3: func_id from the live registration cache.
-            let func_id = host
-                .ext_scalar_func_ids
-                .lock()
-                .get(&(ext_name.clone(), function_name.clone(), n_args))
-                .copied()
-                .ok_or_else(|| {
-                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                        code: 3,
-                        message: format!(
-                            "extension {ext_name:?} has no scalar registration for ({function_name}, {n_args})  not yet loaded, OR pin targets a non-scalar shape (aggregates/collations/vtabs are not live-pinnable in v1)"
-                        ),
-                    }
-                })?;
-            (expansion, ext_name, func_id)
-        };
-        // Re-register the bare-name trampoline on the same shared
-        // connection. sqlite3_create_function_v2 with the same
-        // (name, num_args) replaces the existing registration; that
-        // is exactly the override the pin needs.
-        let rc = {
-            let g = host.shared_spi_conn.lock();
-            let r = g.borrow();
-            let conn = r.as_ref().expect("ensured open");
-            unsafe {
-                register_host_loaded_scalar(
-                    conn.raw_handle(),
-                    host.clone(),
-                    ext_name.clone(),
-                    &function_name,
-                    n_args,
-                    func_id,
-                )
-            }
-        };
-        if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(
-                loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                    code: 3,
-                    message: format!(
-                        "re-register scalar {function_name}/{n_args} for pinned ext {ext_name:?} (expansion={expansion}): rc={rc}"
-                    ),
-                },
-            );
-        }
-        tracing::info!(
-            function = %function_name,
-            n_args,
-            pinned_ext = %ext_name,
-            expansion = %expansion,
-            "loader-bridge.apply-prefix-pin: bare-name dispatch re-registered against pinned extension"
-        );
-        Ok(())
+        // apply-prefix-pin re-registers a bare-name scalar trampoline on the
+        // bespoke loader's SHARED spi connection. The compose:dynlink provider
+        // dispatch path does not use host-registered scalar trampolines (scalars
+        // dispatch through the provider endpoint), so prefix-pinning has no
+        // analog here. Report clearly rather than pretend success.
+        Err(
+            loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                code: 1,
+                message: "loader-bridge.apply-prefix-pin is not applicable on the \
+                          compose:dynlink provider dispatch path (bespoke-loader only)"
+                    .into(),
+            },
+        )
     }
 }
 
@@ -7048,11 +4792,6 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
 /// entry is readable by every extension with Spi.
 const ENV_VAR_ALLOWLIST: &[&str] = &["SQLINK_DEV_ROOT"];
 
-/// HasData tag for the loaded-extension linker setup.
-pub struct LoadedHostData;
-impl wasmtime::component::HasData for LoadedHostData {
-    type Data<'a> = &'a mut LoadedState;
-}
 
 /// State carried by a runnable component's per-run Store. Holds WASI
 /// plumbing and the host-side compose machinery (providers
@@ -7166,351 +4905,18 @@ fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
     Ok(linker)
 }
 
-fn make_loaded_linker(engine: &Engine, http_granted: bool) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    // Async WASI for the same reason as tabular: heavy loaded
-    // extensions (postgis-bridge -> gdal-wasm -> wasivfs) need
-    // async stream/file ops; sync WASI under our async tokio
-    // runtime trips "runtime within a runtime".
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685) — without the grant, components
-    // composing wasi:http fail at instantiation with an unmet-import
-    // error rather than getting silent open-internet access. Uses
-    // `add_only_http_to_linker_async` rather than `add_to_linker_async`
-    // because the wasi proxy interfaces are already wired by the
-    // `wasmtime_wasi::p2::add_to_linker_async` call above; this
-    // adds just the two http interfaces (`wasi:http/types`,
-    // `wasi:http/outgoing-handler`). Adding here is a no-op for
-    // worlds that don't import wasi:http.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded::Minimal::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext minimal: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `minimal-http`-world loaded
-/// extension. Same imports as minimal, plus the http interface
-/// (gated by manifest http-policy at the per-call boundary).
-fn make_loaded_minimal_http_linker(
-    engine: &Engine,
-    http_granted: bool,
-) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685); see `make_loaded_linker` for the
-    // full rationale on why `add_only_http_to_linker_async` is used.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded_minimal_http::MinimalHttp::add_to_linker::<_, LoadedHostData>(&mut linker, |state| {
-        state
-    })
-    .map_err(|e| anyhow!("loaded-ext minimal-http: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `minimal-dns`-world loaded
-/// extension: WASI + the minimal imports + dns. Used when an
-/// extension declares `Capability::Dns`.
-fn make_loaded_minimal_dns_linker(
-    engine: &Engine,
-    http_granted: bool,
-) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685); see `make_loaded_linker` for the
-    // full rationale on why `add_only_http_to_linker_async` is used.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded_minimal_dns::MinimalDns::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext minimal-dns: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `stateful`-world loaded extension:
-/// WASI + the minimal imports + state + cache. Used when dispatching
-/// aggregate calls.
-fn make_loaded_stateful_linker(
-    engine: &Engine,
-    http_granted: bool,
-) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    // Async WASI — see make_loaded_linker. The raster aggregate
-    // st_rast_union_agg routes through gdal-wasm, which is what
-    // forced this from sync to async.
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685); see `make_loaded_linker` for the
-    // full rationale on why `add_only_http_to_linker_async` is used.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded_stateful::Stateful::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext stateful: {e}"))?;
-    // Stateful world doesn't import dns directly, but the
-    // bootstrap linker is shared with describe(), which may run
-    // a dns-capable extension. Wire the dns interface in
-    // explicitly so that `describe()` and load both succeed.
-    loaded_minimal_dns::sqlite::extension::dns::add_to_linker::<_, LoadedHostData>(
-        &mut linker,
-        |state| state,
-    )
-    .map_err(|e| anyhow!("loaded-ext bootstrap dns: {e}"))?;
-    // Same rationale for dotcmd-aware imports  bootstrap linker
-    // resolves describe() of any extension that imports them.
-    loaded_dotcmd_aware::sqlite::extension::cli_stdout::add_to_linker::<_, LoadedHostData>(
-        &mut linker,
-        |state| state,
-    )
-    .map_err(|e| anyhow!("loaded-ext bootstrap cli-stdout: {e}"))?;
-    loaded_dotcmd_aware::sqlite::extension::cli_stderr::add_to_linker::<_, LoadedHostData>(
-        &mut linker,
-        |state| state,
-    )
-    .map_err(|e| anyhow!("loaded-ext bootstrap cli-stderr: {e}"))?;
-    loaded_dotcmd_aware::sqlite::extension::cli_state::add_to_linker::<_, LoadedHostData>(
-        &mut linker,
-        |state| state,
-    )
-    .map_err(|e| anyhow!("loaded-ext bootstrap cli-state: {e}"))?;
-    loaded_dotcmd_aware::sqlite::extension::loader_bridge::add_to_linker::<_, LoadedHostData>(
-        &mut linker,
-        |state| state,
-    )
-    .map_err(|e| anyhow!("loaded-ext bootstrap loader-bridge: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `dotcmd-aware`-world loaded
-/// extension: minimal + cli-stdout/stderr/state imports. Used
-/// when the manifest carries non-empty `dot_commands`.
-fn make_loaded_dotcmd_aware_linker(
-    engine: &Engine,
-    http_granted: bool,
-) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685); see `make_loaded_linker` for the
-    // full rationale on why `add_only_http_to_linker_async` is used.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded_dotcmd_aware::DotcmdAware::add_to_linker::<_, LoadedHostData>(&mut linker, |state| {
-        state
-    })
-    .map_err(|e| anyhow!("loaded-ext dotcmd-aware: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `collating`-world loaded
-/// extension: same imports as minimal. Used when dispatching
-/// collation comparisons.
-fn make_loaded_collating_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    loaded_collating::Collating::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext collating: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `tabular`-world loaded
-/// extension. Used when dispatching vtab callbacks. Uses
-/// async WASI because vtab extensions like csv touch the
-/// filesystem and the cli already runs under an async runtime —
-/// sync WASI would `block_on` and trip the "runtime within a
-/// runtime" panic.
-fn make_loaded_tabular_linker(
-    engine: &Engine,
-    http_granted: bool,
-) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685); see `make_loaded_linker` for the
-    // full rationale on why `add_only_http_to_linker_async` is used.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded_tabular::Tabular::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext tabular: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `tabular-mutating`-world loaded
-/// extension. Same imports as `tabular`; the additional `vtab-update`
-/// export needs nothing on the import side beyond what `tabular`
-/// already wires.
-fn make_loaded_tabular_mutating_linker(
-    engine: &Engine,
-    http_granted: bool,
-) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Gated by
-    // `Capability::Http` (#685); see `make_loaded_linker` for the
-    // full rationale on why `add_only_http_to_linker_async` is used.
-    if http_granted {
-        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
-    }
-    loaded_tabular_mutating::TabularMutating::add_to_linker::<_, LoadedHostData>(
-        &mut linker,
-        |state| state,
-    )
-    .map_err(|e| anyhow!("loaded-ext tabular-mutating: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for an `authorizing`-world loaded
-/// extension. Used when dispatching authorizer callbacks.
-fn make_loaded_authorizing_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    loaded_authorizing::Authorizing::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext authorizing: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `resolving`-world loaded extension.
-fn make_loaded_resolving_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    loaded_resolving::Resolving::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext resolving: {e}"))?;
-    Ok(linker)
-}
 
-/// Build a Linker pre-wired for a `hooked`-world loaded extension.
-/// Used when dispatching update / commit / rollback hook callbacks.
-fn make_loaded_hooked_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
-    let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    loaded_hooked::Hooked::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
-        .map_err(|e| anyhow!("loaded-ext hooked: {e}"))?;
-    Ok(linker)
-}
 
-/// Construct a fresh Store + LoadedState for one dispatch into a
-/// loaded extension. Each dispatch gets its own Store so per-call
-/// fuel is re-supplied and shared global state doesn't leak.
-fn build_loaded_store(
-    engine: &Engine,
-    ext: &LoadedExtension,
-    db_path: String,
-) -> Result<wasmtime::Store<LoadedState>> {
-    let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
-    builder.inherit_stdio();
-    // Vtab extensions (csv etc.) read files via `std::fs::*` from
-    // inside their wasi context. Preopen the cwd at `.` so
-    // relative paths work, and `/` so absolute paths in tests
-    // hit the host filesystem.
-    //
-    // TODO: gate by policy.fs once a filesystem capability lands
-    // in `sqlite:extension/policy`.
-    if let Ok(cwd) = std::env::current_dir() {
-        let _ = builder.preopened_dir(
-            &cwd,
-            ".",
-            wasmtime_wasi::DirPerms::all(),
-            wasmtime_wasi::FilePerms::all(),
-        );
-    }
-    let _ = builder.preopened_dir(
-        "/",
-        "/",
-        wasmtime_wasi::DirPerms::all(),
-        wasmtime_wasi::FilePerms::all(),
-    );
-    let state = LoadedState {
-        wasi: builder.build(),
-        table: wasmtime_wasi::ResourceTable::new(),
-        state: ext.state.clone(),
-        cache: ext.cache.clone(),
-        db_path,
-        spi_conn: ext.spi_conn.clone(),
-        http_policy: ext.policy.http.clone(),
-        dns_policy: ext.policy.dns.clone(),
-        wal_frames_granted: ext.policy.is_granted(Capability::WalFrames),
-        s3_granted: ext.policy.is_granted(Capability::S3),
-        spawn_build_granted: ext.policy.is_granted(Capability::SpawnBuild),
-        bundles_granted: ext.policy.is_granted(Capability::Bundles),
-        host_ref: None,
-        cli_state_snapshot: HashMap::new(),
-        // Per-Store wasi:http context. Default field-size limit (4 KiB
-        // per `wasmtime_wasi_http::DEFAULT_FIELD_SIZE_LIMIT`) is fine
-        // for typical REST/JSON payloads; tighter limits would need to
-        // travel via per-extension policy. See #683.
-        http_ctx: wasmtime_wasi_http::WasiHttpCtx::new(),
-        // Per-Store wasi:http hooks. Clone the same `HttpPolicy` the
-        // custom `sqlite:extension/http` surface uses so both surfaces
-        // are held to the same per-domain allowlist (#688). `None`
-        // policy = the extension wasn't granted any HTTP policy at
-        // load time = fail-closed deny on outbound HTTP, matching
-        // `check_http_policy` for the custom surface.
-        http_hooks: SqlinkWasiHttpHooks {
-            policy: ext.policy.http.clone(),
-        },
-    };
-    let mut store = wasmtime::Store::new(engine, state);
-    let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
-    store
-        .set_fuel(fuel)
-        .map_err(|e| anyhow!("loaded-ext set_fuel: {e}"))?;
-    store.set_epoch_deadline(ext.policy.epoch_deadline_ms.unwrap_or(1_000_000_000_000));
-    Ok(store)
-}
 
-/// Per-call budget refresh for a cached loaded-extension Store.
-/// Without this, fuel and epoch deadline only get set at first
-/// instantiation (in `build_loaded_store`); a long-running call
-/// earlier in the connection's lifetime would shrink the budget
-/// available to later calls. Called from `minimal_locked` /
-/// `stateful_locked` / `tabular_locked` after the lazy
-/// instantiation block so every dispatch site picks it up for
-/// free.
-fn refresh_call_budget(
-    store: &mut wasmtime::Store<LoadedState>,
-    ext: &LoadedExtension,
-) -> Result<()> {
-    let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
-    let deadline = ext.policy.epoch_deadline_ms.unwrap_or(1_000_000_000_000);
-    store
-        .set_fuel(fuel)
-        .map_err(|e| anyhow!("refresh_call_budget set_fuel: {e}"))?;
-    store.set_epoch_deadline(deadline);
-    Ok(())
-}
 
 #[derive(Debug, Clone)]
 pub struct ScalarFunctionEntry {
@@ -7624,7 +5030,6 @@ type LanguageRuntimes = Arc<RwLock<HashMap<(String, String), Arc<LanguageRuntime
 pub struct Host {
     engine: Engine,
     engine_run: Engine,
-    components: Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>>,
     /// Database path the cli is using. Loaded extensions' spi.execute
     /// opens its own core::db::Connection to this path. Empty string
     /// means `:memory:`, and SPI returns an error then (in-memory
@@ -7715,11 +5120,6 @@ pub struct Host {
     /// Mutex). Sessions are tied to shared_spi_conn's lifetime;
     /// open/close them via the spi.session-* methods.
     session_handles: Arc<Mutex<HashMap<String, usize>>>,
-    /// scheme → registered resolver extension. `.load <uri>` looks
-    /// up the URI's scheme and instantiates the matching resolver
-    /// as a `resolving`-world component. `file` and `blake3` schemes
-    /// are handled in-host and never appear in this map.
-    resolvers: Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>>,
     /// CAS cache for resolved bytes.
     cache: Arc<RwLock<Option<cache::Cache>>>,
     /// Built-in compose:dynlink providers, keyed by registry id.
@@ -8124,20 +5524,6 @@ pub fn is_wasmtime_trap(err: &wasmtime::Error) -> bool {
     err.downcast_ref::<wasmtime::Trap>().is_some()
 }
 
-impl TabularGuard {
-    /// Drop the cached `tabular`-world Store + Instance if `err`
-    /// is a wasmtime trap. Next `tabular_guard` acquire will
-    /// re-instantiate the component. See `is_wasmtime_trap`. (#693)
-    fn poison_if_trap(&mut self, err: &wasmtime::Error) {
-        if !is_wasmtime_trap(err) {
-            return;
-        }
-        match self {
-            TabularGuard::ReadOnly(g) => **g = None,
-            TabularGuard::Mutating(g) => **g = None,
-        }
-    }
-}
 
 impl Host {
     /// Build a Host with sensible default Engine config (fuel, epoch,
@@ -8285,7 +5671,6 @@ impl Host {
         Ok(Self {
             engine,
             engine_run,
-            components: Arc::new(RwLock::new(HashMap::new())),
             db_path: Arc::new(RwLock::new(String::new())),
             shared_spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
             user_conn: Arc::new(Mutex::new(None)),
@@ -8302,7 +5687,6 @@ impl Host {
             ext_wal_hook_owner: Arc::new(Mutex::new(None)),
             ext_vtab_registrations: Arc::new(Mutex::new(HashMap::new())),
             session_handles: Arc::new(Mutex::new(HashMap::new())),
-            resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache,
             compose_providers,
             provider_backed: Arc::new(RwLock::new(HashMap::new())),
@@ -8651,36 +6035,28 @@ impl Host {
     pub async fn register_resolver(
         &self,
         scheme: &str,
-        path: PathBuf,
-        policy: Policy,
+        _path: PathBuf,
+        _policy: Policy,
     ) -> Result<String> {
-        let name = self.load_extension(path, policy).await?;
-        let ext = self
-            .components
-            .read()
-            .get(&name)
-            .cloned()
-            .ok_or_else(|| anyhow!("internal: just-loaded ext {name} missing"))?;
-        self.resolvers.write().insert(scheme.to_string(), ext);
-        Ok(name)
+        // #220: custom-scheme URI resolvers ran the bespoke `Resolving` world
+        // via the retired the retired bespoke loader loader. `resolve_uri` still handles the
+        // in-host schemes (file:/blake3:/sha256:/digest:); registering a custom
+        // resolver extension is unsupported until it is re-expressed as a
+        // compose:dynlink provider.
+        Err(anyhow!(
+            "custom-scheme resolver registration ({scheme}) is retired (#220); \
+             file:/blake3:/sha256:/digest: resolve in-host"
+        ))
     }
 
-    /// Drop the resolver registered for `scheme`.
+    /// Drop the resolver registered for `scheme` (#220: no custom resolvers).
     pub fn unregister_resolver(&self, scheme: &str) -> Result<()> {
-        if self.resolvers.write().remove(scheme).is_some() {
-            Ok(())
-        } else {
-            Err(anyhow!("no resolver registered for {scheme}"))
-        }
+        Err(anyhow!("no resolver registered for {scheme}"))
     }
 
-    /// List (scheme, resolver-extension-name) pairs.
+    /// List (scheme, resolver-extension-name) pairs (#220: none — retired).
     pub fn list_resolvers(&self) -> Vec<(String, String)> {
-        self.resolvers
-            .read()
-            .iter()
-            .map(|(s, e)| (s.clone(), e.name.clone()))
-            .collect()
+        Vec::new()
     }
 
     /// Resolve `uri` to component bytes. Handles `file:` and
@@ -8714,27 +6090,19 @@ impl Host {
                     .ok_or_else(|| anyhow!("{scheme}:{rest} not in cache"))
             }
             other => {
-                let resolver = {
-                    let g = self.resolvers.read();
-                    g.get(other)
-                        .cloned()
-                        .ok_or_else(|| anyhow!("no resolver registered for scheme {other}:"))?
-                };
-                let linker = make_loaded_resolving_linker(&self.engine)?;
-                let mut store = build_loaded_store(&self.engine, &resolver, self.db_path())?;
-                let instance = loaded_resolving::Resolving::instantiate_async(
-                    &mut store,
-                    &resolver.component,
-                    &linker,
-                )
-                .await
-                .map_err(|e| anyhow!("instantiate resolver {scheme}: {e}"))?;
-                let result = instance
-                    .sqlite_extension_resolver()
-                    .call_resolve(&mut store, uri)
-                    .await
-                    .map_err(|e| anyhow!("resolver {scheme}.resolve: {e}"))?;
-                result.map_err(|e| anyhow!("resolver {scheme}: {e}"))
+                // #220: custom-scheme resolver EXTENSIONS ran through the
+                // bespoke `Resolving` the bespoke loader world, which is retired.
+                // (register_resolver already can't populate a resolver — it
+                // reads the bespoke `components` registry that the provider
+                // load path no longer fills.) Provider-backed resolver
+                // extensions need a `resolve` endpoint-envelope method, which
+                // does not exist yet; until then custom schemes are
+                // unsupported. file:/blake3:/sha256:/digest: still resolve above.
+                Err(anyhow!(
+                    "unsupported uri scheme {other}: (custom-scheme resolver \
+                     extensions were retired with the bespoke loader in #220; \
+                     use file:/blake3:/sha256:/digest:)"
+                ))
             }
         }
     }
@@ -8761,7 +6129,10 @@ impl Host {
         } else {
             uri.to_string()
         };
-        self.load_extension_from_bytes(bytes, &hint, policy).await
+        // #220 loader retirement: URI loads go provider-only, same as the
+        // path-based router. A non-provider component is a hard error.
+        let _ = policy;
+        self.instantiate_provider_from_bytes(&hint, &bytes).await
     }
 
     /// PLAN-latent-cleanup.md L3b: shared "URI → bytes" path. Used
@@ -8814,14 +6185,6 @@ impl Host {
         Ok(bytes)
     }
 
-    /// Snapshot ref to the components map. Internal — kept available
-    /// for HostWrap call sites that need to avoid re-locking across
-    /// await boundaries.
-    #[allow(dead_code)]
-    fn components_arc(&self) -> Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>> {
-        self.components.clone()
-    }
-
     /// PLAN-prefixes.md hot-path helper. Resolves the prefix +
     /// expansion for `ext_name` and records the row in
     /// `__sqlink_prefix` on first call; subsequent calls return the
@@ -8838,20 +6201,11 @@ impl Host {
         if let Some(v) = self.prefix_cache.lock().get(ext_name) {
             return Some(v.clone());
         }
-        // Slow path: look up the loaded extension's manifest fields.
-        let (preferred_prefix, prefix_expansion) = {
-            let comps = self.components.read();
-            match comps.get(ext_name) {
-                Some(ext) => (ext.preferred_prefix.clone(), ext.prefix_expansion.clone()),
-                None => {
-                    tracing::warn!(
-                        extension = ext_name,
-                        "ensure_prefix_for_extension: extension not in components map; using synthetic fallback"
-                    );
-                    (None, None)
-                }
-            }
-        };
+        // #220: the bespoke `components` registry is retired; provider-backed
+        // extensions carry prefix hints in the provider manifest and the
+        // resolver applies collision-safe naming at registration. The synthetic
+        // fallback (derive the prefix from the ext name) is now the sole path.
+        let (preferred_prefix, prefix_expansion): (Option<String>, Option<String>) = (None, None);
         let (p, e_, _synth) = prefix_registry::resolve_prefix_expansion(
             ext_name,
             preferred_prefix.as_deref(),
@@ -9019,17 +6373,6 @@ impl Host {
         &self.engine_run
     }
 
-    /// Look up a previously-loaded extension's manifest entry by
-    /// name. Returns `None` if no extension by that name has been
-    /// loaded yet (or if it was unloaded).
-    ///
-    /// Used by `sqlink-loader` to walk the scalar / aggregate /
-    /// collation specs after `load_extension` returns the name
-    /// the loader's pApi-based trampolines register one sqlite3
-    /// function per spec on the user-process db handle.
-    pub fn get_loaded_extension(&self, ext_name: &str) -> Option<Arc<LoadedExtension>> {
-        self.components.read().get(ext_name).cloned()
-    }
 
     /// Load an extension component from a host path, apply the policy,
     /// verify the manifest, and store the loaded component. Returns
@@ -9101,10 +6444,12 @@ impl Host {
         // vtab/hook/dotcmd tiers all dispatch through the provider with
         // cross-call store coherence (the retirement target). The bespoke
         // loader only sees plain extension components.
-        let is_provider = self
+        let resolved_component = self
             .component_for_digest(&bytes, &blake3::hash(&bytes).to_hex().to_string(), &hint)
-            .ok()
-            .map(|c| compose_provider::exports_endpoint(&c, &self.engine))
+            .ok();
+        let is_provider = resolved_component
+            .as_ref()
+            .map(|c| compose_provider::exports_endpoint(c, &self.engine))
             .unwrap_or(false);
         if is_provider {
             let provider = compose_provider::ProviderHandle::new_resident_wasm_component(
@@ -9114,6 +6459,12 @@ impl Host {
                 // provider importing `compose:dynlink/linker` (reentrant SPI)
                 // can re-enter the engine provider from its warm store.
                 Some(self.dynlink_bridge.clone()),
+                // Task #220: the cli's --db so an spi-importing ext's
+                // spi.execute hits the same database, not an isolated :memory:.
+                self.db_path(),
+                // #220 full-port: thread the loader Host so a loader-bridge
+                // ext (sqlink-meta-cli) can re-enter the loader provider-only.
+                Some(self.clone()),
             )
             .map_err(|e| anyhow!("compile resident provider {}: {e}", resolved.display()))?;
             // The provider's own manifest names the extension; describe it
@@ -9132,12 +6483,86 @@ impl Host {
             self.load_extension_as_provider(&ext_name, provider).await?;
             return Ok(ext_name);
         }
-        self.load_extension_from_bytes(bytes, &hint, policy).await
+        // #220 loader retirement — the bespoke `loaded::*` loader is RETIRED.
+        // Every buildable wasm extension runs provider-only (the full port:
+        // scalar/collation/aggregate/vtab/hook + session/authorizer/
+        // loader-bridge all dispatch through the resident compose:dynlink
+        // provider). A resolved artifact that does not export the
+        // compose:dynlink endpoint (i.e. a plain `sqlite:extension`-world
+        // component with no `<ext>-provider.wasm`) is a hard error: provider-
+        // back it. This is now unconditional (was gated behind
+        // SQLINK_RETIRE_BESPOKE while the in-tree suites migrated).
+        let _ = (bytes, policy);
+        Err(anyhow!(
+            "extension '{hint}': no <ext>-provider.wasm resolved; the bespoke \
+             loader has been retired (#220) — provider-back this extension \
+             (build its <ext>-provider.wasm onto SQLINK_EXT_DIR)."
+        ))
+    }
+
+    /// #220 loader retirement: instantiate component BYTES as a WARM-ONCE
+    /// RESIDENT compose:dynlink provider — the byte-based analog of
+    /// `load_extension`'s provider branch, for callers that hold bytes
+    /// rather than a resolved path (the URI load path, the cli loader
+    /// callback, the loader-bridge sub-load). A non-provider component
+    /// (no `compose:dynlink/endpoint` export) is a hard error: the bespoke
+    /// `loaded::*` loader is retired. Returns the registered extension name.
+    pub async fn instantiate_provider_from_bytes(
+        &self,
+        name_hint: &str,
+        bytes: &[u8],
+    ) -> Result<String> {
+        let component = Component::from_binary(&self.engine, bytes)
+            .map_err(|e| anyhow!("compile provider {name_hint}: {e}"))?;
+        // Contract-version guard (#220): reject a component whose imported
+        // `sqlite:extension` major differs from this host's BEFORE instantiating
+        // — otherwise an ABI-skewed component traps cryptically or silently
+        // marshals corrupted values. Ported from the retired bespoke
+        // `register_component` guard so version rejection survives the loader
+        // deletion; runs before the endpoint check so an incompatible-version
+        // component is rejected with the actionable contract message.
+        let imported_major =
+            datalink_contract::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
+        datalink_contract::check_component_contract(
+            imported_major,
+            CONTRACT_MAJOR,
+            CONTRACT_PACKAGE,
+            name_hint,
+        )?;
+        if !compose_provider::exports_endpoint(&component, &self.engine) {
+            return Err(anyhow!(
+                "extension '{name_hint}': not a compose:dynlink provider (no \
+                 endpoint export); the bespoke loader has been retired (#220) \
+                 — provider-back this extension."
+            ));
+        }
+        let provider = compose_provider::ProviderHandle::new_resident_wasm_component_from_bytes(
+            self.engine.clone(),
+            bytes,
+            PathBuf::from(format!("bytes:{name_hint}")),
+            Some(self.dynlink_bridge.clone()),
+            self.db_path(),
+            Some(self.clone()),
+        )
+        .map_err(|e| anyhow!("compile resident provider {name_hint}: {e}"))?;
+        let (mbytes, _) = provider
+            .invoke_cli("describe", &[], std::collections::HashMap::new())
+            .await
+            .map_err(|e| anyhow!("provider describe: {e}"))?;
+        let manifest = provider_envelope::decode_manifest(&mbytes)
+            .map_err(|e| anyhow!("decode manifest: {e}"))?;
+        let ext_name = if manifest.name.is_empty() {
+            name_hint.to_string()
+        } else {
+            manifest.name.clone()
+        };
+        self.load_extension_as_provider(&ext_name, provider).await?;
+        Ok(ext_name)
     }
 
     /// Describe an extension WITHOUT loading it — instantiates
     /// briefly, calls `metadata.describe()`, drops the temporary
-    /// LoadedState. Used by the cli to know `(ext_name, digest)`
+    /// the bespoke loader. Used by the cli to know `(ext_name, digest)`
     /// before resolving the effective Policy from the grants
     /// table (PLAN-grants-db.md pre-load enforcement). The C1
     /// Component cache means the subsequent real `load_extension`
@@ -9193,110 +6618,50 @@ impl Host {
         // C2 row on first run; later processes hit C2 from cold
         // start and skip the from_binary parse entirely.
         let component = self.component_for_digest(&bytes, &digest, name_hint)?;
-        // describe() runs with a default (empty) policy, so wasi:http
-        // stays unwired here regardless of what the extension
-        // eventually requests at load time.
-        let linker = make_loaded_stateful_linker(&self.engine, false)?;
-        let tmp_ext = LoadedExtension {
-            name: String::new(),
-            version: String::new(),
-            component: component.clone(),
-            policy: Policy::default(),
-            digest: digest.clone(),
-            scalar_functions: Vec::new(),
-            aggregate_functions: Vec::new(),
-            collations: Vec::new(),
-            vtabs: Vec::new(),
-            has_authorizer: false,
-            has_update_hook: false,
-            has_commit_hook: false,
-            has_wal_hook: false,
-            wal_hook_id: 0,
-            state: Arc::new(Mutex::new(HashMap::new())),
-            cache: Arc::new(Mutex::new(HashMap::new())),
-            spi_conn: self.shared_spi_conn.clone(),
-            cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_tabular_mutating: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_hooked: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_authorizing: Arc::new(tokio::sync::Mutex::new(None)),
-
-            dot_commands: Vec::new(),
-            cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),
-            preferred_prefix: None,
-            prefix_expansion: None,
-        };
-        let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
-        let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
+        // Contract-version guard (#220): reject an ABI-skewed component before
+        // instantiating (mirrors instantiate_provider_from_bytes).
+        let imported_major =
+            datalink_contract::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
+        datalink_contract::check_component_contract(
+            imported_major,
+            CONTRACT_MAJOR,
+            CONTRACT_PACKAGE,
+            name_hint,
+        )?;
+        // #220: describe via the compose:dynlink provider. The bespoke
+        // Stateful-store describe was retired with the bespoke loader; the provider
+        // endpoint's `describe` returns the same manifest (name + declared
+        // capabilities as strings) via `provider_envelope::Manifest`.
+        if !compose_provider::exports_endpoint(&component, &self.engine) {
+            return Err(anyhow!(
+                "extension '{name_hint}': not a compose:dynlink provider (no \
+                 endpoint export); the bespoke loader has been retired (#220) \
+                 — provider-back this extension."
+            ));
+        }
+        let provider = compose_provider::ProviderHandle::new_resident_wasm_component_from_bytes(
+            self.engine.clone(),
+            &bytes,
+            PathBuf::from(format!("describe:{name_hint}")),
+            Some(self.dynlink_bridge.clone()),
+            self.db_path(),
+            Some(self.clone()),
+        )
+        .map_err(|e| anyhow!("compile resident provider {name_hint}: {e}"))?;
+        let (mbytes, _) = provider
+            .invoke_cli("describe", &[], std::collections::HashMap::new())
             .await
-            .map_err(|e| anyhow!("instantiate describe-only: {e}"))?;
-        let manifest = instance
-            .sqlite_extension_metadata()
-            .call_describe(&mut store)
-            .await
-            .map_err(|e| anyhow!("describe call: {e}"))?;
+            .map_err(|e| anyhow!("provider describe: {e}"))?;
+        let manifest = provider_envelope::decode_manifest(&mbytes)
+            .map_err(|e| anyhow!("decode manifest: {e}"))?;
         let name = if manifest.name.is_empty() {
             name_hint.to_string()
         } else {
-            manifest.name
+            manifest.name.clone()
         };
-        let declared_caps: Vec<String> = manifest
-            .declared_capabilities
-            .iter()
-            .map(|c| {
-                use loaded::sqlite::extension::policy::Capability as L;
-                match c {
-                    L::Spi => "Spi",
-                    L::Prepared => "Prepared",
-                    L::Transaction => "Transaction",
-                    L::Schema => "Schema",
-                    L::State => "State",
-                    L::Cache => "Cache",
-                    L::Random => "Random",
-                    L::Text => "Text",
-                    L::Hashing => "Hashing",
-                    L::Encoding => "Encoding",
-                    L::Http => "Http",
-                    L::Dns => "Dns",
-                    L::WalFrames => "WalFrames",
-                    L::S3 => "S3",
-                    L::SpawnBuild => "SpawnBuild",
-                    L::Bundles => "Bundles",
-                }
-                .to_string()
-            })
-            .collect();
-        Ok((name, digest, declared_caps))
+        Ok((name, digest, manifest.declared_capabilities.clone()))
     }
 
-    /// As `load_extension` but takes bytes directly. Used by the
-    /// CAS path so cached extensions don't have to round-trip
-    /// through a temp file. `name_hint` provides the fallback
-    /// name when the extension's manifest leaves `name` empty.
-    pub async fn load_extension_from_bytes(
-        &self,
-        bytes: Vec<u8>,
-        name_hint: &str,
-        policy: Policy,
-    ) -> Result<String> {
-        // Compute blake3 of the provider bytes once. The cli uses
-        // this to pin grants to specific bytes without needing
-        // its own wasi-fs preopen (PLAN-grants-db.md G3) AND it
-        // doubles as the component-cache key (PLAN-component-
-        // cache.md C1).
-        let digest = blake3::hash(&bytes).to_hex().to_string();
-        // PLAN-component-cache.md C1: skip the ~100-500ms
-        // Component::from_binary parse if we already have a
-        // parsed Component for these exact bytes. wasmtime::
-        // Component is Arc-wrapped internally so the clone is a
-        // cheap reference bump.
-        let component = self.component_for_digest(&bytes, &digest, name_hint)?;
-        self.register_component(component, name_hint, policy, digest)
-            .await
-    }
 
     /// Resolve a `Component` for the given digest via the
     /// three-tier cache: C1 (in-process LRU) → C2 (precompiled
@@ -9436,754 +6801,7 @@ impl Host {
         });
     }
 
-    async fn register_component(
-        &self,
-        component: Component,
-        name_hint: &str,
-        policy: Policy,
-        digest: String,
-    ) -> Result<String> {
-        // Use the stateful linker (superset of minimal) so extensions
-        // that import `state` or `cache` can still resolve their
-        // imports during the describe() call. We still `Minimal::
-        // instantiate`, so any component exporting at least
-        // `metadata` + `scalar-function` loads — minimal AND stateful
-        // and wider worlds.
-        let linker =
-            make_loaded_stateful_linker(&self.engine, policy.is_granted(Capability::Http))?;
-        let tmp_ext = LoadedExtension {
-            name: String::new(),
-            version: String::new(),
-            component: component.clone(),
-            policy: policy.clone(),
-            digest: digest.clone(),
-            scalar_functions: Vec::new(),
-            aggregate_functions: Vec::new(),
-            collations: Vec::new(),
-            vtabs: Vec::new(),
-            has_authorizer: false,
-            has_update_hook: false,
-            has_commit_hook: false,
-            has_wal_hook: false,
-            wal_hook_id: 0,
-            state: Arc::new(Mutex::new(HashMap::new())),
-            cache: Arc::new(Mutex::new(HashMap::new())),
-            spi_conn: self.shared_spi_conn.clone(),
-            cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_tabular_mutating: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_hooked: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_authorizing: Arc::new(tokio::sync::Mutex::new(None)),
 
-            dot_commands: Vec::new(),
-            cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),
-            preferred_prefix: None,
-            prefix_expansion: None,
-        };
-        // Runtime contract-version guard (shared datalink-contract, also used
-        // by the ducklink host). Reject a component whose imported
-        // sqlite:extension major differs from this host's CONTRACT_MAJOR (or
-        // that imports the package unversioned/legacy) BEFORE instantiating it,
-        // with a friendly, actionable message -- otherwise an ABI-skewed
-        // component could trap cryptically at instantiate, or silently marshal
-        // corrupted values.
-        let imported_major =
-            datalink_contract::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
-        datalink_contract::check_component_contract(
-            imported_major,
-            CONTRACT_MAJOR,
-            CONTRACT_PACKAGE,
-            name_hint,
-        )?;
-
-        let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
-        let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
-            .await
-            .map_err(|e| anyhow!("instantiate loaded ext: {e}"))?;
-        let manifest = instance
-            .sqlite_extension_metadata()
-            .call_describe(&mut store)
-            .await
-            .map_err(|e| anyhow!("call describe: {e}"))?;
-
-        // Enforce declared-capabilities ⊆ grant per the policy
-        // contract. Loads with missing grants fail BEFORE we
-        // register anything with SQLite.
-        let declared: Vec<Capability> = manifest
-            .declared_capabilities
-            .iter()
-            .map(|c| {
-                use loaded::sqlite::extension::policy::Capability as L;
-                match c {
-                    L::Spi => Capability::Spi,
-                    L::Prepared => Capability::Prepared,
-                    L::Transaction => Capability::Transaction,
-                    L::Schema => Capability::Schema,
-                    L::State => Capability::State,
-                    L::Cache => Capability::Cache,
-                    L::Random => Capability::Random,
-                    L::Text => Capability::Text,
-                    L::Hashing => Capability::Hashing,
-                    L::Encoding => Capability::Encoding,
-                    L::Http => Capability::Http,
-                    L::Dns => Capability::Dns,
-                    L::WalFrames => Capability::WalFrames,
-                    L::S3 => Capability::S3,
-                    L::SpawnBuild => Capability::SpawnBuild,
-                    L::Bundles => Capability::Bundles,
-                }
-            })
-            .collect();
-        if let Err(e) = policy.check_manifest(&declared) {
-            return Err(anyhow!("policy refused load: {e:?}"));
-        }
-
-        let name = if !manifest.name.is_empty() {
-            manifest.name.clone()
-        } else {
-            name_hint.to_string()
-        };
-
-        // PLAN-wit-value-extension.md Phase B (DD3): drain the
-        // manifest's typed-value-binding entries into the host's
-        // global registry. A conflict (same type-id, different
-        // decoder/encoder/symbolic — i.e. canon:wit drift) is a
-        // fatal load error: a partial registry would silently
-        // misroute wit-value crossings later.
-        for binding in &manifest.typed_values {
-            let entry = typed_value::TypedValueBinding {
-                type_id: type_id_from_wit(&binding.type_id),
-                symbolic_name: binding.symbolic_name.clone(),
-                decoder_import: binding.decoder_import.clone(),
-                encoder_import: binding.encoder_import.clone(),
-                extension_name: name.clone(),
-            };
-            if let Err(conflict) = self.typed_values.insert(entry) {
-                return Err(anyhow!(
-                    "wit-value typed-value-binding conflict at load of {name_hint}: {conflict}"
-                ));
-            }
-        }
-        let version = if !manifest.version.is_empty() {
-            manifest.version.clone()
-        } else {
-            "0.0.0".to_string()
-        };
-        let scalar_functions: Vec<_> = manifest
-            .scalar_functions
-            .iter()
-            .map(|s| ScalarFunctionEntry {
-                id: s.id,
-                name: s.name.clone(),
-                num_args: s.num_args,
-                deterministic: s
-                    .func_flags
-                    .contains(loaded::sqlite::extension::types::FunctionFlags::DETERMINISTIC),
-            })
-            .collect();
-        let aggregate_functions: Vec<_> = manifest
-            .aggregate_functions
-            .iter()
-            .map(|a| AggregateFunctionEntry {
-                id: a.id,
-                name: a.name.clone(),
-                num_args: a.num_args,
-                deterministic: a
-                    .func_flags
-                    .contains(loaded::sqlite::extension::types::FunctionFlags::DETERMINISTIC),
-                is_window: a.is_window,
-            })
-            .collect();
-        let collations: Vec<_> = manifest
-            .collations
-            .iter()
-            .map(|c| CollationEntry {
-                id: c.id,
-                name: c.name.clone(),
-            })
-            .collect();
-
-        let vtabs: Vec<_> = manifest
-            .vtabs
-            .iter()
-            .map(|v| VtabEntry {
-                id: v.id,
-                name: v.name.clone(),
-                eponymous: v.eponymous,
-                mutable: v.mutable,
-                batched: v.batched,
-            })
-            .collect();
-        let dot_commands: Vec<DotCommandEntry> = manifest
-            .dot_commands
-            .iter()
-            .map(|d| DotCommandEntry {
-                id: d.id,
-                name: d.name.clone(),
-                version: d.version.clone(),
-                summary: d.summary.clone(),
-                usage: d.usage.clone(),
-                help: d.help.clone(),
-                examples: d
-                    .examples
-                    .iter()
-                    .map(|e| (e.description.clone(), e.command.clone()))
-                    .collect(),
-                requires_write: d.requires_write,
-                no_args: d.no_args,
-            })
-            .collect();
-        self.components.write().insert(
-            name.clone(),
-            Arc::new(LoadedExtension {
-                name: name.clone(),
-                version,
-                component,
-                policy,
-                digest,
-                scalar_functions,
-                aggregate_functions,
-                collations,
-                vtabs,
-                has_authorizer: manifest.has_authorizer,
-                has_update_hook: manifest.has_update_hook,
-                has_commit_hook: manifest.has_commit_hook,
-                has_wal_hook: manifest.has_wal_hook,
-                wal_hook_id: manifest.wal_hook_id,
-                state: Arc::new(Mutex::new(HashMap::new())),
-                cache: Arc::new(Mutex::new(HashMap::new())),
-                spi_conn: self.shared_spi_conn.clone(),
-                cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
-                cached_tabular_mutating: Arc::new(tokio::sync::Mutex::new(None)),
-                cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
-                cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
-                cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
-                cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
-                cached_hooked: Arc::new(tokio::sync::Mutex::new(None)),
-                cached_authorizing: Arc::new(tokio::sync::Mutex::new(None)),
-                dot_commands,
-                cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),
-                preferred_prefix: manifest.preferred_prefix.clone(),
-                prefix_expansion: manifest.prefix_expansion.clone(),
-            }),
-        );
-
-        Ok(name)
-    }
-
-    /// Walk a loaded extension's manifest and register every scalar,
-    /// aggregate, collation, vtab, and hook on the host's shared
-    /// connection. Mirrors what the in-WASM cli's `do_load` does after
-    /// `load_extension` returns — splitting it out lets a native
-    /// loader (Scenario 1) drive the same registrations without going
-    /// through wasm.
-    ///
-    /// Returns counts of (scalars, aggregates, collations, hooks, vtabs).
-    /// Errors are logged via tracing and counted as zero; the
-    /// installation is best-effort per-entry so a single bad
-    /// registration doesn't abort the rest.
-    pub async fn install_loaded_extension(
-        &self,
-        ext_name: &str,
-    ) -> Result<(u32, u32, u32, u32, u32)> {
-        let ext = {
-            let comps = self.components.read();
-            comps.get(ext_name).cloned().ok_or_else(|| {
-                anyhow!("install_loaded_extension: extension {ext_name} not loaded")
-            })?
-        };
-        // The registration code paths need a live shared_spi_conn.
-        // shared_spi_ensure_open mirrors what the WIT register-*
-        // methods do at the top of each call.
-        shared_spi_ensure_open(self).map_err(|e| {
-            anyhow!(
-                "install_loaded_extension: open shared spi: {} (code {})",
-                e.message,
-                e.code
-            )
-        })?;
-
-        let mut scalars = 0u32;
-        let mut aggregates = 0u32;
-        let mut collations = 0u32;
-        let mut hooks = 0u32;
-        let mut vtabs = 0u32;
-
-        // Scalars. Each function gets up to TWO registrations:
-        //   * `prefix__name` qualified form: always registered.
-        //   * bare `name`: registered unless a pin redirects bare
-        //     dispatch elsewhere (Q5 / want_bare).
-        // record_function_for_extension handles the prefix recording,
-        // the collision detection, and the pin lookup; this loop
-        // owns the actual SQLite-side registration + bookkeeping.
-        for spec in &ext.scalar_functions {
-            let Some(rec) =
-                self.record_function_for_extension(ext_name, &spec.name, spec.num_args)
-            else {
-                tracing::warn!(
-                    extension = ext_name,
-                    func = %spec.name,
-                    "scalar registration: prefix resolution failed; skipping qualified form"
-                );
-                continue;
-            };
-
-            // Bare-name registration  pin-aware + collision-safe
-            // (Task #216). Before registering the short name, ask the
-            // LIVE connection (PRAGMA function_list) whether `(name,
-            // arity)` is already taken by a SQLite builtin or a
-            // previously-loaded extension. If free, keep the bare name;
-            // if taken, register under `<ext>_<name>` (never clobber).
-            let (bare_name, r_bare) = if rec.want_bare {
-                let g = self.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("shared_spi_conn open");
-                let resolved = prefix_registry::resolve_collision_free_name(
-                    conn,
-                    ext_name,
-                    &spec.name,
-                    spec.num_args,
-                )
-                .unwrap_or_else(|e| {
-                    tracing::warn!(
-                        extension = ext_name,
-                        func = %spec.name,
-                        arity = spec.num_args,
-                        err = %e,
-                        "collision-free name resolution failed; falling back to bare name"
-                    );
-                    prefix_registry::ResolvedName {
-                        name: spec.name.clone(),
-                        remapped: false,
-                    }
-                });
-                if resolved.remapped {
-                    eprintln!(
-                        "[sqlink] {}.{}/{} collides with an existing function; registered as {}",
-                        ext_name, spec.name, spec.num_args, resolved.name
-                    );
-                }
-                let rc = unsafe {
-                    register_host_loaded_scalar(
-                        conn.raw_handle(),
-                        self.clone(),
-                        ext_name.to_string(),
-                        &resolved.name,
-                        spec.num_args,
-                        spec.id,
-                    )
-                };
-                (resolved.name, rc)
-            } else {
-                (spec.name.clone(), libsqlite3_sys::SQLITE_OK)
-            };
-
-            if r_bare == libsqlite3_sys::SQLITE_OK && rec.want_bare {
-                scalars += 1;
-                self.ext_scalar_registrations
-                    .lock()
-                    .entry(ext_name.to_string())
-                    .or_default()
-                    .push((bare_name.clone(), spec.num_args));
-            } else if rec.want_bare {
-                tracing::warn!(
-                    extension = ext_name,
-                    func = %bare_name,
-                    arity = spec.num_args,
-                    rc = r_bare,
-                    "register_scalar (bare) failed"
-                );
-            }
-
-            // Qualified-form registration: always run.
-            let r_qual = {
-                let g = self.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("shared_spi_conn open");
-                unsafe {
-                    register_host_loaded_scalar(
-                        conn.raw_handle(),
-                        self.clone(),
-                        ext_name.to_string(),
-                        &rec.qualified,
-                        spec.num_args,
-                        spec.id,
-                    )
-                }
-            };
-            if r_qual == libsqlite3_sys::SQLITE_OK {
-                self.ext_scalar_registrations
-                    .lock()
-                    .entry(ext_name.to_string())
-                    .or_default()
-                    .push((rec.qualified.clone(), spec.num_args));
-            } else {
-                tracing::warn!(
-                    extension = ext_name,
-                    func = %rec.qualified,
-                    arity = spec.num_args,
-                    rc = r_qual,
-                    "register_scalar (qualified) failed"
-                );
-            }
-
-            if !rec.other_expansions.is_empty() {
-                let bare_owner = if rec.want_bare {
-                    prefix_registry::BareNameOwner::ThisExtension
-                } else {
-                    // Pin redirected; show the pinned expansion in the warning.
-                    let pinned = {
-                        let g = self.shared_spi_conn.lock();
-                        let r = g.borrow();
-                        let conn = r.as_ref().expect("shared_spi_conn open");
-                        prefix_registry::lookup_pin(conn, &spec.name, spec.num_args)
-                            .unwrap_or(None)
-                            .unwrap_or_else(|| rec.expansion.clone())
-                    };
-                    prefix_registry::BareNameOwner::PinnedElsewhere(pinned)
-                };
-                prefix_registry::warn_function_collision(
-                    &spec.name,
-                    spec.num_args,
-                    ext_name,
-                    &rec.expansion,
-                    &rec.prefix,
-                    &rec.other_expansions,
-                    bare_owner,
-                );
-            }
-        }
-
-        // Collations. Bare-name dispatch + always-available qualified
-        // form. Pins are scalar-shaped (function_name, n_args); for
-        // v1 collations don't honor pins (n_args == 0 sentinel) so
-        // we ignore `rec.want_bare` and always register bare.
-        for spec in &ext.collations {
-            let Some(rec) = self.record_function_for_extension(ext_name, &spec.name, 0) else {
-                tracing::warn!(
-                    extension = ext_name,
-                    coll = %spec.name,
-                    "collation registration: prefix resolution failed; skipping qualified form"
-                );
-                continue;
-            };
-            let r = {
-                let g = self.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("shared_spi_conn open");
-                unsafe {
-                    register_host_loaded_collation(
-                        conn.raw_handle(),
-                        self.clone(),
-                        ext_name.to_string(),
-                        &spec.name,
-                        spec.id,
-                    )
-                }
-            };
-            if r == libsqlite3_sys::SQLITE_OK {
-                collations += 1;
-                self.ext_collation_registrations
-                    .lock()
-                    .entry(ext_name.to_string())
-                    .or_default()
-                    .push(spec.name.clone());
-            } else {
-                tracing::warn!(extension = ext_name, coll = %spec.name, rc = r,
-                    "register_collation (bare) failed");
-            }
-            let r_q = {
-                let g = self.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("shared_spi_conn open");
-                unsafe {
-                    register_host_loaded_collation(
-                        conn.raw_handle(),
-                        self.clone(),
-                        ext_name.to_string(),
-                        &rec.qualified,
-                        spec.id,
-                    )
-                }
-            };
-            if r_q == libsqlite3_sys::SQLITE_OK {
-                self.ext_collation_registrations
-                    .lock()
-                    .entry(ext_name.to_string())
-                    .or_default()
-                    .push(rec.qualified);
-            }
-        }
-
-        // Aggregates. Bare + always-available qualified. Pin-aware
-        // bare gate matches scalar policy.
-        for spec in &ext.aggregate_functions {
-            let Some(rec) =
-                self.record_function_for_extension(ext_name, &spec.name, spec.num_args)
-            else {
-                tracing::warn!(
-                    extension = ext_name,
-                    func = %spec.name,
-                    "aggregate registration: prefix resolution failed; skipping qualified form"
-                );
-                continue;
-            };
-            let mk_agg = || HostLoadedAggregate {
-                host: self.clone(),
-                ext_name: ext_name.to_string(),
-                func_id: spec.id,
-            };
-            if rec.want_bare {
-                let res = {
-                    let g = self.shared_spi_conn.lock();
-                    let r = g.borrow();
-                    let conn = r.as_ref().expect("shared_spi_conn open");
-                    if spec.is_window {
-                        conn.create_window_function(
-                            &spec.name,
-                            spec.num_args,
-                            sqlite_component_core::db::FunctionFlags::UTF8
-                                | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                            mk_agg(),
-                        )
-                    } else {
-                        conn.create_aggregate_function(
-                            &spec.name,
-                            spec.num_args,
-                            sqlite_component_core::db::FunctionFlags::UTF8
-                                | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                            mk_agg(),
-                        )
-                    }
-                };
-                match res {
-                    Ok(()) => {
-                        aggregates += 1;
-                        self.ext_aggregate_registrations
-                            .lock()
-                            .entry(ext_name.to_string())
-                            .or_default()
-                            .push((spec.name.clone(), spec.num_args));
-                    }
-                    Err(e) => {
-                        tracing::warn!(extension = ext_name, func = %spec.name,
-                            arity = spec.num_args, err = %e.message,
-                            "register_aggregate (bare) failed");
-                    }
-                }
-            }
-            let res_q = {
-                let g = self.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("shared_spi_conn open");
-                if spec.is_window {
-                    conn.create_window_function(
-                        &rec.qualified,
-                        spec.num_args,
-                        sqlite_component_core::db::FunctionFlags::UTF8
-                            | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                        mk_agg(),
-                    )
-                } else {
-                    conn.create_aggregate_function(
-                        &rec.qualified,
-                        spec.num_args,
-                        sqlite_component_core::db::FunctionFlags::UTF8
-                            | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                        mk_agg(),
-                    )
-                }
-            };
-            if res_q.is_ok() {
-                self.ext_aggregate_registrations
-                    .lock()
-                    .entry(ext_name.to_string())
-                    .or_default()
-                    .push((rec.qualified, spec.num_args));
-            }
-        }
-
-        // Vtabs. Bare + always-available qualified module name.
-        // `CREATE VIRTUAL TABLE foo USING prefix__myvtab(...)` is the
-        // qualified form; users still pick `foo` separately so no
-        // implicit table-name collision.
-        for spec in &ext.vtabs {
-            let Some(rec) = self.record_function_for_extension(ext_name, &spec.name, 0) else {
-                tracing::warn!(
-                    extension = ext_name,
-                    vtab = %spec.name,
-                    "vtab registration: prefix resolution failed; skipping qualified form"
-                );
-                continue;
-            };
-            let res = {
-                let g = self.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("shared_spi_conn open");
-                unsafe {
-                    crate::vtab::register_vtab_module(
-                        conn.raw_handle(),
-                        self.clone(),
-                        &spec.name,
-                        ext_name,
-                        spec.id,
-                        spec.eponymous,
-                        spec.mutable,
-                        spec.batched,
-                    )
-                }
-            };
-            match res {
-                Ok(()) => {
-                    vtabs += 1;
-                    self.ext_vtab_registrations
-                        .lock()
-                        .entry(ext_name.to_string())
-                        .or_default()
-                        .push(spec.name.clone());
-                }
-                Err(e) => {
-                    tracing::warn!(extension = ext_name, vtab = %spec.name, err = %e,
-                        "register_vtab (bare) failed");
-                }
-            }
-            let res_q = {
-                let g = self.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("shared_spi_conn open");
-                unsafe {
-                    crate::vtab::register_vtab_module(
-                        conn.raw_handle(),
-                        self.clone(),
-                        &rec.qualified,
-                        ext_name,
-                        spec.id,
-                        spec.eponymous,
-                        spec.mutable,
-                        spec.batched,
-                    )
-                }
-            };
-            if res_q.is_ok() {
-                self.ext_vtab_registrations
-                    .lock()
-                    .entry(ext_name.to_string())
-                    .or_default()
-                    .push(rec.qualified);
-            }
-        }
-
-        // Authorizer / update / commit hooks. Each replaces the
-        // currently-installed hook on shared_spi_conn — the cli's
-        // do_load behaves the same.
-        if ext.has_authorizer {
-            let host_c = self.clone();
-            let ext_n = ext_name.to_string();
-            let result = {
-                let g = self.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("shared_spi_conn open");
-                conn.set_authorizer(Some(
-                    move |action: i32,
-                          a1: Option<String>,
-                          a2: Option<String>,
-                          a3: Option<String>,
-                          a4: Option<String>| {
-                        let wit_action = sqlite_code_to_auth_action(action);
-                        match sync_dispatch_authorize(&host_c, &ext_n, wit_action, a1, a2, a3, a4) {
-                            Ok(bindings::sqlite::extension::types::AuthResult::Ok) => {
-                                sqlite_component_core::db::AuthResult::Allow
-                            }
-                            Ok(bindings::sqlite::extension::types::AuthResult::Deny) => {
-                                sqlite_component_core::db::AuthResult::Deny
-                            }
-                            Ok(bindings::sqlite::extension::types::AuthResult::Ignore) => {
-                                sqlite_component_core::db::AuthResult::Ignore
-                            }
-                            Err(_) => sqlite_component_core::db::AuthResult::Allow,
-                        }
-                    },
-                ))
-            };
-            match result {
-                Ok(()) => {
-                    hooks += 1;
-                    *self.ext_authorizer_owner.lock() = Some(ext_name.to_string());
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        extension = ext_name,
-                        err = %e.message,
-                        "set_authorizer failed"
-                    );
-                }
-            }
-        }
-        if ext.has_update_hook {
-            let host_c = self.clone();
-            let ext_n = ext_name.to_string();
-            let g = self.shared_spi_conn.lock();
-            let r = g.borrow();
-            let conn = r.as_ref().expect("shared_spi_conn open");
-            conn.update_hook(Some(
-                move |action: sqlite_component_core::db::UpdateAction,
-                      db_name: &str,
-                      table: &str,
-                      rowid: i64| {
-                    use bindings::sqlite::extension::types::UpdateOperation as Op;
-                    let op = match action {
-                        sqlite_component_core::db::UpdateAction::Insert => Op::Insert,
-                        sqlite_component_core::db::UpdateAction::Update => Op::Update,
-                        sqlite_component_core::db::UpdateAction::Delete => Op::Delete,
-                        sqlite_component_core::db::UpdateAction::Unknown => return,
-                    };
-                    let _ = sync_dispatch_on_update(&host_c, &ext_n, op, db_name, table, rowid);
-                },
-            ));
-            *self.ext_update_hook_owner.lock() = Some(ext_name.to_string());
-            hooks += 1;
-        }
-        if ext.has_commit_hook {
-            let host_c = self.clone();
-            let ext_c = ext_name.to_string();
-            let host_r = self.clone();
-            let ext_r = ext_name.to_string();
-            let g = self.shared_spi_conn.lock();
-            let r = g.borrow();
-            let conn = r.as_ref().expect("shared_spi_conn open");
-            conn.commit_hook(Some(move || {
-                match sync_dispatch_on_commit(&host_c, &ext_c) {
-                    Ok(proceed) => !proceed,
-                    Err(_) => false,
-                }
-            }));
-            conn.rollback_hook(Some(move || {
-                let _ = sync_dispatch_on_rollback(&host_r, &ext_r);
-            }));
-            *self.ext_commit_hook_owner.lock() = Some(ext_name.to_string());
-            hooks += 1;
-        }
-        if ext.has_wal_hook {
-            let host_c = self.clone();
-            let ext_n = ext_name.to_string();
-            let hook_id = ext.wal_hook_id;
-            let g = self.shared_spi_conn.lock();
-            let r = g.borrow();
-            let conn = r.as_ref().expect("shared_spi_conn open");
-            unsafe { clear_default_wal_autocheckpoint(conn.raw_handle()) };
-            conn.wal_hook(Some(move |db_name: &str, n_frames: i32| {
-                let n = if n_frames < 0 { 0u32 } else { n_frames as u32 };
-                sync_dispatch_on_wal_hook(&host_c, &ext_n, hook_id, db_name, n).unwrap_or_default()
-            }));
-            *self.ext_wal_hook_owner.lock() = Some((ext_name.to_string(), hook_id));
-            hooks += 1;
-        }
-
-        Ok((scalars, aggregates, collations, hooks, vtabs))
-    }
 
     /// Dispatch a dot command by name. Walks every loaded
     /// extension looking for one whose manifest declared the
@@ -10263,102 +6881,10 @@ impl Host {
             });
         }
 
-        // Find the extension whose manifest registers `name`.
-        let (ext_arc, func_id) = {
-            let components = self.components.read();
-            let mut found = None;
-            for (_, ext) in components.iter() {
-                if let Some(dc) = ext.dot_commands.iter().find(|d| d.name == name) {
-                    found = Some((ext.clone(), dc.id));
-                    break;
-                }
-            }
-            found.ok_or_else(|| anyhow!("no dot-command named {name:?}"))?
-        };
-
-        // Lazy-instantiate the dotcmd-aware cached store on first
-        // call against this extension.
-        let cached_arc = ext_arc.cached_dotcmd_aware.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_dotcmd_aware_linker(
-                &self.engine,
-                ext_arc.policy.is_granted(Capability::Http),
-            )?;
-            let mut store = build_loaded_store(&self.engine, &ext_arc, self.db_path())?;
-            // Hand the Store data a back-reference to Self so the
-            // loader-bridge imports route to the right registry.
-            // Host is Arc-internal so the clone is just refcount
-            // bumps; no deep copy.
-            store.data_mut().host_ref = Some(self.clone());
-            let instance = loaded_dotcmd_aware::DotcmdAware::instantiate_async(
-                &mut store,
-                &ext_arc.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate dotcmd-aware: {e}"))?;
-            *guard = Some(CachedDotcmdAware { store, instance });
-        }
-        let cached = guard.as_mut().unwrap();
-        refresh_call_budget(&mut cached.store, &ext_arc)?;
-
-        // Push the latest cli-state snapshot into the Store data
-        // so cli_state.get_* see fresh values for this invoke.
-        let snapshot: HashMap<String, String> = cli_state.into_iter().collect();
-        cached.store.data_mut().cli_state_snapshot = snapshot;
-
-        let display_mode = cached
-            .store
-            .data()
-            .cli_state_snapshot
-            .get("display/mode")
-            .and_then(|j| parse_json_text(j))
-            .unwrap_or_else(|| "list".to_string());
-        let bail_on_error = cached
-            .store
-            .data()
-            .cli_state_snapshot
-            .get("bail/on-error")
-            .map(|j| matches!(j.trim(), "true" | "1"))
-            .unwrap_or(false);
-        let ctx = loaded_dotcmd_aware::exports::sqlite::extension::dot_command::InvokeContext {
-            args: args.to_string(),
-            interactive: true,
-            display_mode,
-            bail_on_error,
-        };
-        let invoke_result = cached
-            .instance
-            .sqlite_extension_dot_command()
-            .call_invoke(&mut cached.store, func_id, &ctx)
-            .await;
-        if let Err(ref e) = invoke_result {
-            if is_wasmtime_trap(e) {
-                // Drop the cached dotcmd-aware Store; next
-                // dispatch will re-instantiate. (#693)
-                *guard = None;
-            }
-        }
-        let result = invoke_result.map_err(|e| anyhow!("dot-command.invoke trap: {e}"))?;
-        match result {
-            Ok(r) => {
-                let deltas = r
-                    .state_deltas
-                    .into_iter()
-                    .map(|d| StateDeltaOut {
-                        key: d.key,
-                        value_json: sql_value_to_json(d.value),
-                    })
-                    .collect();
-                Ok(DotCommandOutcome {
-                    text: r.text,
-                    state_deltas: deltas,
-                    exit_code: r.exit_code,
-                })
-            }
-            Err(e) => Err(anyhow!("{}: {}", e.code, e.message)),
-        }
+        // #220: the bespoke dotcmd-aware the bespoke loader path is retired. Every
+        // extension is provider-backed now, so a dot-command not found in
+        // `provider_backed` above is genuinely unregistered.
+        Err(anyhow!("no dot-command named {name:?}"))
     }
 
     /// Parser-extension dispatch — the SQLite-side equivalent of
@@ -10393,16 +6919,24 @@ impl Host {
         // that declares the parser entrypoint scalar. Done under a
         // short read lock so the async dispatch below doesn't hold it.
         let candidates: Vec<(String, u64)> = {
-            let components = self.components.read();
-            components
-                .values()
-                .filter_map(|ext| {
-                    ext.scalar_functions
-                        .iter()
-                        .find(|f| f.name == PARSER_ENTRY_FN)
-                        .map(|f| (ext.name.clone(), f.id))
-                })
-                .collect()
+            // #220: provider-backed extensions live in `provider_manifests`
+            // (the bespoke `self.components` registry is retired). Snapshot the
+            // parser-entrypoint scalar of each so a provider-backed parser
+            // extension's `__sqlink_parse` fires — `dispatch_scalar` routes
+            // provider-backed exts through the resident provider by
+            // (ext-name, func-id).
+            let mut cands: Vec<(String, u64)> = Vec::new();
+            let manifests = self.provider_manifests.read();
+            for (ext_name, m) in manifests.iter() {
+                if let Some((_, id, _)) = m
+                    .scalar_specs
+                    .iter()
+                    .find(|(name, _, _)| name == PARSER_ENTRY_FN)
+                {
+                    cands.push((ext_name.clone(), *id));
+                }
+            }
+            cands
         };
         for (ext_name, func_id) in candidates {
             let args = vec![SqlValue::Text(query.to_string())];
@@ -10503,10 +7037,13 @@ impl Host {
     /// provider-backed. The cli `.load` loader handler returns this when
     /// the ext is absent from the bespoke `components` map.
     pub fn provider_backed_bindings_manifest(&self, name: &str) -> Option<Manifest> {
-        self.provider_manifests
-            .read()
-            .get(name)
-            .map(manifest_for_provider)
+        let m = self.provider_manifests.read().get(name).cloned()?;
+        // #220: resolve scalar collisions against the shared spi conn (builtins
+        // are identical across sqlite conns) so the cli registers `<ext>_<name>`
+        // for a scalar that would clobber a builtin. Bare names if not open.
+        let g = self.shared_spi_conn.lock();
+        let r = g.borrow();
+        Some(manifest_for_provider(&m, r.as_ref()))
     }
 
     /// If `ext_name` is provider-backed, dispatch the scalar `func_id`
@@ -10686,196 +7223,10 @@ impl Host {
             return r;
         }
 
-        // The two bindgens (extension-loader-host's and loaded's)
-        // produce structurally-identical but distinctly-typed
-        // SqlValue variants. Hand-translate to bridge the boundary.
-        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-
-        // Route to the "most capable" cached Store for this
-        // extension. The minimal/tabular/stateful/hooked Stores
-        // hold separate wasm instances with separate
-        // thread_locals; if vec0 (tabular) registers its name in
-        // the vtab create path and reads it back from a scalar,
-        // the scalar MUST run in the same Store as the vtab or
-        // the thread_local lookup misses. Same constraint applies
-        // to hook-bearing extensions: wal-archive's `start({opts})`
-        // populates a `OnceLock<Mutex<RingBuffer>>` from a scalar
-        // call; the subsequent wal-hook firing has to see it, so
-        // the scalar has to run in the same Store as the hook.
-        // Picking by manifest:
-        //
-        //   * vtabs present                use tabular Store
-        //   * aggregates present           use stateful Store
-        //   * any hook export              use cached_hooked
-        //   * http capability granted      use minimal-http
-        //   * dns capability granted       use minimal-dns
-        //   * otherwise                    minimal
-        //
-        // Each world's instance has the scalar-function export,
-        // so the call signature is identical across paths.
-        // Worlds are disjoint in practice — a tabular extension
-        // does not export wal-hook, so no manifest reaches the
-        // tabular + hook overlap branch.
-        let route = {
-            let components = self.components.read();
-            let ext = components
-                .get(ext_name)
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
-            if !ext.vtabs.is_empty() {
-                ScalarRoute::Tabular
-            } else if !ext.aggregate_functions.is_empty() {
-                ScalarRoute::Stateful
-            } else if ext.has_update_hook || ext.has_commit_hook || ext.has_wal_hook {
-                // Cross-world coherence: scalars and hook
-                // callbacks share one Store so guest-side
-                // `thread_local!` / `OnceLock` / `static
-                // AtomicU64` state set by a scalar call is
-                // visible to the next hook firing — the
-                // wal-archive substrate invariant.
-                ScalarRoute::Hooked
-            } else if ext.policy.is_granted(Capability::Http) {
-                // Scalar extensions that need outbound HTTP load
-                // against the minimal-http world. The host's
-                // existing http::Host::handle gates each request
-                // via check_http_policy(self.http_policy)  if
-                // the load-time policy denied http, the call
-                // here still routes to MinimalHttp but every
-                // request will fail at the policy boundary.
-                ScalarRoute::MinimalHttp
-            } else if ext.policy.is_granted(Capability::Dns) {
-                // Same pattern as MinimalHttp  scalars that need
-                // outbound DNS load against the minimal-dns world;
-                // check_dns_policy gates each call.
-                ScalarRoute::MinimalDns
-            } else {
-                ScalarRoute::Minimal
-            }
-        };
-
-        let result = match route {
-            ScalarRoute::Minimal => {
-                let mut guard = self.minimal_locked(ext_name).await?;
-                let r = {
-                    let cached = guard.as_mut().unwrap();
-                    cached
-                        .instance
-                        .sqlite_extension_scalar_function()
-                        .call_call(&mut cached.store, func_id, &loaded_args)
-                        .await
-                };
-                if let Err(ref e) = r {
-                    if is_wasmtime_trap(e) {
-                        *guard = None;
-                    }
-                }
-                r.map_err(|e| anyhow!("call_call: {e}"))?
-            }
-            ScalarRoute::Tabular => {
-                // Match the Store the read-side vtab dispatch will
-                // use — same routing rule as `tabular_guard` so
-                // scalar fns sharing thread_local state with vtab
-                // dispatches stay inside one wasm instance.
-                let mut g = self.tabular_guard(ext_name).await?;
-                let r = match &mut g {
-                    TabularGuard::ReadOnly(guard) => {
-                        let cached = guard.as_mut().unwrap();
-                        cached
-                            .instance
-                            .sqlite_extension_scalar_function()
-                            .call_call(&mut cached.store, func_id, &loaded_args)
-                            .await
-                    }
-                    TabularGuard::Mutating(guard) => {
-                        let cached = guard.as_mut().unwrap();
-                        cached
-                            .instance
-                            .sqlite_extension_scalar_function()
-                            .call_call(&mut cached.store, func_id, &loaded_args)
-                            .await
-                    }
-                };
-                if let Err(ref e) = r {
-                    g.poison_if_trap(e);
-                }
-                r.map_err(|e| anyhow!("call_call: {e}"))?
-            }
-            ScalarRoute::Stateful => {
-                let mut guard = self.stateful_locked(ext_name).await?;
-                let r = {
-                    let cached = guard.as_mut().unwrap();
-                    cached
-                        .instance
-                        .sqlite_extension_scalar_function()
-                        .call_call(&mut cached.store, func_id, &loaded_args)
-                        .await
-                };
-                if let Err(ref e) = r {
-                    if is_wasmtime_trap(e) {
-                        *guard = None;
-                    }
-                }
-                r.map_err(|e| anyhow!("call_call: {e}"))?
-            }
-            ScalarRoute::MinimalHttp => {
-                let mut guard = self.minimal_http_locked(ext_name).await?;
-                let r = {
-                    let cached = guard.as_mut().unwrap();
-                    cached
-                        .instance
-                        .sqlite_extension_scalar_function()
-                        .call_call(&mut cached.store, func_id, &loaded_args)
-                        .await
-                };
-                if let Err(ref e) = r {
-                    if is_wasmtime_trap(e) {
-                        *guard = None;
-                    }
-                }
-                r.map_err(|e| anyhow!("call_call: {e}"))?
-            }
-            ScalarRoute::MinimalDns => {
-                let mut guard = self.minimal_dns_locked(ext_name).await?;
-                let r = {
-                    let cached = guard.as_mut().unwrap();
-                    cached
-                        .instance
-                        .sqlite_extension_scalar_function()
-                        .call_call(&mut cached.store, func_id, &loaded_args)
-                        .await
-                };
-                if let Err(ref e) = r {
-                    if is_wasmtime_trap(e) {
-                        *guard = None;
-                    }
-                }
-                r.map_err(|e| anyhow!("call_call: {e}"))?
-            }
-            ScalarRoute::Hooked => {
-                // Shared Store with the hook dispatchers — set
-                // up by `hooked_locked`. The `hooked` world also
-                // exports `scalar-function`, so we call the same
-                // export proxy through the wider instance.
-                let mut guard = self.hooked_locked(ext_name).await?;
-                let r = {
-                    let cached = guard.as_mut().unwrap();
-                    cached
-                        .instance
-                        .sqlite_extension_scalar_function()
-                        .call_call(&mut cached.store, func_id, &loaded_args)
-                        .await
-                };
-                if let Err(ref e) = r {
-                    if is_wasmtime_trap(e) {
-                        *guard = None;
-                    }
-                }
-                r.map_err(|e| anyhow!("call_call: {e}"))?
-            }
-        };
-        match result {
-            Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
-            Err(s) => Ok(Err(s)),
-        }
+        // #220: the bespoke loader is retired — compose:dynlink provider
+        // backing is the only scalar dispatch path. try_provider_scalar
+        // returning None means no such provider-backed extension exists.
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Forward one row's contribution to an aggregate. Instantiates
@@ -10898,23 +7249,7 @@ impl Host {
         {
             return r;
         }
-        let mut guard = self.stateful_locked(ext_name).await?;
-        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_aggregate_function()
-                .call_step(&mut cached.store, func_id, context_id, &loaded_args)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let result = r.map_err(|e| anyhow!("call_step: {e}"))?;
-        Ok(result)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Finalize an aggregate; produces its final value and releases
@@ -10933,25 +7268,7 @@ impl Host {
         {
             return r;
         }
-        let mut guard = self.stateful_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_aggregate_function()
-                .call_finalize(&mut cached.store, func_id, context_id)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let result = r.map_err(|e| anyhow!("call_finalize: {e}"))?;
-        match result {
-            Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
-            Err(s) => Ok(Err(s)),
-        }
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Window-function path: produce the current intermediate
@@ -10975,25 +7292,7 @@ impl Host {
         {
             return r;
         }
-        let mut guard = self.stateful_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_aggregate_function()
-                .call_value(&mut cached.store, func_id, context_id)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let result = r.map_err(|e| anyhow!("call_value: {e}"))?;
-        match result {
-            Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
-            Err(s) => Ok(Err(s)),
-        }
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Window-function path: undo one row's contribution to the
@@ -11016,58 +7315,9 @@ impl Host {
         {
             return r;
         }
-        let mut guard = self.stateful_locked(ext_name).await?;
-        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_aggregate_function()
-                .call_inverse(&mut cached.store, func_id, context_id, &loaded_args)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let result = r.map_err(|e| anyhow!("call_inverse: {e}"))?;
-        Ok(result)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
-    /// Shared helper: look up the extension and return a locked
-    /// guard over its cached `stateful`-world (Store, Instance).
-    /// Lazy-instantiates on first call; subsequent calls reuse
-    /// the same Store so aggregator state (per-context
-    /// accumulators) survives across step / value / inverse /
-    /// finalize. See `cached_tabular` for the parallel pattern
-    /// on the vtab world.
-    async fn stateful_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedStateful>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_stateful.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker =
-                make_loaded_stateful_linker(&self.engine, ext.policy.is_granted(Capability::Http))?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance =
-                loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
-                    .await
-                    .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
-            *guard = Some(CachedStateful { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
     /// Forward a collation compare to a loaded extension's
     /// `collation.compare`. Returns < 0 / 0 / > 0 per SQLite's
@@ -11111,25 +7361,11 @@ impl Host {
                 .map_err(|e| anyhow!("decode collation result: {e}"));
         }
 
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let linker = make_loaded_collating_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_collating::Collating::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as collating: {e}"))?;
-        let result = instance
-            .sqlite_extension_collation()
-            .call_compare(&mut store, collation_id, a, b)
-            .await
-            .map_err(|e| anyhow!("call_compare: {e}"))?;
-        Ok(result)
+        // #220: bespoke loader retired — every extension is provider-backed,
+        // so a missing provider handle here means the collation isn't served.
+        Err(anyhow!(
+            "extension {ext_name} has no provider-backed collation {collation_id}"
+        ))
     }
 
     // ─────────── Vtab dispatch ───────────
@@ -11165,44 +7401,7 @@ impl Host {
                 Err(e) => Err(e),
             });
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_create(
-                        &mut cached.store,
-                        vtab_id,
-                        instance_id,
-                        &db_name,
-                        &table_name,
-                        &args,
-                    )
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_create(
-                        &mut cached.store,
-                        vtab_id,
-                        instance_id,
-                        &db_name,
-                        &table_name,
-                        &args,
-                    )
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.create: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_connect(
@@ -11230,44 +7429,7 @@ impl Host {
                 Err(e) => Err(e),
             });
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_connect(
-                        &mut cached.store,
-                        vtab_id,
-                        instance_id,
-                        &db_name,
-                        &table_name,
-                        &args,
-                    )
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_connect(
-                        &mut cached.store,
-                        vtab_id,
-                        instance_id,
-                        &db_name,
-                        &table_name,
-                        &args,
-                    )
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.connect: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_destroy(
@@ -11286,30 +7448,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_destroy(&mut cached.store, vtab_id, instance_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_destroy(&mut cached.store, vtab_id, instance_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.destroy: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_disconnect(
@@ -11328,30 +7467,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_disconnect(&mut cached.store, vtab_id, instance_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_disconnect(&mut cached.store, vtab_id, instance_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.disconnect: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_best_index(
@@ -11390,34 +7506,7 @@ impl Host {
         // Each arm's `call_best_index` returns the IndexPlan from
         // its own bindgen — converted to the wire-side IndexPlan
         // inside the arm so the outer types line up.
-        let mut g = self.tabular_guard(ext_name).await?;
-        let raw: wasmtime::Result<std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>> = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                let info_loaded = convert_vtab_index_info_to_loaded(info);
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_best_index(&mut cached.store, vtab_id, instance_id, &info_loaded)
-                    .await
-                    .map(|r| r.map(convert_vtab_index_plan_from_loaded))
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                let info_loaded = convert_vtab_index_info_to_loaded_mut(info);
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_best_index(&mut cached.store, vtab_id, instance_id, &info_loaded)
-                    .await
-                    .map(|r| r.map(convert_vtab_index_plan_from_loaded_mut))
-            }
-        };
-        if let Err(ref e) = raw {
-            g.poison_if_trap(e);
-        }
-        let r = raw.map_err(|e| anyhow!("vtab.best_index: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_open(
@@ -11437,30 +7526,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_open(&mut cached.store, vtab_id, instance_id, cursor_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_open(&mut cached.store, vtab_id, instance_id, cursor_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.open: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_close(
@@ -11479,30 +7545,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_close(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_close(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.close: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_filter(
@@ -11526,45 +7569,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_filter(
-                        &mut cached.store,
-                        vtab_id,
-                        cursor_id,
-                        idx_num,
-                        idx_str.as_deref(),
-                        &loaded_args,
-                    )
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_filter(
-                        &mut cached.store,
-                        vtab_id,
-                        cursor_id,
-                        idx_num,
-                        idx_str.as_deref(),
-                        &loaded_args,
-                    )
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.filter: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_next(
@@ -11583,30 +7588,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_next(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_next(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        let r = r.map_err(|e| anyhow!("vtab.next: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_eof(
@@ -11630,29 +7612,7 @@ impl Host {
                 Err(e) => Err(anyhow!("vtab.eof: {e}")),
             };
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_eof(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_eof(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = r {
-            g.poison_if_trap(e);
-        }
-        r.map_err(|e| anyhow!("vtab.eof: {e}"))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_column(
@@ -11676,30 +7636,7 @@ impl Host {
                 Err(e) => Err(e),
             });
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let raw = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_column(&mut cached.store, vtab_id, cursor_id, col)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_column(&mut cached.store, vtab_id, cursor_id, col)
-                    .await
-            }
-        };
-        if let Err(ref e) = raw {
-            g.poison_if_trap(e);
-        }
-        let r = raw.map_err(|e| anyhow!("vtab.column: {e}"))?;
-        Ok(r.map(convert_sql_value_from_loaded))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_rowid(
@@ -11723,30 +7660,7 @@ impl Host {
                 Err(e) => Err(e),
             });
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let raw = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_rowid(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_rowid(&mut cached.store, vtab_id, cursor_id)
-                    .await
-            }
-        };
-        if let Err(ref e) = raw {
-            g.poison_if_trap(e);
-        }
-        let r = raw.map_err(|e| anyhow!("vtab.rowid: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Batched vtab fetch. Returns up to `max_rows` rows starting
@@ -11790,46 +7704,7 @@ impl Host {
                 Err(e) => Err(e),
             });
         }
-        let mut g = self.tabular_guard(ext_name).await?;
-        let raw = match &mut g {
-            TabularGuard::ReadOnly(guard) => {
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_fetch_batch(&mut cached.store, vtab_id, cursor_id, max_rows)
-                    .await
-            }
-            TabularGuard::Mutating(guard) => {
-                let cached = guard.as_mut().unwrap();
-                let rs = cached
-                    .instance
-                    .sqlite_extension_vtab()
-                    .call_fetch_batch(&mut cached.store, vtab_id, cursor_id, max_rows)
-                    .await;
-                // Translate mutating-world rows  read-only-world rows.
-                // The two bindgens are independent type universes;
-                // sql-value is shared via `with:` but vtab-row is
-                // emitted per-world.
-                rs.map(|res| {
-                    res.map(|rows| {
-                        rows.into_iter()
-                            .map(
-                                |r| loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
-                                    rowid: r.rowid,
-                                    columns: r.columns,
-                                },
-                            )
-                            .collect()
-                    })
-                })
-            }
-        };
-        if let Err(ref e) = raw {
-            g.poison_if_trap(e);
-        }
-        let r = raw.map_err(|e| anyhow!("vtab.fetch_batch: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     // ── Mutating-vtab dispatch ──────────────────────────────
@@ -11861,23 +7736,7 @@ impl Host {
                 });
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_update(&mut cached.store, vtab_id, instance_id, &loaded_args)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.update: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_begin(
@@ -11896,22 +7755,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_begin(&mut cached.store, vtab_id, instance_id)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.begin: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_sync(
@@ -11930,22 +7774,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_sync(&mut cached.store, vtab_id, instance_id)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.sync: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_commit(
@@ -11964,22 +7793,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_commit(&mut cached.store, vtab_id, instance_id)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.commit: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_rollback(
@@ -11998,22 +7812,7 @@ impl Host {
         {
             return Ok(r.map(|_| ()));
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_rollback(&mut cached.store, vtab_id, instance_id)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.rollback: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_rename(
@@ -12034,22 +7833,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_rename(&mut cached.store, vtab_id, instance_id, &new_name)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.rename: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_savepoint(
@@ -12069,22 +7853,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_savepoint(&mut cached.store, vtab_id, instance_id, savepoint)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.savepoint: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_release(
@@ -12104,22 +7873,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_release(&mut cached.store, vtab_id, instance_id, savepoint)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.release: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_rollback_to(
@@ -12139,22 +7893,7 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_rollback_to(&mut cached.store, vtab_id, instance_id, savepoint)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.rollback_to: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_is_shadow_name(
@@ -12177,22 +7916,7 @@ impl Host {
                 };
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_is_shadow_name(&mut cached.store, vtab_id, name)
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.is_shadow_name: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     pub async fn dispatch_vtab_integrity(
@@ -12220,303 +7944,21 @@ impl Host {
                 return Ok(r.map(|_| ()));
             }
         }
-        let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let raw = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_vtab_update()
-                .call_integrity(
-                    &mut cached.store,
-                    vtab_id,
-                    instance_id,
-                    schema,
-                    table_name,
-                    mode_flags,
-                )
-                .await
-        };
-        if let Err(ref e) = raw {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let r = raw.map_err(|e| anyhow!("vtab-update.integrity: {e}"))?;
-        Ok(r)
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
-    /// Shared helper: look up the extension and return a locked
-    /// guard over its cached `minimal`-world Store + Instance.
-    /// Mirrors `tabular_locked` / `stateful_locked` — lazy first
-    /// instantiation, then per-extension serial reuse. Caching
-    /// here is purely a perf win for scalar dispatch (no
-    /// correctness dependency on Store identity across calls).
-    async fn minimal_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedMinimal>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_minimal.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker =
-                make_loaded_linker(&self.engine, ext.policy.is_granted(Capability::Http))?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded::Minimal::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as minimal: {e}"))?;
-            *guard = Some(CachedMinimal { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// `minimal-http`-world variant of `minimal_locked`. Same
-    /// lazy-instantiate + cache shape; uses the linker that
-    /// wires the http interface.
-    async fn minimal_http_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedMinimalHttp>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_minimal_http.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_minimal_http_linker(
-                &self.engine,
-                ext.policy.is_granted(Capability::Http),
-            )?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_minimal_http::MinimalHttp::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as minimal-http: {e}"))?;
-            *guard = Some(CachedMinimalHttp { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// `hooked`-world variant of `minimal_locked`. Same
-    /// lazy-instantiate + cache shape; uses the linker that
-    /// wires the update / commit / rollback / wal hook exports.
-    /// The `wal-aware` world has an identical export shape, so
-    /// this single cache covers both. Backs every hook
-    /// dispatcher AND scalar dispatch for extensions that
-    /// declare any hook (so guest-side `thread_local!` set by
-    /// scalar calls is visible to subsequent hook callbacks —
-    /// the wal-archive substrate's invariant).
-    async fn hooked_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedHooked>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_hooked.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_hooked_linker(&self.engine)?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance =
-                loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
-                    .await
-                    .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
-            *guard = Some(CachedHooked { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// `authorizing`-world variant of `minimal_locked`. Built
-    /// lazily on first `dispatch_authorize` against extensions
-    /// declaring `has_authorizer`. The `authorizing` world does
-    /// not export hooks, so this is held separately from
-    /// `cached_hooked`.
-    async fn authorizing_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedAuthorizing>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_authorizing.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_authorizing_linker(&self.engine)?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_authorizing::Authorizing::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as authorizing: {e}"))?;
-            *guard = Some(CachedAuthorizing { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// `minimal-dns`-world variant of `minimal_locked`. Same
-    /// lazy-instantiate + cache shape; uses the linker that
-    /// wires the dns interface.
-    async fn minimal_dns_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedMinimalDns>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_minimal_dns.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_minimal_dns_linker(
-                &self.engine,
-                ext.policy.is_granted(Capability::Http),
-            )?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_minimal_dns::MinimalDns::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as minimal-dns: {e}"))?;
-            *guard = Some(CachedMinimalDns { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// Shared helper: look up the extension and return a locked
-    /// guard over its cached `tabular`-world Store + Instance.
-    /// Lazily instantiates on first call; subsequent calls reuse
-    /// the same Store so vtab state (parsed files, cursors,
-    /// thread_local maps) survives across dispatch boundaries.
-    async fn tabular_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedTabular>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_tabular.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_tabular_linker(
-                &self.engine,
-                ext.policy.is_granted(Capability::Http),
-            )?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance =
-                loaded_tabular::Tabular::instantiate_async(&mut store, &ext.component, &linker)
-                    .await
-                    .map_err(|e| anyhow!("instantiate {ext_name} as tabular: {e}"))?;
-            *guard = Some(CachedTabular { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
-    /// `tabular-mutating`-world variant of `tabular_locked`. Used
-    /// when the extension declared `mutable: true` on any vtab —
-    /// the wider world's instance services both the read surface
-    /// (xCreate/xConnect/xBestIndex/cursor calls) AND xUpdate /
-    /// transactional callbacks, keeping all dispatches inside one
-    /// wasm Store so the cursor sees writes the same xUpdate just
-    /// committed.
-    async fn tabular_mutating_locked(
-        &self,
-        ext_name: &str,
-    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedTabularMutating>>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let cached_arc = ext.cached_tabular_mutating.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_tabular_mutating_linker(
-                &self.engine,
-                ext.policy.is_granted(Capability::Http),
-            )?;
-            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_tabular_mutating::TabularMutating::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as tabular-mutating: {e}"))?;
-            *guard = Some(CachedTabularMutating { store, instance });
-        }
-        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
-        Ok(guard)
-    }
 
     /// Returns true if any vtab declared in the extension's
     /// manifest set `mutable: true`. Routes the read-side dispatch
     /// helpers (`dispatch_vtab_*`) to the `tabular-mutating` cache
     /// so the same Store services xUpdate.
-    fn ext_has_mutable_vtab(&self, ext_name: &str) -> Result<bool> {
-        let components = self.components.read();
-        let ext = components
-            .get(ext_name)
-            .cloned()
-            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
-        Ok(ext.vtabs.iter().any(|v| v.mutable))
-    }
 
-    /// Picks the right cache for a read-side vtab dispatch. The
-    /// enum lets the per-method arms switch on the variant without
-    /// duplicating the lookup / refresh logic. We don't try to
-    /// share the call site itself — `sqlite_extension_vtab()`
-    /// returns a per-world export proxy type, so each arm calls
-    /// the same export under a different proxy.
-    async fn tabular_guard(&self, ext_name: &str) -> Result<TabularGuard> {
-        if self.ext_has_mutable_vtab(ext_name)? {
-            Ok(TabularGuard::Mutating(
-                self.tabular_mutating_locked(ext_name).await?,
-            ))
-        } else {
-            Ok(TabularGuard::ReadOnly(self.tabular_locked(ext_name).await?))
-        }
-    }
 
     /// Route a SQLite authorizer callback to the loaded extension's
     /// `authorizer.authorize` export. Errors bubble as anyhow; the
@@ -12555,30 +7997,11 @@ impl Host {
                 };
             }
         }
-        let mut guard = self.authorizing_locked(ext_name).await?;
-        let action_w = convert_auth_action_to_loaded(action);
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_authorizer()
-                .call_authorize(
-                    &mut cached.store,
-                    action_w,
-                    arg1.as_deref(),
-                    arg2.as_deref(),
-                    database.as_deref(),
-                    trigger.as_deref(),
-                )
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let result = r.map_err(|e| anyhow!("call_authorize: {e}"))?;
-        Ok(convert_auth_result_from_loaded(result))
+        // #220: bespoke loader retired — provider-backed authorizers dispatch
+        // via the resident provider above; a fall-through means no authorizer
+        // is served for this extension, so allow (OK) by default.
+        let _ = (arg1, arg2, database, trigger);
+        Ok(bindings::sqlite::extension::types::AuthResult::Ok)
     }
 
     /// Route a row-level update hook to the loaded extension's
@@ -12605,27 +8028,7 @@ impl Host {
                 return r.map(|_| ()).map_err(|e| anyhow!("hook.update: {e}"));
             }
         }
-        let mut guard = self.hooked_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_update_hook()
-                .call_on_update(
-                    &mut cached.store,
-                    convert_update_op_to_loaded(operation),
-                    database,
-                    table,
-                    rowid,
-                )
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        r.map_err(|e| anyhow!("call_on_update: {e}"))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Route a pre-commit hook. `true` lets the commit proceed; `false`
@@ -12644,21 +8047,7 @@ impl Host {
                 Err(e) => Err(anyhow!("hook.commit: {e}")),
             };
         }
-        let mut guard = self.hooked_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_commit_hook()
-                .call_on_commit(&mut cached.store)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        r.map_err(|e| anyhow!("call_on_commit: {e}"))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Route a post-rollback notification.
@@ -12670,21 +8059,7 @@ impl Host {
         {
             return r.map(|_| ()).map_err(|e| anyhow!("hook.rollback: {e}"));
         }
-        let mut guard = self.hooked_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_commit_hook()
-                .call_on_rollback(&mut cached.store)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        r.map_err(|e| anyhow!("call_on_rollback: {e}"))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Route a WAL-commit callback. SQLite fires the wal-hook after
@@ -12716,21 +8091,7 @@ impl Host {
                 Err(e) => Err(anyhow!("hook.wal: {e}")),
             };
         }
-        let mut guard = self.hooked_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_wal_hook()
-                .call_on_wal_hook(&mut cached.store, hook_id, db_name, n_frames)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        r.map_err(|e| anyhow!("call_on_wal_hook: {e}"))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Load + run a runnable component. Instantiates the component
@@ -12872,13 +8233,18 @@ impl Host {
     }
 
     pub fn unload(&self, name: &str) -> Result<()> {
-        if self.components.write().remove(name).is_some() {
+        // #220: extensions are provider-backed. Unload removes the ext
+        // from the provider registries + drops its compose provider so
+        // the host stops dispatching to it. (The bespoke `self.components`
+        // registry has been retired.)
+        if self.provider_backed.write().remove(name).is_some() {
+            self.provider_manifests.write().remove(name);
+            if let Some(inner) = self.compose_providers.write().get_mut(DEFAULT_TENANT) {
+                inner.remove(&format!("ext:{name}"));
+            }
             // PLAN-wit-value-extension.md Phase B: clear typed-value
             // bindings owned by this extension so a re-load with a
-            // re-hashed type set doesn't deadlock on the conflict
-            // check. Codecs are removed alongside since they hold
-            // wasmtime instance handles into the (now dropped)
-            // LoadedExtension.
+            // re-hashed type set doesn't deadlock on the conflict check.
             let to_remove: Vec<[u8; 32]> = self
                 .typed_values
                 .snapshot()
@@ -12897,11 +8263,11 @@ impl Host {
     }
 
     pub fn list(&self) -> Vec<String> {
-        self.components.read().keys().cloned().collect()
+        self.provider_backed.read().keys().cloned().collect()
     }
 
     pub fn is_loaded(&self, name: &str) -> bool {
-        self.components.read().contains_key(name)
+        self.provider_backed.read().contains_key(name)
     }
 
     /// Register `path` as a language runtime for files with
@@ -13796,7 +9162,7 @@ fn convert_update_op_to_loaded(
 }
 
 /// PLAN-cli-shared-conn.md Stage 3: spi Host impl for the cli.
-/// Mirrors the LoadedState impl but operates directly on
+/// Mirrors the the bespoke loader impl but operates directly on
 /// `host.shared_spi_conn`  the same connection extensions reach
 /// via the Stage 2 shared Arc.
 impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
@@ -15662,15 +11028,10 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         let policy = policy_from_load_options(&options);
         match self.host.load_extension(PathBuf::from(&path), policy).await {
             Ok(name) => {
-                {
-                    let components = self.host.components.read();
-                    if let Some(ext) = components.get(&name) {
-                        return Ok(manifest_for_ext(ext));
-                    }
-                }
-                // Task #228: a `.load`'d `<ext>-provider.wasm` lives in the
-                // provider-backed map, not `components`. Return its manifest
-                // so the cli registers the provider-backed trampolines.
+                // #220: a `.load`'d `<ext>-provider.wasm` lives in the
+                // provider-backed map (the bespoke `components` registry is
+                // retired). Return its manifest so the cli registers the
+                // provider-backed trampolines.
                 if let Some(m) = self.host.provider_backed_bindings_manifest(&name) {
                     return Ok(m);
                 }
@@ -15694,12 +11055,9 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         })
     }
 
-    async fn extension_digest(&mut self, name: String) -> String {
-        let components = self.host.components.read();
-        components
-            .get(&name)
-            .map(|e| e.digest.clone())
-            .unwrap_or_default()
+    async fn extension_digest(&mut self, _name: String) -> String {
+        // #220: digests were tracked in the retired `components` registry.
+        String::new()
     }
 
     async fn load_extension_from_bytes(
@@ -15708,21 +11066,25 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         bytes: Vec<u8>,
         options: bindings::sqlite::extension::policy::LoadOptions,
     ) -> std::result::Result<Manifest, LoaderError> {
-        let policy = policy_from_load_options(&options);
+        // #220 loader retirement: the cli's in-band `.load <bytes>` goes
+        // provider-only. A provider-backed ext lives in `provider_manifests`
+        // (not the bespoke `components` registry), so build its manifest via
+        // `provider_backed_bindings_manifest`.
+        let _ = options;
         let name = self
             .host
-            .load_extension_from_bytes(bytes, &name_hint, policy)
+            .instantiate_provider_from_bytes(&name_hint, &bytes)
             .await
             .map_err(|e| LoaderError {
                 code: 1,
                 message: e.to_string(),
             })?;
-        let components = self.host.components.read();
-        let ext = components.get(&name).ok_or_else(|| LoaderError {
-            code: 1,
-            message: format!("load-from-bytes succeeded but {name} not in registry"),
-        })?;
-        Ok(manifest_for_ext(ext))
+        self.host
+            .provider_backed_bindings_manifest(&name)
+            .ok_or_else(|| LoaderError {
+                code: 1,
+                message: format!("load-from-bytes succeeded but {name} not provider-backed"),
+            })
     }
 
     async fn dispatch_dot_command(
@@ -15886,11 +11248,11 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     }
 
     async fn list_extensions(&mut self) -> Vec<Manifest> {
-        let names = self.host.list();
-        let components = self.host.components.read();
-        names
+        // #220: provider-backed extensions live in the provider-backed map.
+        self.host
+            .list()
             .iter()
-            .filter_map(|n| components.get(n).map(|e| manifest_for_ext(e.as_ref())))
+            .filter_map(|n| self.host.provider_backed_bindings_manifest(n))
             .collect()
     }
 
@@ -15906,10 +11268,9 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         let policy = policy_from_load_options(&options);
         match self.host.load_extension_from_uri(&uri, policy).await {
             Ok(name) => {
-                let components = self.host.components.read();
-                components
-                    .get(&name)
-                    .map(|e| manifest_for_ext(e.as_ref()))
+                // #220: provider-backed manifest (bespoke `components` retired).
+                self.host
+                    .provider_backed_bindings_manifest(&name)
                     .ok_or_else(|| LoaderError {
                         code: 1,
                         message: format!("internal: ext {name} vanished after URI load"),
@@ -16292,6 +11653,11 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
             // provider importing `compose:dynlink/linker` (reentrant SPI)
             // can re-enter the engine provider from its warm store.
             Some(self.host.dynlink_bridge.clone()),
+            // Task #220: the cli's --db so an spi-importing ext's spi.execute
+            // hits the same database, not an isolated :memory:.
+            self.host.db_path(),
+            // #220 full-port: thread the loader Host for loader-bridge exts.
+            Some(self.host.clone()),
         ) {
             Ok(p) => p,
             Err(e) => {
@@ -16306,7 +11672,14 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
             .load_extension_as_provider(&ext_name, provider)
             .await
         {
-            Ok(m) => Ok(manifest_for_provider(&m)),
+            Ok(m) => {
+                // #220: resolve scalar collisions so the cli registers
+                // `<ext>_<name>` for a builtin-clobbering scalar (see
+                // manifest_for_provider). Builtins are identical across conns.
+                let g = self.host.shared_spi_conn.lock();
+                let r = g.borrow();
+                Ok(manifest_for_provider(&m, r.as_ref()))
+            }
             Err(e) => Err(LoaderError {
                 code: 1,
                 message: e.to_string(),
@@ -16670,38 +12043,19 @@ mod contract_guard_tests {
         Engine::new(&cfg).expect("engine")
     }
 
-    /// A real, built `sqlite:extension@0.1` component, if present. Skips the
-    /// case when the wasm artifact hasn't been built (matches the suite's
-    /// build-optional convention).
-    fn real_v0_1_component_path() -> Option<PathBuf> {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        for c in [
-            "../browser/public/uuid_extension.component.wasm",
-            "../wasmmachine/sqlite_cli.component.wasm",
-            "../build/extensions/wasm-demo.wasm",
-        ] {
-            let p = manifest_dir.join(c);
-            if p.exists() {
-                return Some(p);
-            }
-        }
-        None
-    }
-
     #[test]
     fn legacy_v0_1_component_introspects_to_major_0_and_is_rejected_by_v1_host() {
         // After the legacy 0.x → `sqlite:extension@1.0.0` bump
-        // (PLAN-wit-value-extension.md Phase A), any pre-existing built
-        // component still targets major 0 and the new host's guard (major
-        // 1) must reject it. The mechanical recompile against the new
-        // contract is the migration; this test pins the rejection so a
-        // future loose patch can't silently accept ABI-skewed bytes.
-        let Some(path) = real_v0_1_component_path() else {
-            eprintln!("skipping: no built sqlite:extension component found");
-            return;
-        };
+        // (PLAN-wit-value-extension.md Phase A), a component that still
+        // targets major 0 must be rejected by the new host's guard (major
+        // 1). We SYNTHESIZE a genuine @0.1 component deterministically
+        // rather than hunt for a pre-built legacy artifact — after the
+        // bump every on-disk component is rebuilt to @1.0.0 (major 1), so
+        // the old "find a real one" approach picked up a major-1 component
+        // and mis-asserted. Synthesis pins the legacy-rejection behavior
+        // so a future loose patch can't silently accept ABI-skewed bytes.
         let engine = engine();
-        let bytes = std::fs::read(&path).expect("read component");
+        let bytes = synth_component_targeting("0.1.0");
         let component = Component::from_binary(&engine, &bytes).expect("parse component");
 
         let major =
@@ -16815,12 +12169,14 @@ mod contract_guard_tests {
     }
 
     #[test]
-    fn host_rejects_v0_1_synthetic_via_load_extension_from_bytes() {
+    fn host_rejects_v0_1_synthetic_via_instantiate_provider_from_bytes() {
+        // #220: the version guard moved from the retired bespoke
+        // `load_extension_from_bytes` onto the provider path helper. Rejection
+        // still fires (before the endpoint check), same actionable message.
         let bytes = synth_component_targeting("0.1.0");
         let host = Host::new().expect("host new");
-        let err =
-            block_on(host.load_extension_from_bytes(bytes, "v0_1_synth", default_policy()))
-                .expect_err("v0.1 synthetic must be rejected by v1 host through load_extension_from_bytes");
+        let err = block_on(host.instantiate_provider_from_bytes("v0_1_synth", &bytes))
+            .expect_err("v0.1 synthetic must be rejected by v1 host through instantiate_provider_from_bytes");
         let msg = err.to_string();
         assert!(msg.contains("v0_1_synth"), "names the extension: {msg}");
         assert!(
@@ -16832,14 +12188,13 @@ mod contract_guard_tests {
     }
 
     #[test]
-    fn host_rejects_v2_synthetic_via_load_extension_from_bytes() {
+    fn host_rejects_v2_synthetic_via_instantiate_provider_from_bytes() {
         // Forward-compat case: a hypothetical @2.x extension shouldn't
         // load into a @1.x host. Same code path, same message shape.
         let bytes = synth_component_targeting("2.0.0");
         let host = Host::new().expect("host new");
-        let err =
-            block_on(host.load_extension_from_bytes(bytes, "v2_synth", default_policy()))
-                .expect_err("v2.x synthetic must be rejected by v1 host through load_extension_from_bytes");
+        let err = block_on(host.instantiate_provider_from_bytes("v2_synth", &bytes))
+            .expect_err("v2.x synthetic must be rejected by v1 host through instantiate_provider_from_bytes");
         let msg = err.to_string();
         assert!(msg.contains("v2_synth"), "names the extension: {msg}");
         assert!(
