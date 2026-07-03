@@ -57,6 +57,10 @@ extensions/extensions.db
 triage-log.md
 .secrets
 
+# R2 / S3 credentials (bucket + endpoint keys for deploy/publish scripts).
+# Never commit — object-scoped tokens for the sqlink-ext bucket.
+r2.env
+
 # composectl runtime artifacts (blob store / cache / trust / audit).
 # Created by `composectl plan validate / blob put / emit build` in any
 # directory it's invoked from.
