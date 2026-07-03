@@ -11727,25 +11727,11 @@ impl Host {
                 .map_err(|e| anyhow!("decode collation result: {e}"));
         }
 
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let linker = make_loaded_collating_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_collating::Collating::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as collating: {e}"))?;
-        let result = instance
-            .sqlite_extension_collation()
-            .call_compare(&mut store, collation_id, a, b)
-            .await
-            .map_err(|e| anyhow!("call_compare: {e}"))?;
-        Ok(result)
+        // #220: bespoke loader retired — every extension is provider-backed,
+        // so a missing provider handle here means the collation isn't served.
+        Err(anyhow!(
+            "extension {ext_name} has no provider-backed collation {collation_id}"
+        ))
     }
 
     // ─────────── Vtab dispatch ───────────
@@ -13171,30 +13157,11 @@ impl Host {
                 };
             }
         }
-        let mut guard = self.authorizing_locked(ext_name).await?;
-        let action_w = convert_auth_action_to_loaded(action);
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_authorizer()
-                .call_authorize(
-                    &mut cached.store,
-                    action_w,
-                    arg1.as_deref(),
-                    arg2.as_deref(),
-                    database.as_deref(),
-                    trigger.as_deref(),
-                )
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        let result = r.map_err(|e| anyhow!("call_authorize: {e}"))?;
-        Ok(convert_auth_result_from_loaded(result))
+        // #220: bespoke loader retired — provider-backed authorizers dispatch
+        // via the resident provider above; a fall-through means no authorizer
+        // is served for this extension, so allow (OK) by default.
+        let _ = (arg1, arg2, database, trigger);
+        Ok(bindings::sqlite::extension::types::AuthResult::Ok)
     }
 
     /// Route a row-level update hook to the loaded extension's
