@@ -122,11 +122,11 @@ is ~1-2 days; total ~5 days of substrate before the extension's
 
 ### Substrate 1 (#438): native cli wal-hook wiring — RESOLVED
 
-Landed on branch `cli-wal-hook-wiring` (sqlink) + sqlite-loader-wit
+Landed on branch `cli-wal-hook-wiring` (sqlink) + sqlite-wit
 `main` (ab3576f). The native side now mirrors the browser-side
 substrate that `#436` shipped:
 
-  - `sqlite-loader-wit/wit/guest.wit`: `manifest.has-wal-hook: bool`
+  - `sqlite-wit/wit/sqlite-extension/guest.wit`: `manifest.has-wal-hook: bool`
     + `manifest.wal-hook-id: u64`; `hooked` world also exports
     `wal-hook` so a single loader linker dispatches all four hook
     surfaces.
@@ -158,7 +158,7 @@ extension needs.
 What actually landed:
 
 ```wit
-// sqlite-loader-wit/wit/host-spi.wit
+// sqlite-wit/wit/sqlite-extension/host-spi.wit
 interface wal-frames {
   use types.{sqlite-error};
 
@@ -174,7 +174,7 @@ interface wal-frames {
     -> result<list<u8>, sqlite-error>;
 }
 
-// sqlite-loader-wit/wit/policy.wit  capability enum gained:
+// sqlite-wit/wit/sqlite-extension/policy.wit  capability enum gained:
 //   wal-frames,
 ```
 
@@ -185,7 +185,7 @@ interface needed. The wal-archive snapshot cadence path is
 
 Other landed pieces:
 
-- `Capability::WalFrames` variant on `sqlite-loader-wit/src/lib.rs`
+- `Capability::WalFrames` variant on `sqlite-wit/src/lib.rs`
   (the Rust source of truth shared across host / loader / native).
 - `wal-frames` imported into every world (minimal, minimal-http,
   minimal-dns, stateful, lifecycle-aware, resolving, collating,
@@ -216,24 +216,24 @@ Other landed pieces:
   on the serialized snapshot.
 
 The `backup` interface and `backup-aware` world that briefly
-appeared in `sqlite-loader-wit` f66bdca were reverted in 522645e
+appeared in `sqlite-wit` f66bdca were reverted in 522645e
 once the design call landed.
 
 ### Substrate 3 (#440): host-resident `s3-base` SPI bridge  **LANDED**
 
-Defines `sqlite:extension/s3-base@0.1.0` in `sqlite-loader-wit`,
+Defines `sqlite:extension/s3-base@0.1.0` in `sqlite-wit`,
 mirroring `~/git/s3-wasm`'s `s3-base` interface (get/put/delete/
 head/list/copy-object) record-for-record. Extensions import this
 interface like they import spi/types/policy.
 
 What landed:
 
-- WIT contract (`sqlite-loader-wit/wit/host-spi.wit`): the
+- WIT contract (`sqlite-wit/wit/sqlite-extension/host-spi.wit`): the
   `s3-base` interface plus the six S3 method signatures + the
   record types (s3-endpoint-config, s3-credentials, options,
   outputs) and the s3-error variant (including the extra
   `capability-not-granted` variant for the grant gate).
-- `Capability::S3` in `sqlite-loader-wit/wit/policy.wit` + the
+- `Capability::S3` in `sqlite-wit/wit/sqlite-extension/policy.wit` + the
   Rust `Capability::S3` variant. Operator picks it via
   `--grant=s3` on `.load`.
 - World widening: every world that hosts an extension (minimal,
@@ -347,7 +347,7 @@ register-host-wal-hook: func(
     hook-id: u64,
 ) -> result<_, sqlite-error>;
 
-// sqlite-loader-wit/wit/spi.wit (dispatch interface):
+// sqlite-wit/wit/sqlite-extension/spi.wit (dispatch interface):
 wal-hook: func(
     ext-name: string,
     hook-id: u64,

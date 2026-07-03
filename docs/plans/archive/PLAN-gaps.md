@@ -142,7 +142,7 @@ Update after each commit.
        Extension dependency declarations  NOT done, intentionally
        deferred. Would require:
          - Adding a `requires-spec` record to the Manifest in
-           sqlite-loader-wit/wit/guest.wit
+           sqlite-wit/wit/sqlite-extension/guest.wit
          - Updating host's manifest dispatch path to surface the
            field through bindgen
          - Updating cli's `.load` flow to check requires against

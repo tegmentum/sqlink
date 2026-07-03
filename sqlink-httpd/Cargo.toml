@@ -44,4 +44,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # binary grows accordingly, but pays for itself the moment a
 # single wasm route fires.
 sqlink-host = { path = "../host" }
-sqlite-extension-policy = { path = "../sqlite-loader-wit" }
+sqlite-extension-policy = { path = "../sqlite-wit" }

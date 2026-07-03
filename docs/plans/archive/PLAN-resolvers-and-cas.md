@@ -96,7 +96,7 @@ by a built-in `file` resolver in the host, not a separate component
 
 ### Step 1 — WIT: `resolver` interface + `resolving` world
 
-In `sqlite-loader-wit/wit/`:
+In `sqlite-wit/wit/sqlite-extension/`:
 
 ```wit
 // add to guest.wit
@@ -305,7 +305,7 @@ Reasonable order: 1, 2 (parallel) → 3 → 4 → 5, 6 (parallel) → 7.
 ## Branch strategy
 
 One branch per major chunk:
-- `feat/resolver-wit` — Step 1 only (sqlite-loader-wit + submodule bumps)
+- `feat/resolver-wit` — Step 1 only (sqlite-wit + submodule bumps)
 - `feat/cas-cache` — Step 2 (host-only, with unit tests)
 - `feat/resolver-loading` — Step 3 + 6 (host bindgen + bootstrap)
 - `feat/http-resolver` — Step 4 (extension crate)

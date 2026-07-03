@@ -36,7 +36,7 @@ Single self-contained change:
    ```rust
    pub mod loaded_stateful {
        wasmtime::component::bindgen!({
-           path: "../sqlite-loader-wit/wit",
+           path: "../sqlite-wit/wit/sqlite-extension",
            world: "stateful",
            with: {
                "sqlite:extension/types": super::loaded::sqlite::extension::types,

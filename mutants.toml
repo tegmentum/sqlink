@@ -20,7 +20,7 @@ exclude_globs = [
     # tests, so mutating them and trying to run `cargo test` is
     # nonsense — cargo-mutants would time out or skip-mark every
     # mutant. The non-wasm host crates (host, sqlink-loader,
-    # sqlite-cas-cache, sqlite-loader-wit) are where mutation
+    # sqlite-cas-cache, sqlite-wit) are where mutation
     # testing has signal.
     "extensions/**",
     "**/build.rs",

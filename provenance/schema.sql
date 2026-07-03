@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS dot_command (
 );
 
 -- Capabilities the plugin declares (matches
--- sqlite-loader-wit's policy::Capability enum names).
+-- sqlite-wit's policy::Capability enum names).
 CREATE TABLE IF NOT EXISTS capability (
     id                 INTEGER PRIMARY KEY,
     plugin_version_id  INTEGER NOT NULL REFERENCES plugin_version(id) ON DELETE CASCADE,

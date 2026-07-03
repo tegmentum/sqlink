@@ -109,7 +109,7 @@ mod wasm_export {
     // through to drive cas-conn SQL directly.
     mod bindings {
         wit_bindgen::generate!({
-            path: "../../sqlite-loader-wit/wit",
+            path: "../../sqlite-wit/wit/sqlite-extension",
             world: "bundle-cli",
             generate_all,
         });

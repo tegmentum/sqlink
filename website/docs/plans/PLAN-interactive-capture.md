@@ -99,7 +99,7 @@ echo "quit" | nc -U /tmp/s.sock
 
 ### How it would work
 
-New WIT interface in `sqlite-loader-wit/wit/host-spi.wit`:
+New WIT interface in `sqlite-wit/wit/sqlite-extension/host-spi.wit`:
 
 ```wit
 interface session {

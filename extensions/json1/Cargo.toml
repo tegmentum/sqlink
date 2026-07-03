@@ -46,7 +46,7 @@ embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 [dependencies]
 # Same wit-bindgen pair the cli + sqlite-pcache-tvm use. The
 # generate! macro lives in src/lib.rs against world="minimal" in
-# ../../sqlite-loader-wit/wit.
+# ../../sqlite-wit/wit/sqlite-extension.
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 # Pure-Rust JSON parser. The default features enable std; we want

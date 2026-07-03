@@ -163,7 +163,7 @@ usage: sqlink [--db PATH] [--cache-dir DIR] [--no-component-cache] <component.wa
 ```
 git clone <repo>
 cd sqlink
-git submodule update --init   # sqlite-loader-wit
+git submodule update --init   # sqlite-wit
 # Install wasi-sdk if missing (CONTRIBUTING points at the release page)
 bash scripts/setup-cargo-config.sh
 cargo build --release                          # ~6 min cold (wasmtime + sqlite)

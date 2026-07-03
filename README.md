@@ -11,7 +11,7 @@ SQLite + a portable extension ecosystem, distributed as
 [WebAssembly Components](https://component-model.bytecodealliance.org/).
 The full SQLite C library compiles to WASI Preview 2 alongside a
 cli, a host runtime, ~110 extension components, and a contract
-(`sqlite-loader-wit`) that says how any wasm component becomes
+(`sqlite-wit`) that says how any wasm component becomes
 an extension — scalar function, aggregate, collation, virtual
 table, authorizer, or interactive dot command.
 
@@ -181,7 +181,7 @@ host does:
        or `import.meta.url`-relative asset and pass them
        straight in.
 
-The WIT contract in `sqlite-loader-wit/` is the single point of
+The WIT contract in `sqlite-wit/` is the single point of
 truth that lets the same extension binary work in all three
 scenarios; the same `.component.wasm` is interchangeable between
 dynamic-`.load` and static-embed modes within scenarios 2 and 3.
@@ -200,7 +200,7 @@ cli/                  The cli  a wasm component that loads other
 host/                 The runtime. Loads + runs the cli component
                       and any extension components it `.load`s.
                       Ships as the `sqlink` binary.
-sqlite-loader-wit/    The WIT contract every extension speaks.
+sqlite-wit/    The WIT contract every extension speaks.
                       Defines worlds for scalar-only, aggregate,
                       collation, vtab (read-only + mutable +
                       batched), authorizer, dot-command, and the

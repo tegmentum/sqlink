@@ -43,7 +43,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Same wit-bindgen pair every sqlink extension uses; bindings are
-# generated against the wal-aware world in ../../sqlite-loader-wit/
+# generated against the wal-aware world in ../../sqlite-wit/
 # wit/world.wit (exports metadata + scalar-function + update-hook +
 # commit-hook + wal-hook; imports spi + wal-frames + s3-base + types
 # + session + logging + config).

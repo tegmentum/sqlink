@@ -365,7 +365,7 @@ their declared error variant.
 │   └── deps/
 │       ├── postgis-wasm/      # vendored from sqlink/extensions/postgis-bridge
 │       ├── sfcgal-component/  # vendored from sqlink/extensions/postgis-bridge
-│       └── sqlite-extension/  # vendored from sqlink/sqlite-loader-wit (canonical)
+│       └── sqlite-extension/  # vendored from sqlink/sqlite-wit (canonical)
 ├── src/lib.rs                 # wit_bindgen::generate! + stubbed guest impls
 └── README.md
 ```
@@ -387,11 +387,11 @@ their declared error variant.
 
 - **Vendored WIT source.** The hand-written postgis-bridge's
   `wit/deps/sqlite-extension/` is stale relative to
-  `sqlite-loader-wit/wit/` (the host bindgen target):
+  `sqlite-wit/wit/sqlite-extension/` (the host bindgen target):
   newer manifest fields (`optional-capabilities`,
   `preferred-prefix`, `prefix-expansion`) and several new world
   imports. The codegen now sources the canonical
-  sqlite-extension WIT from `sqlite-loader-wit/wit/` directly
+  sqlite-extension WIT from `sqlite-wit/wit/sqlite-extension/` directly
   and vendors only the shim-side packages (postgis-wasm,
   sfcgal-component) from the hand-written bridge.
 - **DCE anchor.** With every Phase 1 stub returning `Err`

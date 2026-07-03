@@ -53,7 +53,7 @@ done
 # Canonical workspace SPI WIT — shared by every extension that
 # imports the host SPI (almost all of them).
 CANONICAL_WIT=()
-for f in $(find sqlite-loader-wit/wit -name "*.wit" -type f 2>/dev/null | sort); do
+for f in $(find sqlite-wit/wit/sqlite-extension -name "*.wit" -type f 2>/dev/null | sort); do
     CANONICAL_WIT+=("$f")
 done
 for f in $(find sqlite-wasm/wit -name "*.wit" -type f 2>/dev/null | sort); do
@@ -61,7 +61,7 @@ for f in $(find sqlite-wasm/wit -name "*.wit" -type f 2>/dev/null | sort); do
 done
 
 # Compute WIT-closure hash for a package. The closure is:
-#   1. Canonical workspace WIT (sqlite-loader-wit/wit/, sqlite-wasm/wit/)
+#   1. Canonical workspace WIT (sqlite-wit/wit/sqlite-extension/, sqlite-wasm/wit/)
 #   2. Extension's own wit/ tree if present (this also covers
 #      any locally-vendored wit/deps/ since they live underneath).
 #
@@ -103,7 +103,7 @@ wit_newer_than() {
     local pkg="$2"
     local extdir="${PKG_DIR[$pkg]:-}"
     # find -newer with -quit short-circuits at the first hit.
-    if find sqlite-loader-wit/wit sqlite-wasm/wit -name "*.wit" -type f -newer "$component" -print -quit 2>/dev/null | grep -q .; then
+    if find sqlite-wit/wit/sqlite-extension sqlite-wasm/wit -name "*.wit" -type f -newer "$component" -print -quit 2>/dev/null | grep -q .; then
         return 0
     fi
     if [ -n "$extdir" ] && [ -d "$extdir/wit" ]; then

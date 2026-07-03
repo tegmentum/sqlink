@@ -54,7 +54,7 @@ jobs:
       - name: cargo fmt --check
         working-directory: host
         # Lint only host's own code; --all would walk path-deps
-        # into submodules (sqlite-loader-wit, sqlite-wasm/core)
+        # into submodules (sqlite-wit, sqlite-wasm/core)
         # whose fmt is enforced by their own CI. Drift across
         # submodule rustfmt versions is real and shouldn't gate
         # sqlink CI.

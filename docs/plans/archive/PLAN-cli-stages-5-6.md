@@ -427,7 +427,7 @@ not a cli limitation. Without a PK, isempty stays 1.
 
 ### Stage 6a — `sqlite:extension/session` WIT interface (~1 hour)
 
-Add to `sqlite-loader-wit/wit/host-spi.wit` (or a new
+Add to `sqlite-wit/wit/sqlite-extension/host-spi.wit` (or a new
 session.wit). 9 methods as sketched above.
 
 ### Stage 6b — host impls (~half day)

@@ -56,7 +56,7 @@ Common types:
 2. Relevant smoke runs without errors (project has small per-extension
    smoke scripts under `tooling/`; for cli changes,
    `examples/sqlite-utils-tour.sql` is a good baseline).
-3. If you touched a WIT file in `sqlite-loader-wit/`, that submodule has its
+3. If you touched a WIT file in `sqlite-wit/`, that submodule has its
    own commit + parent-repo submodule-bump.
 4. If you added a new dot command or extension, the provenance database
    (`provenance/extensions.db`) regenerates via `python3 provenance/scan.py`.
@@ -80,7 +80,7 @@ Common types:
     `PLAN-gaps.md` first — there's a curated list of what's wanted.
   - **CLI dot commands:** new commands ship as wasm extensions, not
     cli source. See `AUTHORING-DOTCMD-COMPONENTS.md`.
-  - **WIT changes** to `sqlite-loader-wit/`: please discuss first via an
+  - **WIT changes** to `sqlite-wit/`: please discuss first via an
     issue — the WIT contract is the wide-API surface every extension
     depends on; breaking changes are coordinated carefully.
   - **Architectural rewrites:** open an issue first to align on the plan.

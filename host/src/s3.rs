@@ -12,7 +12,7 @@
 //!     instantiating an additional aws-sigv4 component into every
 //!     loaded-extension Store. The bookkeeping cost dwarfs the
 //!     payoff for a single sink-style SPI.
-//!   - The WIT contract (sqlite-loader-wit/wit/host-spi.wit) is
+//!   - The WIT contract (sqlite-wit/wit/sqlite-extension/host-spi.wit) is
 //!     mirrored exactly from s3-wasm's s3-base interface, so a
 //!     future iteration can swap implementations without touching
 //!     the extension-facing surface.

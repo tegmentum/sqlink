@@ -372,7 +372,7 @@ clean while phase 2/3 are still appropriately deferred.
 Independent of which item, every entry on this list shares
 infrastructure that's already in place:
 
-- WIT contract evolution path (`sqlite-loader-wit/wit/guest.wit`,
+- WIT contract evolution path (`sqlite-wit/wit/sqlite-extension/guest.wit`,
   the dispatch.wit pair, regen the host bindings, bump every
   extension's manifest if a manifest field changes)
 - Host dispatch + HostWrap impl pattern

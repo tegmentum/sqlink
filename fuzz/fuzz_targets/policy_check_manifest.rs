@@ -13,7 +13,7 @@ use arbitrary::{Arbitrary, Unstructured};
 use sqlite_extension_policy::{Capability, Policy};
 
 // Capability doesn't derive Arbitrary upstream; map a u8 to the
-// 16 variants enumerated in sqlite-loader-wit/src/lib.rs.
+// 16 variants enumerated in sqlite-wit/src/lib.rs.
 fn cap_from_byte(b: u8) -> Capability {
     match b % 16 {
         0 => Capability::Spi,

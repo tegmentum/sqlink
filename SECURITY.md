@@ -35,7 +35,7 @@ trust boundaries:
 
   - **Host (sqlink binary) ↔ extension component.** Extensions run
     inside wasmtime with fuel + epoch metering. They reach the host
-    only through the `sqlite-loader-wit` WIT interface — no direct
+    only through the `sqlite-wit` WIT interface — no direct
     syscall surface. SQL executes against a shared host-owned
     sqlite3 connection via spi.
   - **Capability policy.** Each extension declares the host

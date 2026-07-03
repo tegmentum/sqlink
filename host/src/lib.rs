@@ -84,7 +84,7 @@ pub mod bindings {
 /// config` imports satisfied by the retired bespoke loader impls below.
 pub mod loaded {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "minimal",
         imports: { default: async },
         exports: { default: async },
@@ -99,7 +99,7 @@ pub mod loaded {
 /// generated trait + type modules via `with:`.
 pub mod loaded_minimal_http {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "minimal-http",
         imports: { default: async },
         exports: { default: async },
@@ -125,7 +125,7 @@ pub mod loaded_minimal_http {
 /// dns-policy at the check_dns_policy boundary).
 pub mod loaded_minimal_dns {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "minimal-dns",
         imports: { default: async },
         exports: { default: async },
@@ -152,7 +152,7 @@ pub mod loaded_minimal_dns {
 /// `loaded` so we don't pay the duplicate-bindings cost.
 pub mod loaded_stateful {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "stateful",
         imports: { default: async },
         exports: { default: async },
@@ -178,7 +178,7 @@ pub mod loaded_stateful {
 /// export. Shares the rest of the minimal surface via `with:`.
 pub mod loaded_dotcmd_aware {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "dotcmd-aware",
         imports: { default: async },
         exports: { default: async },
@@ -212,7 +212,7 @@ pub mod loaded_dotcmd_aware {
 /// addition; its trait gets a fresh per-world impl below.
 pub mod loaded_bundle_cli {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "bundle-cli",
         imports: { default: async },
         exports: { default: async },
@@ -239,7 +239,7 @@ pub mod loaded_bundle_cli {
 /// with `loaded` via `with:` to keep one copy of every record.
 pub mod loaded_collating {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "collating",
         imports: { default: async },
         exports: { default: async },
@@ -265,7 +265,7 @@ pub mod loaded_collating {
 /// `loaded`'s types via `with:` for ABI compat across the boundary.
 pub mod loaded_tabular {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "tabular",
         imports: { default: async },
         exports: { default: async },
@@ -300,7 +300,7 @@ pub mod loaded_tabular {
 /// world's variants.
 pub mod loaded_tabular_mutating {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "tabular-mutating",
         imports: { default: async },
         exports: { default: async },
@@ -325,7 +325,7 @@ pub mod loaded_tabular_mutating {
 /// in addition to the minimal-shape metadata.
 pub mod loaded_authorizing {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "authorizing",
         imports: { default: async },
         exports: { default: async },
@@ -1353,7 +1353,7 @@ impl<'a> compose::compose::dynlink::linker::HostInstance for HostWrap<'a> {
 /// the matching scheme's resolver.
 pub mod loaded_resolving {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "resolving",
         imports: { default: async },
         exports: { default: async },
@@ -1388,7 +1388,7 @@ pub mod loaded_resolving {
 /// cache slot is needed in the host.
 pub mod loaded_hooked {
     wasmtime::component::bindgen!({
-        path: "../sqlite-loader-wit/wit",
+        path: "../sqlite-wit/wit/sqlite-extension",
         world: "hooked",
         imports: { default: async },
         exports: { default: async },
@@ -11761,7 +11761,7 @@ mod http_policy_tests {
     //! Exercise the policy gate in `check_http_policy`. The
     //! matching primitives in `HttpPolicy::check_host` /
     //! `::check_method` already have their own unit tests in
-    //! `sqlite-loader-wit`; what we're checking here is that the
+    //! `sqlite-wit`; what we're checking here is that the
     //! host's gate consults them with the right inputs and surfaces
     //! the right error shape.
 

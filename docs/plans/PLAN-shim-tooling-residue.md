@@ -1954,7 +1954,7 @@ wac plug \
 # exit 0
 wasm-tools component targets \
   --world 'sqlite:extension/tabular@1.0.0' \
-  ../sqlink/sqlite-loader-wit/wit \
+  ../sqlink/sqlite-wit/wit/sqlite-extension \
   mobilitydb-sqlink-loadable.wasm
 # error: missing import named `mobilitydb:temporal/types@0.1.0`
 ```

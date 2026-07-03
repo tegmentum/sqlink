@@ -59,7 +59,7 @@ in scope.
 
 ### Axis 1 — Contract dispatch shape (3 distinct surfaces)
 
-#### SQLite (`sqlite:extension/aggregate-function` in `~/git/sqlink/sqlite-loader-wit/wit/guest.wit`)
+#### SQLite (`sqlite:extension/aggregate-function` in `~/git/sqlink/sqlite-wit/wit/sqlite-extension/guest.wit`)
 
 Window functions ride the aggregate dispatch surface:
 
@@ -827,7 +827,7 @@ substrate.
 ## References
 
 ### Contract WIT
-- `~/git/sqlink/sqlite-loader-wit/wit/guest.wit:53-62, 263-284` —
+- `~/git/sqlink/sqlite-wit/wit/sqlite-extension/guest.wit:53-62, 263-284` —
   `aggregate-function-spec.is-window` + `aggregate-function`
   interface (step / finalize / value / inverse)
 - `~/git/ducklink/wit/duckdb-extension/aggregate-incr-dispatch.wit` —

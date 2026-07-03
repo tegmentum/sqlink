@@ -20,7 +20,7 @@ COPY sqlite-wasm-httpd ./sqlite-wasm-httpd
 COPY host ./host
 COPY core ./core
 COPY cli ./cli
-COPY sqlite-loader-wit ./sqlite-loader-wit
+COPY sqlite-wit ./sqlite-wit
 COPY sqlite-cas-cache ./sqlite-cas-cache
 COPY sqlite-cli-embedded ./sqlite-cli-embedded
 COPY sqlite-embed ./sqlite-embed

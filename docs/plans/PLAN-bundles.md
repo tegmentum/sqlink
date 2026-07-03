@@ -93,7 +93,7 @@ a new host-resident SPI capability mirroring the dispatch-bridge
 pattern from #429/#432/#433/#436/#439/#440:
 
 ```wit
-// sqlite-loader-wit/wit/host-spi.wit
+// sqlite-wit/wit/sqlite-extension/host-spi.wit
 interface build {
   use types.{sqlite-error};
 

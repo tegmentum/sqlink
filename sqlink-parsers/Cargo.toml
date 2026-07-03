@@ -27,4 +27,4 @@ std = ["dep:anyhow", "dep:sqlite-extension-policy"]
 
 [dependencies]
 anyhow = { version = "1.0", optional = true }
-sqlite-extension-policy = { path = "../sqlite-loader-wit", optional = true }
+sqlite-extension-policy = { path = "../sqlite-wit", optional = true }

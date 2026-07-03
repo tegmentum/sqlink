@@ -94,7 +94,7 @@ The original "blocker" analysis below is kept for context.
 
 ## 1. Methods declared by `spi-loader`
 
-From `sqlite-loader-wit/wit/host-spi.wit` (interface `spi-loader`):
+From `sqlite-wit/wit/sqlite-extension/host-spi.wit` (interface `spi-loader`):
 
 | Method | Signature | Used by browser? |
 | --- | --- | --- |
@@ -186,7 +186,7 @@ expose sqlite-lib's export to the host — unusual but doable via
 the composed binary re-exporting library).
 
 This is the closest mirror of the native host pattern, but it
-requires sqlite-lib to import `dispatch` from sqlite-loader-wit
+requires sqlite-lib to import `dispatch` from sqlite-wit
 (rather than just `extension-loader`), and the JS host needs to
 implement `dispatch.scalar-call` (which it can — that's just the
 existing extension-loader.js' dispatch path).
@@ -252,7 +252,7 @@ Implementing it requires:
 1. Add `dispatch-bridge` (or extend `library`) to sqlite-lib's
    exports. ~50 lines of Rust in `sqlite-lib/src/lib.rs` +
    ~30 lines of WIT in `sqlite-wasm/wit/library.wit`.
-2. Import `dispatch` from `sqlite-loader-wit` into the
+2. Import `dispatch` from `sqlite-wit` into the
    `sqlite-library` world.
 3. Either:
    - **a.** Re-wire the cli's `spi-loader.register-scalar` to

@@ -59,7 +59,7 @@ of `sqlite:extension/bundles`, so the browser polyfill
 can retire its `sqlite:extension/bundles` typed shim.
 
 **The blocker**: bundle-cli's WIT world (`dotcmd-aware` in
-`sqlite-loader-wit/wit/world.wit`) belongs to the
+`sqlite-wit/wit/sqlite-extension/world.wit`) belongs to the
 `sqlite:extension@1.0.0` package, while `dispatch-bridge` lives in
 `sqlink:wasm@0.1.0` (defined in `sqlite-wasm/wit/dispatch-bridge.wit`).
 The two packages are not currently mutually-importable in a way
@@ -69,16 +69,16 @@ restructuring.
 
 Specifically:
 
-  1. **WIT package boundary.** sqlite-loader-wit's worlds today
+  1. **WIT package boundary.** sqlite-wit's worlds today
      only import interfaces in their own package
      (`sqlite:extension/{spi, session, bundles, ...}`). Adding a
      cross-package import would require either:
-       * extending sqlite-loader-wit's `wit/deps/` to vendor the
+       * extending sqlite-wit's `wit/deps/` to vendor the
          `sqlink:wasm` package (mirrors what sqlite-wasm already
          does the other way at `sqlite-wasm/wit/deps/sqlite-extension/`),
          OR
        * giving bundle-cli a bespoke world definition outside
-         sqlite-loader-wit so its bindgen path can be a UNION of
+         sqlite-wit so its bindgen path can be a UNION of
          both wit dirs.
      Either path crosses a submodule + package-versioning boundary
      not previously crossed by any in-tree extension.
@@ -143,7 +143,7 @@ Specifically:
   The MOVE itself reduces the polyfill from ~450 lines to ~30-50
   lines (one execute-cas method plus the schema bootstrap), which
   is the genuine win Sub-item A aimed at. But this requires:
-    * sqlite-loader-wit deps restructuring (or a bundle-cli
+    * sqlite-wit deps restructuring (or a bundle-cli
       bespoke world);
     * native host's dotcmd-aware bindgen extended to satisfy
       sqlink:wasm/dispatch-bridge for bundle-cli;
@@ -406,10 +406,10 @@ WAC-composable component EXPORTS today:
 
 | Imported by | Interface | Defined in | Exported by |
 |---|---|---|---|
-| prefix-cli, sqlink-meta-cli | `sqlite:extension/loader-bridge` | `sqlite-loader-wit/wit/loader-bridge.wit` | (none — host impl only) |
-| core-dotcmd, sqlite-utils-maint | `sqlite:extension/cli-state` | `sqlite-loader-wit/wit/dotcmd.wit:138` | (none) |
-| serialize-cli, archive-cli | `sqlite:extension/cli-stdout` | `sqlite-loader-wit/wit/dotcmd.wit:90` | (none) |
-| bundle-cli | `sqlite:extension/build` | `sqlite-loader-wit/wit/host-spi.wit` | sqlite-lib (OK) |
+| prefix-cli, sqlink-meta-cli | `sqlite:extension/loader-bridge` | `sqlite-wit/wit/sqlite-extension/loader-bridge.wit` | (none — host impl only) |
+| core-dotcmd, sqlite-utils-maint | `sqlite:extension/cli-state` | `sqlite-wit/wit/sqlite-extension/dotcmd.wit:138` | (none) |
+| serialize-cli, archive-cli | `sqlite:extension/cli-stdout` | `sqlite-wit/wit/sqlite-extension/dotcmd.wit:90` | (none) |
+| bundle-cli | `sqlite:extension/build` | `sqlite-wit/wit/sqlite-extension/host-spi.wit` | sqlite-lib (OK) |
 
 The native sqlink-host implements `loader-bridge` / `cli-state` /
 `cli-stdout` in `host/src/lib.rs` as wasmtime host impls — never

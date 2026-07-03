@@ -1638,7 +1638,7 @@ dependencies = [
 [[package]]
 name = "datalink-policy"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git?rev=d1e5984b51dba1d6f40d6173c7ab26af4a905cf2#d1e5984b51dba1d6f40d6173c7ab26af4a905cf2"
+source = "git+https://github.com/tegmentum/datalink.git#8211a7542eea5c5d661e69ab621b74c71ccf016f"
 
 [[package]]
 name = "datalink-prefix"

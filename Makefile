@@ -159,7 +159,7 @@ $(BINDINGS_EXT_DIR)/sqlite_extensible.h: $(WIT_DIR)/world.wit $(WIT_DIR)/sqlite-
 
 # Generate bindings for the unified-WIT world (task #12 target shape).
 #
-# Uses the canonical sqlite:extension contract via the sqlite-loader-wit
+# Uses the canonical sqlite:extension contract via the sqlite-wit
 # submodule, exposed to wit-bindgen via wit/deps/sqlite-extension as a
 # symlink. The C glue that consumes these bindings (a successor to
 # src/exports/extension.c) hasn't landed yet; this target exists so the

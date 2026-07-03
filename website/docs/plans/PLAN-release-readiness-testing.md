@@ -162,7 +162,7 @@ Current `.github/workflows/ci.yml` runs:
 - Workspace-wide `cargo fmt --check` / `cargo clippy` (only host is checked)
 - Doc build (`cargo doc --no-deps`) — would catch broken intra-doc links
 - `tooling/doc-refs-check.py` — already exists, not wired
-- Submodule (`sqlite-loader-wit/`) fmt+clippy+tests
+- Submodule (`sqlite-wit/`) fmt+clippy+tests
 - Coverage report — no tarpaulin / llvm-cov
 - License-header check (LICENSE shipped 6fe4f81; no enforcement of per-file headers)
 

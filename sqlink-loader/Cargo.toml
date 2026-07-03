@@ -41,7 +41,7 @@ path = "src/lib.rs"
 sqlink-host = { path = "../host" }
 # Capability / Policy types  the env-var path needs to compose a
 # Policy for each extension we load.
-sqlite-extension-policy = { path = "../sqlite-loader-wit" }
+sqlite-extension-policy = { path = "../sqlite-wit" }
 
 anyhow = "1"
 once_cell = "1"

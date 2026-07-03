@@ -45,7 +45,7 @@ Two related-but-separable capabilities:
 
 ### Capability surface (relevant types)
 
-`sqlite-loader-wit/src/lib.rs`:
+`sqlite-wit/src/lib.rs`:
 - `Capability` enum — 11 variants (Spi, Prepared, Transaction,
   Schema, State, Cache, Random, Text, Hashing, Encoding, Http).
 - `HttpPolicy` — allowlist of hosts, methods, body cap,

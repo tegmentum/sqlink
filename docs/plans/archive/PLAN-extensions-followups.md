@@ -87,7 +87,7 @@
 > ip_contains. 4 native unit tests pass.
 >
 > **Phase E9 status: shipped.** New `minimal-http` world in
-> sqlite-loader-wit/wit/world.wit + CachedMinimalHttp + the
+> sqlite-wit/wit/sqlite-extension/world.wit + CachedMinimalHttp + the
 > `make_loaded_minimal_http_linker` paralleling minimal /
 > tabular / stateful. dispatch_scalar now picks
 > `ScalarRoute::MinimalHttp` for extensions declaring

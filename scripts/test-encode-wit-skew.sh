@@ -20,7 +20,7 @@ REPO_ROOT="$(pwd)"
 UUID_WASM="target/wasm32-wasip2/release/uuid_extension.wasm"
 UUID_COMP="target/wasm32-wasip2/release/uuid_extension.component.wasm"
 UUID_HASH="target/wasm32-wasip2/release/uuid_extension.component.wasm.wit-hash"
-WIT_FILE="sqlite-loader-wit/wit/host-spi.wit"
+WIT_FILE="sqlite-wit/wit/sqlite-extension/host-spi.wit"
 MARKER="// encode-skew-smoke marker — should be reverted"
 
 fail() {
@@ -35,8 +35,8 @@ cleanup() {
     # Revert the WIT marker if the test bailed mid-flight. The
     # submodule may be on a detached HEAD/branch; use checkout
     # at the path, not at the submodule level.
-    if [ -d sqlite-loader-wit ]; then
-        ( cd sqlite-loader-wit && git checkout -- wit/host-spi.wit 2>/dev/null || true )
+    if [ -d sqlite-wit ]; then
+        ( cd sqlite-wit && git checkout -- wit/host-spi.wit 2>/dev/null || true )
     fi
 }
 trap cleanup EXIT
@@ -79,7 +79,7 @@ pass "WIT-skew run rebuilt uuid-extension; sidecar rotated to ${SKEW_HASH:0:16}.
 
 echo
 echo "=== Check 4: revert returns sidecar to original hash ==="
-( cd sqlite-loader-wit && git checkout -- wit/host-spi.wit )
+( cd sqlite-wit && git checkout -- wit/host-spi.wit )
 echo "(Expected runtime: several minutes — workspace-wide rebuild back)"
 REVERT_OUTPUT=$(bash scripts/encode-extension-components.sh 2>&1)
 REVERTED_HASH=$(cat "$UUID_HASH")

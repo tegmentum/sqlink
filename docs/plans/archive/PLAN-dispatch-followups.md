@@ -74,7 +74,7 @@ sqlite> SELECT wasm_sum(x) FROM (VALUES(1),(2),(3));
    ```rust
    pub mod loaded_stateful {
        wasmtime::component::bindgen!({
-           path: "../sqlite-loader-wit/wit",
+           path: "../sqlite-wit/wit/sqlite-extension",
            world: "stateful",
            with: {
                "sqlite:extension/types":   super::loaded::sqlite::extension::types,
@@ -221,7 +221,7 @@ sqlite> SELECT s FROM t ORDER BY s COLLATE noaccent;
   instantiate as Full. Two ways out:
   - Make `coll-extension` ALSO export stubs for every other Full
     interface. Mechanical but tedious.
-  - Add a fourth world to `sqlite-loader-wit/wit/world.wit`
+  - Add a fourth world to `sqlite-wit/wit/sqlite-extension/world.wit`
     specifically for "minimal + collation" extensions: imports the
     minimal set, exports metadata + scalar-function + collation.
     Cleaner WIT shape, costs another bindgen.

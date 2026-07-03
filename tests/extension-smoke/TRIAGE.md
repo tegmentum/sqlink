@@ -62,7 +62,7 @@ The bridge component imports `postgis:wasm/*` (32 interfaces) and
 `sqlite:extension/*` surface. Loading the bridge wasm standalone
 fails instantiation because those imports are unsatisfied.
 
-Bindings were rebuilt against the current sqlite-loader-wit
+Bindings were rebuilt against the current sqlite-wit
 contract (see phase3-postgis-bridge branch). The fixture stays
 skipped until one of these lands:
 

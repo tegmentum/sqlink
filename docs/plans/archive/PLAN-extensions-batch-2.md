@@ -567,13 +567,13 @@ sequenced /loop iteration:
 
   1. `capability::dns` variant + `dns-policy` record +
      `dns-policy` field on `load-options`  added to
-     `sqlite-loader-wit/wit/policy.wit`.
+     `sqlite-wit/wit/sqlite-extension/policy.wit`.
   2. `dns` interface (resolve func, record-type variant,
      dns-error variant)  added to
-     `sqlite-loader-wit/wit/host-spi.wit`.
+     `sqlite-wit/wit/sqlite-extension/host-spi.wit`.
   3. `minimal-dns` world + dns import added to `full`
-     world  added to `sqlite-loader-wit/wit/world.wit`.
-  4. Mirror types in `sqlite-loader-wit/src/lib.rs`
+     world  added to `sqlite-wit/wit/sqlite-extension/world.wit`.
+  4. Mirror types in `sqlite-wit/src/lib.rs`
      (`DnsPolicy`, `Capability::Dns`, error variants).
      Also mirrored in `wit/library.wit` for sqlite-lib.
   5. Host wiring: `dns::Host` impl on `LoadedState`,

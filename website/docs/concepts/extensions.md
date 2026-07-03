@@ -7,7 +7,7 @@ description: What a sqlink extension is, how it dispatches, and the capability m
 # Extensions
 
 A sqlink extension is a single `.component.wasm` file conforming
-to the `sqlite-loader-wit` contract. It exports one or more of:
+to the `sqlite-wit` contract. It exports one or more of:
 
 - **Scalar functions** — invoked as `name(arg, ...)` in SQL.
 - **Aggregates** — `name(col)` with `step` + `final`.

@@ -39,7 +39,7 @@ binary:
 
 1. **`sqlite:extension`-world extensions** — the original shape.
    Self-contained wasm components that target one of the worlds
-   in `sqlite-loader-wit` (minimal, stateful, collating,
+   in `sqlite-wit` (minimal, stateful, collating,
    authorizing, hooked, full). Loaded via `.load <path>`,
    register SQL functions / aggregates / collations / hooks /
    authorizers with the cli's SQLite, run via the dispatch
@@ -145,7 +145,7 @@ which returns `Err(PolicyError::CapabilityNotGranted(<which>))` if
 the extension declares a capability the user didn't grant.
 
 The policy types are canonical: `sqlite-extension-policy` (under
-`sqlite-loader-wit/`) defines `Capability`, `HttpPolicy`, `Policy`,
+`sqlite-wit/`) defines `Capability`, `HttpPolicy`, `Policy`,
 `PolicyError`. Both this host AND `sqlite-wasm-loader` use the same
 crate so policy values port identically across deployment modes.
 

@@ -48,7 +48,7 @@ my-dotcmd/
 ├── src/
 │   └── lib.rs
 └── (no local wit/ — the path resolves to the shared
-    sqlite-loader-wit submodule that defines `dotcmd-aware`)
+    sqlite-wit submodule that defines `dotcmd-aware`)
 ```
 
 Unlike runnable components, dot-command components use plain
@@ -73,7 +73,7 @@ wit-bindgen = "0.49"
 [workspace]   # standalone; not in the sqlite-wasm workspace
 ```
 
-Note: every extension targeting one of the `sqlite-loader-wit`
+Note: every extension targeting one of the `sqlite-wit`
 worlds is a standalone workspace so the parent repo's exclude
 list keeps it from being pulled into the cli build by mistake.
 Build it from its own directory:
@@ -102,7 +102,7 @@ mod wasm_export {
 
     mod bindings {
         wit_bindgen::generate!({
-            path: "../../sqlite-loader-wit/wit",
+            path: "../../sqlite-wit/wit/sqlite-extension",
             world: "dotcmd-aware",
             generate_all,
         });

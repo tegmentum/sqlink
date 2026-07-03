@@ -188,7 +188,7 @@ value.
 
 1. Lock the four design questions above (this PLAN doc + an
    AskUserQuestion pass).
-2. Update `sqlite-loader-wit/wit/` with the new variant + manifest
+2. Update `sqlite-wit/wit/sqlite-extension/` with the new variant + manifest
    fields. Bump `sqlink:wasm@0.1.0` → `sqlink:wasm@1.0.0`.
 3. Write a `migration-notes-1.0.md` documenting the change for
    extension authors.
@@ -323,7 +323,7 @@ migration is a recompile, not a behavior change.
   Phase 1 + 2 are sequenced into this plan's Phase A + F.
 - `~/git/sqlink/docs/plans/PLAN-orchestration-integration.md` (#486)
   — Tier 2 canonical-WIT identity overlaps with type-id hashing.
-- `~/git/sqlink/sqlite-loader-wit/wit/` — current contract surface
+- `~/git/sqlink/sqlite-wit/wit/sqlite-extension/` — current contract surface
   to extend.
 - `~/git/mobilitydb-wasm/crates/mdb-temporal-wasm/wit/temporal.wit`
   — the WIT signatures driving the need.
@@ -332,7 +332,7 @@ migration is a recompile, not a behavior change.
 
 ### Landed
 
-- **WIT contract (`sqlite-loader-wit`, branch `feat/wit-value-1.0`,
+- **WIT contract (`sqlite-wit`, branch `feat/wit-value-1.0`,
   commit `4861ae1f`):**
   - `sql-value` variant gains a `wit-value(wit-value-payload)` arm
     in `wit/types.wit`. Payload carries:
@@ -350,7 +350,7 @@ migration is a recompile, not a behavior change.
     `sqlite:extension@1.0.0` across every `wit/*.wit` and the
     README.
 
-- **Migration notes (`sqlite-loader-wit/MIGRATION-1.0.md`):**
+- **Migration notes (`sqlite-wit/MIGRATION-1.0.md`):**
   documents the variant addition, the new manifest field, the
   source-level recipe extension authors follow on recompile,
   backwards-compat semantics, the canonical-CBOR wire format
@@ -392,7 +392,7 @@ migration is a recompile, not a behavior change.
     additions.
   - The `extensions/postgis-bridge/wit/deps/sqlite-extension/`
     vendored copies of the contract were re-synced from
-    `sqlite-loader-wit/wit/`. The 217 path-based extensions
+    `sqlite-wit/wit/sqlite-extension/`. The 217 path-based extensions
     inherit the bump from the submodule without per-extension WIT
     edits.
 
@@ -416,14 +416,14 @@ migration is a recompile, not a behavior change.
 
 ### Branches + commits
 
-- `sqlite-loader-wit` branch `feat/wit-value-1.0` (pushed to
+- `sqlite-wit` branch `feat/wit-value-1.0` (pushed to
   `origin/feat/wit-value-1.0` AND `https://github.com/tegmentum/
-  sqlite-loader-wit.git`):
+  sqlite-wit.git`):
   - `4861ae1f` `feat(wit)!: bump sqlite:extension to @1.0.0 with
     wit-value variant`.
 - `sqlink` branch `feat/wit-value-phase-a` (pushed to
   `origin/feat/wit-value-phase-a`):
-  - `402863e4` `chore(submodule): bump sqlite-loader-wit for
+  - `402863e4` `chore(submodule): bump sqlite-wit for
     wit-value variant + @1.0.0 baseline`.
   - `d8a64c8c` `feat(catalog)!: regenerate 218-extension catalog +
     host crate for @1.0.0 contract`.
@@ -1257,10 +1257,10 @@ wasmtime trap.
   synthesized skewed components through `Host::load_extension_from_bytes`
   directly (not just the helper fn). Proves no dispatch path slips
   past the guard.
-- **F6 — Migration notes.** `sqlite-loader-wit/MIGRATION-1.0.md`'s
+- **F6 — Migration notes.** `sqlite-wit/MIGRATION-1.0.md`'s
   Backwards-compatibility section now records the per-loader
   behavior + test coverage + observability surfaces. Lives on
-  `sqlite-loader-wit@feat/wit-value-phase-f-migration-notes` pending
+  `sqlite-wit@feat/wit-value-phase-f-migration-notes` pending
   the loader-wit PR merge; sqlink submodule pointer tracks it.
 
 ### What's verified
@@ -1575,7 +1575,7 @@ will drop the count and surface in the stderr line.
 The original task description suggested adding `direct: bool` to
 the `typed-value-binding` manifest entry as a diagnostic hint. That
 requires extending the WIT contract in
-`sqlite-loader-wit/wit/metadata.wit` (with a contract version bump
+`sqlite-wit/wit/sqlite-extension/metadata.wit` (with a contract version bump
 per #485) and mirroring the parse on the host + browser sides. Out
 of scope for #523; tracked in `PLAN-followups.md` as a low-priority
 nice-to-have. The stderr line at codegen time already gives the

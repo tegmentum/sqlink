@@ -45,7 +45,7 @@ its registry in priority order.
 
 ## Layer 1: WIT contract
 
-See `sqlite-loader-wit/wit/dotcmd.wit` for the full file. Key
+See `sqlite-wit/wit/sqlite-extension/dotcmd.wit` for the full file. Key
 surface:
 
 ### `dot-command-spec` (in `metadata`)
@@ -436,7 +436,7 @@ contract IS the plugin protocol.
 
 ### Phase 1 — WIT + session layer + shell entry point (~3 days)
 
-- Land `sqlite-loader-wit/wit/dotcmd.wit`.
+- Land `sqlite-wit/wit/sqlite-extension/dotcmd.wit`.
 - Add `dot-commands: list<dot-command-spec>` to the manifest record,
   with the `version` / `usage` / `examples` fields.
 - Add the `dotcmd-aware` world.

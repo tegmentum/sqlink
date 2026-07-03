@@ -126,7 +126,7 @@ The work this requires, mirroring the patterns we landed for
 scalar / aggregate / collation / hook:
 
 1. **WIT extension** — add a `vtab` interface to
-   `sqlite-loader-wit/wit/guest.wit` covering xCreate, xConnect,
+   `sqlite-wit/wit/sqlite-extension/guest.wit` covering xCreate, xConnect,
    xBestIndex, xOpen, xFilter, xNext, xEof, xColumn, xRowid,
    xUpdate, xDestroy
 2. **Bindgen + Host trait** — extend `host/src/lib.rs` with

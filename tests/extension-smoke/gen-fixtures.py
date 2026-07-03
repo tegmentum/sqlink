@@ -260,7 +260,7 @@ SKIP_PLUGINS = {
     # only succeeds after `wac plug` against postgis-composed.wasm
     # AND sfcgal.component.wasm. Until the smoke harness learns to
     # compose, this stays skipped. See TRIAGE.md → "postgis-bridge".
-    "postgis-bridge": "needs wac-compose with postgis-composed.wasm + sfcgal-wasm before .load; bindings rebuilt against current sqlite-loader-wit",
+    "postgis-bridge": "needs wac-compose with postgis-composed.wasm + sfcgal-wasm before .load; bindings rebuilt against current sqlite-wit",
 }
 
 

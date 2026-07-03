@@ -29,7 +29,7 @@ blake3 = "1"
 sha2 = "0.10"
 tempfile = "3"
 
-sqlite-extension-policy = { path = "../sqlite-loader-wit" }
+sqlite-extension-policy = { path = "../sqlite-wit" }
 sqlite-cas-cache = { path = "../sqlite-cas-cache" }
 sqlink-parsers = { path = "../sqlink-parsers" }
 sqlink-cli-argv = { path = "../sqlink-cli-argv" }

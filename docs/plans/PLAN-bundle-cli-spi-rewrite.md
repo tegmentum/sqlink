@@ -66,7 +66,7 @@ path.
 ### Decision (α) vs (β) for WIT path
 
 Plan assumption was that `sqlite:extension/bundles` lives in the
-`sqlite-loader-wit` package. **It does not.** The interface is defined in
+`sqlite-wit` package. **It does not.** The interface is defined in
 `sqlite-wasm/wit/deps/sqlite-extension/host-spi.wit` lines 816-915. This
 collapses (α) and (β):
 
@@ -140,7 +140,7 @@ surfaced that materially change the plan's checkpoint structure.
 
 ### No `world bundle-cli` exists in any world.wit
 
-- `sqlite-loader-wit/wit/world.wit` declares 15 worlds: `minimal`,
+- `sqlite-wit/wit/sqlite-extension/world.wit` declares 15 worlds: `minimal`,
   `minimal-http`, `minimal-dns`, `stateful`, `lifecycle-aware`,
   `resolving`, `collating`, `authorizing`, `hooked`, `wal-aware`,
   `hookprobe`, `tabular`, `tabular-mutating`, `dotcmd-aware`, `full`.
@@ -149,7 +149,7 @@ surfaced that materially change the plan's checkpoint structure.
   has the same 15 worlds (only `package` version differs:
   `sqlite:extension@1.0.0` upstream vs `@0.1.0` vendored).
 - bundle-cli's `wit_bindgen::generate!` block targets
-  `path: "../../sqlite-loader-wit/wit"` with `world: "dotcmd-aware"`
+  `path: "../../sqlite-wit/wit/sqlite-extension"` with `world: "dotcmd-aware"`
   (`extensions/bundle-cli/src/lib.rs:99-105`). It shares
   `dotcmd-aware` with every other dot-command extension.
 
@@ -164,8 +164,8 @@ executed verbatim. Three viable substitutes:
 2. **Introduce a new `world dotcmd-aware-cas`** that extends
    dotcmd-aware's import set with dispatch-bridge, and switch
    bundle-cli's bindgen to it. New world block in
-   sqlite-loader-wit + new bindgen module in `host/src/lib.rs`.
-3. **Add a new `world bundle-cli`** to sqlite-loader-wit/wit/world.wit
+   sqlite-wit + new bindgen module in `host/src/lib.rs`.
+3. **Add a new `world bundle-cli`** to sqlite-wit/wit/sqlite-extension/world.wit
    pinned to bundle-cli's actual import set (types, spi, session,
    logging, config, cli-stdout, cli-stderr, cli-state, build,
    bundles, loader-bridge + the new dispatch-bridge). Most surgical;
@@ -219,18 +219,18 @@ new `dispatch-bridge-cas` interface.
     `interface dispatch-bridge-cas { bridged-execute-cas: func(sql:
     string, params: list<sql-value>) -> result<query-result,
     sqlite-error>; }` (move/copy from `interface dispatch-bridge`).
-  - `sqlite-loader-wit/wit/deps/` directory created with
+  - `sqlite-wit/wit/sqlite-extension/deps/` directory created with
     `sqlink-wasm.wit` containing the dispatch-bridge-cas interface
     summary, OR a symlink/vendored copy of the upstream
     dispatch-bridge.wit, OR a `wit/deps.toml` entry pointing at
     the sqlite-wasm package.
-  - `sqlite-loader-wit/wit/world.wit` — add `world bundle-cli`
+  - `sqlite-wit/wit/sqlite-extension/world.wit` — add `world bundle-cli`
     block: trimmed import set (types, spi, session, logging,
     config, cli-stdout, cli-stderr, cli-state, build, bundles,
     loader-bridge) + `import sqlink:wasm/dispatch-bridge-cas`.
   - Vendored mirror `sqlite-wasm/wit/deps/sqlite-extension/world.wit`
     gets the same new world block.
-  - Separate commit + push on sqlite-loader-wit submodule (HTTPS).
+  - Separate commit + push on sqlite-wit submodule (HTTPS).
   - Push sqlink with bumped submodule pointer.
 
 - **533.3 (revised)**: Native host impl
@@ -280,9 +280,9 @@ new `dispatch-bridge-cas` interface.
 ### Footprint estimate
 
 - `sqlite-wasm/wit/dispatch-bridge.wit`: ~10 LoC added
-- `sqlite-loader-wit/wit/world.wit`: ~25 LoC (new world) +
+- `sqlite-wit/wit/sqlite-extension/world.wit`: ~25 LoC (new world) +
   ~3 LoC (deps reference)
-- `sqlite-loader-wit/wit/deps/sqlink-wasm.wit` (new): ~10 LoC
+- `sqlite-wit/wit/sqlite-extension/deps/sqlink-wasm.wit` (new): ~10 LoC
 - `host/src/lib.rs`: ~25 LoC (bindgen module) + ~40 LoC (trait impl)
   + ~120 LoC (bundles::Host delegate refactor, net -50)
 - `extensions/bundle-cli/src/lib.rs`: net ~+150 LoC (SQL strings
@@ -304,7 +304,7 @@ coordinator's message didn't approve:
    composed-binary contract because the existing browser code
    calls `b.bridgedExecuteCas(...)` — moving the method to a new
    interface changes the generated JS binding name path.
-2. **New `world bundle-cli`** in `sqlite-loader-wit`. Adds a
+2. **New `world bundle-cli`** in `sqlite-wit`. Adds a
    purpose-built world for a single extension, sets a precedent
    that other near-singleton extensions (sqlink-meta-cli?) may
    follow. Worth confirming before stamping in.
@@ -319,7 +319,7 @@ session.
 
 What I can do in this session if the user confirms the revised plan:
 
-- **533.2 only** (WIT additions + sqlite-loader-wit submodule push
+- **533.2 only** (WIT additions + sqlite-wit submodule push
   + sqlink submodule pointer bump). Roughly 200-300 lines of WIT
   + commit + push. No cargo build needed.
 - Or **533.5 only** (host-side path δ refactor without bundle-cli or
@@ -386,7 +386,7 @@ strings, same Connection target, same v1.5 round 2 unify shape).
   worlds + bindgen regen for 218+ extensions) was out of scope.
 - Native dispatch-bridge work in scope: ported the composed-binary
   body to `host::cas_execute_inner` for native sqlink-host.
-- New `world bundle-cli` in sqlite-loader-wit (purpose-built;
+- New `world bundle-cli` in sqlite-wit (purpose-built;
   drops wal-frames + s3-base; adds dispatch-bridge-cas).
 - Interface split: `bridged-execute-cas` moved into its own
   `dispatch-bridge-cas` interface (both in `sqlink:wasm` and in
@@ -405,12 +405,12 @@ sqlink:
 16f13d4c feat(bundle-cli): #533.5 cutover to world bundle-cli + path delta
 1650509e refactor(host): #533.4 unify bundles::Host through cas_execute_inner
 d4ccee07 feat(host): impl dispatch-bridge-cas against the cas connection
-72075243 chore(submodules): bump sqlite-loader-wit + sqlite-wasm for #533.2
+72075243 chore(submodules): bump sqlite-wit + sqlite-wasm for #533.2
 077ded01 docs(plan): #533.1.5 third blocker + revised execution plan
 4a783594 docs(plan): #533.1 survey output for bundle-cli SPI rewrite
 ```
 
-sqlite-loader-wit:
+sqlite-wit:
 ```
 d88286f feat(wit): add world bundle-cli + interface dispatch-bridge-cas
 ```
@@ -425,7 +425,7 @@ All three branches pushed to `tegmentum/*` on
 
 ### LoC deltas
 
-- WIT: +49 in sqlite-loader-wit (new dispatch-bridge-cas.wit + new
+- WIT: +49 in sqlite-wit (new dispatch-bridge-cas.wit + new
   world bundle-cli); +29 net in sqlite-wasm (split + new world export).
 - host/src/lib.rs: +185 LoC (new bindgen module
   `loaded_bundle_cli`; new `impl dispatch_bridge_cas::Host`;
@@ -460,7 +460,7 @@ deleted for a net negative.
 - `cargo check -p sqlink-host`: clean (verified post-533.4).
 - `cargo build --target wasm32-wasip2 -p bundle-cli-extension`:
   clean (verified post-533.5).
-- `wasm-tools component wit sqlite-loader-wit/wit/`: parses;
+- `wasm-tools component wit sqlite-wit/wit/sqlite-extension/`: parses;
   bundle-cli world embeds as a clean dummy component with
   `sqlite:extension/dispatch-bridge-cas` import resolved.
 - `wasm-tools component embed --dummy --world sqlite-library

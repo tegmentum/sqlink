@@ -858,7 +858,7 @@ mod wasm_export {
 
     mod bindings {
         wit_bindgen::generate!({
-            path: "../../sqlite-loader-wit/wit",
+            path: "../../sqlite-wit/wit/sqlite-extension",
             world: "minimal",
             generate_all,
         });
