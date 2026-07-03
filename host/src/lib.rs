@@ -9097,27 +9097,19 @@ impl Host {
                     .ok_or_else(|| anyhow!("{scheme}:{rest} not in cache"))
             }
             other => {
-                let resolver = {
-                    let g = self.resolvers.read();
-                    g.get(other)
-                        .cloned()
-                        .ok_or_else(|| anyhow!("no resolver registered for scheme {other}:"))?
-                };
-                let linker = make_loaded_resolving_linker(&self.engine)?;
-                let mut store = build_loaded_store(&self.engine, &resolver, self.db_path())?;
-                let instance = loaded_resolving::Resolving::instantiate_async(
-                    &mut store,
-                    &resolver.component,
-                    &linker,
-                )
-                .await
-                .map_err(|e| anyhow!("instantiate resolver {scheme}: {e}"))?;
-                let result = instance
-                    .sqlite_extension_resolver()
-                    .call_resolve(&mut store, uri)
-                    .await
-                    .map_err(|e| anyhow!("resolver {scheme}.resolve: {e}"))?;
-                result.map_err(|e| anyhow!("resolver {scheme}: {e}"))
+                // #220: custom-scheme resolver EXTENSIONS ran through the
+                // bespoke `Resolving` LoadedState world, which is retired.
+                // (register_resolver already can't populate a resolver — it
+                // reads the bespoke `components` registry that the provider
+                // load path no longer fills.) Provider-backed resolver
+                // extensions need a `resolve` endpoint-envelope method, which
+                // does not exist yet; until then custom schemes are
+                // unsupported. file:/blake3:/sha256:/digest: still resolve above.
+                Err(anyhow!(
+                    "unsupported uri scheme {other}: (custom-scheme resolver \
+                     extensions were retired with the bespoke loader in #220; \
+                     use file:/blake3:/sha256:/digest:)"
+                ))
             }
         }
     }
