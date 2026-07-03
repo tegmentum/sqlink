@@ -21,6 +21,6 @@
 26
 # Compressing a ~3.6 KB highly-redundant payload yields a small (<200 byte) blob.
 1
-# NULL propagates through both compress and decompress.
-<NULL>
-<NULL>
+# NULL propagates through both compress and decompress (typeof of a NULL result).
+null
+null

@@ -1,0 +1,11 @@
+# Expected output for extensions/compress/smoke.sql, one row per SELECT.
+# Round-trip each pure-Rust algorithm (store/deflate/bzip2/lzma/lz4).
+hello world hello world
+hello world hello world
+hello world hello world
+hello world hello world
+hello world hello world
+# deflate shrinks the redundant payload (< 40 bytes).
+1
+# compress_version() is present.
+1
