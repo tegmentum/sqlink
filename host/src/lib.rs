@@ -2068,80 +2068,156 @@ impl loaded::sqlite::extension::wal_frames::Host for crate::compose_provider::Pr
     }
 }
 
+// #106/#220: the resident provider's `s3-base` surface. Forwards each op to
+// the resident `s3-endpoint` provider (`crate::s3_resident`, the default S3
+// path) when the extension was granted the capability; deny-by-default
+// (`CapabilityNotGranted`) otherwise — the same fail-closed shape as
+// `http`/`dns`. Under the `native-s3` feature the resident module is swapped
+// out for the native `crate::s3` fallback, which is wired separately; this
+// impl denies there until that lands. (Threading the manifest-granted value
+// into `s3_granted` is the shared http/dns/s3 grant-threading follow-up.)
+macro_rules! s3_denied {
+    () => {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    };
+}
 impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::ProviderState {
     async fn get_object(
         &mut self,
-        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        _bucket: String,
-        _key: String,
-        _options: Option<loaded::sqlite::extension::s3_base::S3GetObjectOptions>,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        bucket: String,
+        key: String,
+        options: Option<loaded::sqlite::extension::s3_base::S3GetObjectOptions>,
     ) -> std::result::Result<
         loaded::sqlite::extension::s3_base::S3GetObjectOutput,
         loaded::sqlite::extension::s3_base::S3Error,
     > {
-        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+        if !self.s3_granted {
+            return s3_denied!();
+        }
+        #[cfg(not(feature = "native-s3"))]
+        return crate::s3_resident::get_object(endpoint, credentials, bucket, key, options).await;
+        #[cfg(feature = "native-s3")]
+        {
+            let _ = (endpoint, credentials, bucket, key, options);
+            s3_denied!()
+        }
     }
     async fn put_object(
         &mut self,
-        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        _bucket: String,
-        _key: String,
-        _body: Vec<u8>,
-        _options: Option<loaded::sqlite::extension::s3_base::S3PutObjectOptions>,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        bucket: String,
+        key: String,
+        body: Vec<u8>,
+        options: Option<loaded::sqlite::extension::s3_base::S3PutObjectOptions>,
     ) -> std::result::Result<
         loaded::sqlite::extension::s3_base::S3PutObjectOutput,
         loaded::sqlite::extension::s3_base::S3Error,
     > {
-        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+        if !self.s3_granted {
+            return s3_denied!();
+        }
+        #[cfg(not(feature = "native-s3"))]
+        return crate::s3_resident::put_object(endpoint, credentials, bucket, key, body, options)
+            .await;
+        #[cfg(feature = "native-s3")]
+        {
+            let _ = (endpoint, credentials, bucket, key, body, options);
+            s3_denied!()
+        }
     }
     async fn delete_object(
         &mut self,
-        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        _bucket: String,
-        _key: String,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        bucket: String,
+        key: String,
     ) -> std::result::Result<(), loaded::sqlite::extension::s3_base::S3Error> {
-        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+        if !self.s3_granted {
+            return s3_denied!();
+        }
+        #[cfg(not(feature = "native-s3"))]
+        return crate::s3_resident::delete_object(endpoint, credentials, bucket, key).await;
+        #[cfg(feature = "native-s3")]
+        {
+            let _ = (endpoint, credentials, bucket, key);
+            s3_denied!()
+        }
     }
     async fn head_object(
         &mut self,
-        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        _bucket: String,
-        _key: String,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        bucket: String,
+        key: String,
     ) -> std::result::Result<
         loaded::sqlite::extension::s3_base::S3HeadObjectOutput,
         loaded::sqlite::extension::s3_base::S3Error,
     > {
-        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+        if !self.s3_granted {
+            return s3_denied!();
+        }
+        #[cfg(not(feature = "native-s3"))]
+        return crate::s3_resident::head_object(endpoint, credentials, bucket, key).await;
+        #[cfg(feature = "native-s3")]
+        {
+            let _ = (endpoint, credentials, bucket, key);
+            s3_denied!()
+        }
     }
     async fn list_objects(
         &mut self,
-        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        _bucket: String,
-        _options: Option<loaded::sqlite::extension::s3_base::S3ListObjectsOptions>,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        bucket: String,
+        options: Option<loaded::sqlite::extension::s3_base::S3ListObjectsOptions>,
     ) -> std::result::Result<
         loaded::sqlite::extension::s3_base::S3ListObjectsOutput,
         loaded::sqlite::extension::s3_base::S3Error,
     > {
-        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+        if !self.s3_granted {
+            return s3_denied!();
+        }
+        #[cfg(not(feature = "native-s3"))]
+        return crate::s3_resident::list_objects(endpoint, credentials, bucket, options).await;
+        #[cfg(feature = "native-s3")]
+        {
+            let _ = (endpoint, credentials, bucket, options);
+            s3_denied!()
+        }
     }
     async fn copy_object(
         &mut self,
-        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
-        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
-        _source_bucket: String,
-        _source_key: String,
-        _dest_bucket: String,
-        _dest_key: String,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        source_bucket: String,
+        source_key: String,
+        dest_bucket: String,
+        dest_key: String,
     ) -> std::result::Result<
         loaded::sqlite::extension::s3_base::S3PutObjectOutput,
         loaded::sqlite::extension::s3_base::S3Error,
     > {
-        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+        if !self.s3_granted {
+            return s3_denied!();
+        }
+        #[cfg(not(feature = "native-s3"))]
+        return crate::s3_resident::copy_object(
+            endpoint,
+            credentials,
+            source_bucket,
+            source_key,
+            dest_bucket,
+            dest_key,
+        )
+        .await;
+        #[cfg(feature = "native-s3")]
+        {
+            let _ = (endpoint, credentials, source_bucket, source_key, dest_bucket, dest_key);
+            s3_denied!()
+        }
     }
 }
 

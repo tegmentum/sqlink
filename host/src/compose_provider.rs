@@ -494,6 +494,13 @@ pub struct ProviderState {
     /// default is the safe first cut.
     pub(crate) http_policy: Option<crate::HttpPolicy>,
     pub(crate) dns_policy: Option<crate::DnsPolicy>,
+    /// #106/#220: whether the resident provider's extension was granted the
+    /// `s3-base` capability. `false` = deny-by-default (same fail-closed shape
+    /// as `http_policy`/`dns_policy`): the `s3_base::Host` impl refuses at CALL
+    /// time until granted, forwarding to the resident `s3-endpoint` provider
+    /// (`crate::s3_resident`) only when true. Threading the manifest-granted
+    /// value into resident registration is the shared http/dns/s3 follow-up.
+    pub(crate) s3_granted: bool,
     /// #220: streamed-output capture for a resident provider that imports
     /// the cli surface (`cli-stdout`/`cli-stderr`) — the streaming-dotcmd
     /// exts (`archive-cli`/`core-dotcmd`/`serialize-cli`/`sqlite-utils-maint`).
@@ -1221,6 +1228,7 @@ async fn wasm_component_invoke(
         // Fresh-store path carries no http/dns surface (resident-only, #220).
         http_policy: None,
         dns_policy: None,
+        s3_granted: false,
         cli: CliCapture::default(),
         // Session is a resident-only surface (#220); empty slot here.
         session_handles: Arc::new(Mutex::new(HashMap::new())),
@@ -1421,6 +1429,7 @@ async fn resident_wasm_component_invoke(
             // call time by check_http_policy/check_dns_policy.
             http_policy: None,
             dns_policy: None,
+            s3_granted: false,
             cli: CliCapture::default(),
             // #220 full-port: per-provider session registry (session-cli).
             session_handles: Arc::new(Mutex::new(HashMap::new())),
