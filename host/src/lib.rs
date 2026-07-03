@@ -9192,14 +9192,6 @@ impl Host {
         Ok(bytes)
     }
 
-    /// Snapshot ref to the components map. Internal — kept available
-    /// for HostWrap call sites that need to avoid re-locking across
-    /// await boundaries.
-    #[allow(dead_code)]
-    fn components_arc(&self) -> Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>> {
-        self.components.clone()
-    }
-
     /// PLAN-prefixes.md hot-path helper. Resolves the prefix +
     /// expansion for `ext_name` and records the row in
     /// `__sqlink_prefix` on first call; subsequent calls return the
@@ -9216,20 +9208,11 @@ impl Host {
         if let Some(v) = self.prefix_cache.lock().get(ext_name) {
             return Some(v.clone());
         }
-        // Slow path: look up the loaded extension's manifest fields.
-        let (preferred_prefix, prefix_expansion) = {
-            let comps = self.components.read();
-            match comps.get(ext_name) {
-                Some(ext) => (ext.preferred_prefix.clone(), ext.prefix_expansion.clone()),
-                None => {
-                    tracing::warn!(
-                        extension = ext_name,
-                        "ensure_prefix_for_extension: extension not in components map; using synthetic fallback"
-                    );
-                    (None, None)
-                }
-            }
-        };
+        // #220: the bespoke `components` registry is retired; provider-backed
+        // extensions carry prefix hints in the provider manifest and the
+        // resolver applies collision-safe naming at registration. The synthetic
+        // fallback (derive the prefix from the ext name) is now the sole path.
+        let (preferred_prefix, prefix_expansion): (Option<String>, Option<String>) = (None, None);
         let (p, e_, _synth) = prefix_registry::resolve_prefix_expansion(
             ext_name,
             preferred_prefix.as_deref(),
@@ -9397,17 +9380,6 @@ impl Host {
         &self.engine_run
     }
 
-    /// Look up a previously-loaded extension's manifest entry by
-    /// name. Returns `None` if no extension by that name has been
-    /// loaded yet (or if it was unloaded).
-    ///
-    /// Used by `sqlink-loader` to walk the scalar / aggregate /
-    /// collation specs after `load_extension` returns the name
-    /// the loader's pApi-based trampolines register one sqlite3
-    /// function per spec on the user-process db handle.
-    pub fn get_loaded_extension(&self, ext_name: &str) -> Option<Arc<LoadedExtension>> {
-        self.components.read().get(ext_name).cloned()
-    }
 
     /// Load an extension component from a host path, apply the policy,
     /// verify the manifest, and store the loaded component. Returns
@@ -11774,14 +11746,6 @@ impl Host {
     /// manifest set `mutable: true`. Routes the read-side dispatch
     /// helpers (`dispatch_vtab_*`) to the `tabular-mutating` cache
     /// so the same Store services xUpdate.
-    fn ext_has_mutable_vtab(&self, ext_name: &str) -> Result<bool> {
-        let components = self.components.read();
-        let ext = components
-            .get(ext_name)
-            .cloned()
-            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
-        Ok(ext.vtabs.iter().any(|v| v.mutable))
-    }
 
 
     /// Route a SQLite authorizer callback to the loaded extension's
