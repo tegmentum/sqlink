@@ -10696,102 +10696,10 @@ impl Host {
             });
         }
 
-        // Find the extension whose manifest registers `name`.
-        let (ext_arc, func_id) = {
-            let components = self.components.read();
-            let mut found = None;
-            for (_, ext) in components.iter() {
-                if let Some(dc) = ext.dot_commands.iter().find(|d| d.name == name) {
-                    found = Some((ext.clone(), dc.id));
-                    break;
-                }
-            }
-            found.ok_or_else(|| anyhow!("no dot-command named {name:?}"))?
-        };
-
-        // Lazy-instantiate the dotcmd-aware cached store on first
-        // call against this extension.
-        let cached_arc = ext_arc.cached_dotcmd_aware.clone();
-        let mut guard = cached_arc.lock_owned().await;
-        if guard.is_none() {
-            let linker = make_loaded_dotcmd_aware_linker(
-                &self.engine,
-                ext_arc.policy.is_granted(Capability::Http),
-            )?;
-            let mut store = build_loaded_store(&self.engine, &ext_arc, self.db_path())?;
-            // Hand the Store data a back-reference to Self so the
-            // loader-bridge imports route to the right registry.
-            // Host is Arc-internal so the clone is just refcount
-            // bumps; no deep copy.
-            store.data_mut().host_ref = Some(self.clone());
-            let instance = loaded_dotcmd_aware::DotcmdAware::instantiate_async(
-                &mut store,
-                &ext_arc.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate dotcmd-aware: {e}"))?;
-            *guard = Some(CachedDotcmdAware { store, instance });
-        }
-        let cached = guard.as_mut().unwrap();
-        refresh_call_budget(&mut cached.store, &ext_arc)?;
-
-        // Push the latest cli-state snapshot into the Store data
-        // so cli_state.get_* see fresh values for this invoke.
-        let snapshot: HashMap<String, String> = cli_state.into_iter().collect();
-        cached.store.data_mut().cli_state_snapshot = snapshot;
-
-        let display_mode = cached
-            .store
-            .data()
-            .cli_state_snapshot
-            .get("display/mode")
-            .and_then(|j| parse_json_text(j))
-            .unwrap_or_else(|| "list".to_string());
-        let bail_on_error = cached
-            .store
-            .data()
-            .cli_state_snapshot
-            .get("bail/on-error")
-            .map(|j| matches!(j.trim(), "true" | "1"))
-            .unwrap_or(false);
-        let ctx = loaded_dotcmd_aware::exports::sqlite::extension::dot_command::InvokeContext {
-            args: args.to_string(),
-            interactive: true,
-            display_mode,
-            bail_on_error,
-        };
-        let invoke_result = cached
-            .instance
-            .sqlite_extension_dot_command()
-            .call_invoke(&mut cached.store, func_id, &ctx)
-            .await;
-        if let Err(ref e) = invoke_result {
-            if is_wasmtime_trap(e) {
-                // Drop the cached dotcmd-aware Store; next
-                // dispatch will re-instantiate. (#693)
-                *guard = None;
-            }
-        }
-        let result = invoke_result.map_err(|e| anyhow!("dot-command.invoke trap: {e}"))?;
-        match result {
-            Ok(r) => {
-                let deltas = r
-                    .state_deltas
-                    .into_iter()
-                    .map(|d| StateDeltaOut {
-                        key: d.key,
-                        value_json: sql_value_to_json(d.value),
-                    })
-                    .collect();
-                Ok(DotCommandOutcome {
-                    text: r.text,
-                    state_deltas: deltas,
-                    exit_code: r.exit_code,
-                })
-            }
-            Err(e) => Err(anyhow!("{}: {}", e.code, e.message)),
-        }
+        // #220: the bespoke dotcmd-aware LoadedState path is retired. Every
+        // extension is provider-backed now, so a dot-command not found in
+        // `provider_backed` above is genuinely unregistered.
+        Err(anyhow!("no dot-command named {name:?}"))
     }
 
     /// Parser-extension dispatch — the SQLite-side equivalent of
