@@ -12043,38 +12043,19 @@ mod contract_guard_tests {
         Engine::new(&cfg).expect("engine")
     }
 
-    /// A real, built `sqlite:extension@0.1` component, if present. Skips the
-    /// case when the wasm artifact hasn't been built (matches the suite's
-    /// build-optional convention).
-    fn real_v0_1_component_path() -> Option<PathBuf> {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        for c in [
-            "../browser/public/uuid_extension.component.wasm",
-            "../wasmmachine/sqlite_cli.component.wasm",
-            "../build/extensions/wasm-demo.wasm",
-        ] {
-            let p = manifest_dir.join(c);
-            if p.exists() {
-                return Some(p);
-            }
-        }
-        None
-    }
-
     #[test]
     fn legacy_v0_1_component_introspects_to_major_0_and_is_rejected_by_v1_host() {
         // After the legacy 0.x → `sqlite:extension@1.0.0` bump
-        // (PLAN-wit-value-extension.md Phase A), any pre-existing built
-        // component still targets major 0 and the new host's guard (major
-        // 1) must reject it. The mechanical recompile against the new
-        // contract is the migration; this test pins the rejection so a
-        // future loose patch can't silently accept ABI-skewed bytes.
-        let Some(path) = real_v0_1_component_path() else {
-            eprintln!("skipping: no built sqlite:extension component found");
-            return;
-        };
+        // (PLAN-wit-value-extension.md Phase A), a component that still
+        // targets major 0 must be rejected by the new host's guard (major
+        // 1). We SYNTHESIZE a genuine @0.1 component deterministically
+        // rather than hunt for a pre-built legacy artifact — after the
+        // bump every on-disk component is rebuilt to @1.0.0 (major 1), so
+        // the old "find a real one" approach picked up a major-1 component
+        // and mis-asserted. Synthesis pins the legacy-rejection behavior
+        // so a future loose patch can't silently accept ABI-skewed bytes.
         let engine = engine();
-        let bytes = std::fs::read(&path).expect("read component");
+        let bytes = synth_component_targeting("0.1.0");
         let component = Component::from_binary(&engine, &bytes).expect("parse component");
 
         let major =
