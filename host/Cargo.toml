@@ -459,3 +459,7 @@ rand = "0.8"
 # the workspace consume.
 wat = { git = "https://github.com/tegmentum/wasm-tools.git", branch = "bytes-api" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# #823 dedup smoke test: encodes/decodes the compose:dynlink/endpoint
+# CBOR envelope end-to-end against a real postgis-composed-provider
+# artifact (mirror of df-plugin-loader's dedup_postgis_provider.rs).
+serde_bytes = "0.11"
