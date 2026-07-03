@@ -1435,75 +1435,54 @@ fn from_wit_cap(c: &WitCapability) -> Capability {
 
 /// The default operator policy applied to extensions loaded through the
 /// in-WASM cli `.load` path, which carries no per-load `Policy` (only the
-/// ext name + path). Grants the safe compute capabilities unconditionally;
-/// the capability-gated network/storage surfaces (http/dns/s3) are
-/// DENY-BY-DEFAULT and opt-in via operator env vars — a cli-loaded extension
-/// reaches the network/S3 only when the operator running the shell has
-/// explicitly allow-listed it:
-///   SQLINK_ALLOW_HTTP = "*" | "example.com,api.foo.com"  (hosts; "*" = any)
-///   SQLINK_ALLOW_DNS  = "*" | "example.com,foo.com"       (domains)
-///   SQLINK_ALLOW_S3   = "1" | "true" | "yes" | "on"       (grant S3)
+/// ext name + path). Philosophy: **if you loaded it, you consent to use it** —
+/// a cli-loaded extension is granted its full capability surface (safe compute
+/// plus http/dns/s3). Capability-gated surfaces are only wired into a
+/// provider's linker for the interfaces the extension actually imports, so
+/// this grants each extension exactly what it declared it needs. Network
+/// allowlists default to ANY host/domain; an operator wanting tighter control
+/// can RESTRICT them (a comma list, or `*` = any) via:
+///   SQLINK_ALLOW_HTTP = "example.com,api.foo.com"   (default: any host)
+///   SQLINK_ALLOW_DNS  = "example.com,foo.com"        (default: any domain)
 pub fn default_operator_policy() -> Policy {
-    let mut caps = vec![
-        Capability::Random,
-        Capability::Hashing,
-        Capability::Encoding,
-        Capability::Text,
-        Capability::Cache,
-        Capability::State,
-        Capability::Spi,
-        Capability::Prepared,
-        Capability::Schema,
-        Capability::Transaction,
-    ];
-    // Operator opt-in for the network/storage surfaces. `*` = wildcard-all
-    // (the `"*."` suffix entry the policy allowlists use); a comma list =
-    // explicit hosts/domains.
-    let allowlist = |var: &str| -> Option<Vec<String>> {
-        let spec = std::env::var(var).ok()?;
-        let spec = spec.trim().to_string();
-        if spec.is_empty() {
-            return None;
-        }
-        Some(if spec == "*" {
-            vec!["*.".to_string()]
-        } else {
-            spec.split(',')
+    // Resolve an allowlist env var to concrete hosts/domains. Unset, empty, or
+    // `*` => the `"*."` wildcard entry (any); a comma list => explicit entries.
+    let allowlist = |var: &str| -> Vec<String> {
+        match std::env::var(var).ok().map(|s| s.trim().to_string()) {
+            Some(spec) if !spec.is_empty() && spec != "*" => spec
+                .split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
-                .collect()
-        })
+                .collect(),
+            _ => vec!["*.".to_string()],
+        }
     };
-    let http = allowlist("SQLINK_ALLOW_HTTP").map(|allowed_hosts| HttpPolicy {
-        allowed_hosts,
-        allowed_methods: None,
-        max_body_bytes: None,
-        timeout_ms: None,
-    });
-    let dns = allowlist("SQLINK_ALLOW_DNS").map(|allowed_domains| DnsPolicy {
-        allowed_domains,
-        timeout_ms: None,
-    });
-    let s3 = std::env::var("SQLINK_ALLOW_S3")
-        .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
-        .unwrap_or(false);
-    if http.is_some() {
-        caps.push(Capability::Http);
-    }
-    if dns.is_some() {
-        caps.push(Capability::Dns);
-    }
-    if s3 {
-        caps.push(Capability::S3);
-    }
-    let mut policy = Policy::deny_all().with_grants(caps);
-    if let Some(h) = http {
-        policy = policy.with_http(h);
-    }
-    if let Some(d) = dns {
-        policy = policy.with_dns(d);
-    }
-    policy
+    Policy::deny_all()
+        .with_grants([
+            Capability::Random,
+            Capability::Hashing,
+            Capability::Encoding,
+            Capability::Text,
+            Capability::Cache,
+            Capability::State,
+            Capability::Spi,
+            Capability::Prepared,
+            Capability::Schema,
+            Capability::Transaction,
+            Capability::Http,
+            Capability::Dns,
+            Capability::S3,
+        ])
+        .with_http(HttpPolicy {
+            allowed_hosts: allowlist("SQLINK_ALLOW_HTTP"),
+            allowed_methods: None,
+            max_body_bytes: None,
+            timeout_ms: None,
+        })
+        .with_dns(DnsPolicy {
+            allowed_domains: allowlist("SQLINK_ALLOW_DNS"),
+            timeout_ms: None,
+        })
 }
 
 #[cfg(test)]
@@ -1535,29 +1514,44 @@ mod default_operator_policy_tests {
     }
 
     #[test]
-    fn denies_network_by_default_grants_compute() {
+    fn grants_full_surface_by_default() {
+        // "If you loaded it, you consent to use it": all caps granted,
+        // network allow-all when no restriction env is set.
         let _h = EnvGuard::clear("SQLINK_ALLOW_HTTP");
         let _d = EnvGuard::clear("SQLINK_ALLOW_DNS");
-        let _s = EnvGuard::clear("SQLINK_ALLOW_S3");
         let p = default_operator_policy();
         assert!(p.is_granted(Capability::Spi), "grants the safe compute set");
-        assert!(p.is_granted(Capability::Text));
-        assert!(!p.is_granted(Capability::Http) && p.http.is_none(), "http deny-by-default");
-        assert!(!p.is_granted(Capability::Dns) && p.dns.is_none(), "dns deny-by-default");
-        assert!(!p.is_granted(Capability::S3), "s3 deny-by-default");
+        assert!(p.is_granted(Capability::Http) && p.is_granted(Capability::Dns));
+        assert!(p.is_granted(Capability::S3), "s3 granted by consent");
+        assert_eq!(
+            p.http.as_ref().expect("http policy present").allowed_hosts,
+            vec!["*."],
+            "http allows any host by default"
+        );
+        assert_eq!(
+            p.dns.as_ref().expect("dns policy present").allowed_domains,
+            vec!["*."],
+            "dns allows any domain by default"
+        );
     }
 
     #[test]
-    fn operator_env_opt_in_grants_network() {
+    fn operator_env_restricts_network() {
+        // The operator can still tighten the allowlist despite grant-by-consent.
         let _h = EnvGuard::set("SQLINK_ALLOW_HTTP", "api.example.com,foo.com");
-        let _s = EnvGuard::set("SQLINK_ALLOW_S3", "1");
         let _d = EnvGuard::clear("SQLINK_ALLOW_DNS");
         let p = default_operator_policy();
-        assert!(p.is_granted(Capability::Http), "http granted via env");
-        let http = p.http.as_ref().expect("http policy present");
-        assert_eq!(http.allowed_hosts, vec!["api.example.com", "foo.com"]);
-        assert!(p.is_granted(Capability::S3), "s3 granted via env");
-        assert!(!p.is_granted(Capability::Dns) && p.dns.is_none(), "dns still denied");
+        assert!(p.is_granted(Capability::Http), "http still granted");
+        assert_eq!(
+            p.http.as_ref().expect("http policy present").allowed_hosts,
+            vec!["api.example.com", "foo.com"],
+            "http restricted to the operator allowlist"
+        );
+        assert_eq!(
+            p.dns.as_ref().expect("dns policy present").allowed_domains,
+            vec!["*."],
+            "dns still any (unrestricted)"
+        );
     }
 }
 
