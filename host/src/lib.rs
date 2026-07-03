@@ -9685,6 +9685,21 @@ impl Host {
     ) -> Result<String> {
         let component = Component::from_binary(&self.engine, bytes)
             .map_err(|e| anyhow!("compile provider {name_hint}: {e}"))?;
+        // Contract-version guard (#220): reject a component whose imported
+        // `sqlite:extension` major differs from this host's BEFORE instantiating
+        // — otherwise an ABI-skewed component traps cryptically or silently
+        // marshals corrupted values. Ported from the retired bespoke
+        // `register_component` guard so version rejection survives the loader
+        // deletion; runs before the endpoint check so an incompatible-version
+        // component is rejected with the actionable contract message.
+        let imported_major =
+            datalink_contract::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
+        datalink_contract::check_component_contract(
+            imported_major,
+            CONTRACT_MAJOR,
+            CONTRACT_PACKAGE,
+            name_hint,
+        )?;
         if !compose_provider::exports_endpoint(&component, &self.engine) {
             return Err(anyhow!(
                 "extension '{name_hint}': not a compose:dynlink provider (no \
@@ -17432,12 +17447,14 @@ mod contract_guard_tests {
     }
 
     #[test]
-    fn host_rejects_v0_1_synthetic_via_load_extension_from_bytes() {
+    fn host_rejects_v0_1_synthetic_via_instantiate_provider_from_bytes() {
+        // #220: the version guard moved from the retired bespoke
+        // `load_extension_from_bytes` onto the provider path helper. Rejection
+        // still fires (before the endpoint check), same actionable message.
         let bytes = synth_component_targeting("0.1.0");
         let host = Host::new().expect("host new");
-        let err =
-            block_on(host.load_extension_from_bytes(bytes, "v0_1_synth", default_policy()))
-                .expect_err("v0.1 synthetic must be rejected by v1 host through load_extension_from_bytes");
+        let err = block_on(host.instantiate_provider_from_bytes("v0_1_synth", &bytes))
+            .expect_err("v0.1 synthetic must be rejected by v1 host through instantiate_provider_from_bytes");
         let msg = err.to_string();
         assert!(msg.contains("v0_1_synth"), "names the extension: {msg}");
         assert!(
@@ -17449,14 +17466,13 @@ mod contract_guard_tests {
     }
 
     #[test]
-    fn host_rejects_v2_synthetic_via_load_extension_from_bytes() {
+    fn host_rejects_v2_synthetic_via_instantiate_provider_from_bytes() {
         // Forward-compat case: a hypothetical @2.x extension shouldn't
         // load into a @1.x host. Same code path, same message shape.
         let bytes = synth_component_targeting("2.0.0");
         let host = Host::new().expect("host new");
-        let err =
-            block_on(host.load_extension_from_bytes(bytes, "v2_synth", default_policy()))
-                .expect_err("v2.x synthetic must be rejected by v1 host through load_extension_from_bytes");
+        let err = block_on(host.instantiate_provider_from_bytes("v2_synth", &bytes))
+            .expect_err("v2.x synthetic must be rejected by v1 host through instantiate_provider_from_bytes");
         let msg = err.to_string();
         assert!(msg.contains("v2_synth"), "names the extension: {msg}");
         assert!(
