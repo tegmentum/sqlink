@@ -30,7 +30,7 @@ The entry point `sqlite3_sqlinkloader_init(db, pErrMsg, pApi)`:
 3. Registers `sqlink_load_ext(name TEXT, path TEXT?)` as a SQL
    function on `db`. Calling it at runtime loads more extensions
    without re-`.load`ing.
-4. If `SQLINK_LOADER_EXTS=foo,bar,baz` is set in the environment,
+4. If `SQLINK_EXTENSION_LOAD=foo,bar,baz` is set in the environment,
    each name is resolved to a `.component.wasm` (see
    `load::resolve_extension_path`) and loaded eagerly during
    `init`.
@@ -87,12 +87,12 @@ sqlite3; the only crossing-point between them is the user's
 Extensions calling `spi.execute('SELECT ...')` from inside a
 scalar/aggregate route through `Host::shared_spi_conn`, which is
 the .so's *own* bundled-sqlite3 connection. That connection opens
-on the path stashed by `SQLINK_LOADER_DB_PATH` (set in the
+on the path stashed by `SQLINK_EXTENSION_DB_PATH` (set in the
 environment before `load_extension`).
 
 Caveats:
 
-* `SQLINK_LOADER_DB_PATH=:memory:` (or unset) means spi.execute
+* `SQLINK_EXTENSION_DB_PATH=:memory:` (or unset) means spi.execute
   fails  the in-.so SQLite cannot reach the user's :memory: db.
 * For file dbs, the two SQLites are distinct *instances* sharing
   the same file. WAL mode lets them coexist as multiple readers /

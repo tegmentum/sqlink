@@ -1,7 +1,7 @@
 //! Loading + installing one wasm extension on a user-process db.
 //!
 //! `load_and_install` is the single entry point both the env-var
-//! discovery path (`SQLINK_LOADER_EXTS`) and the SQL function
+//! discovery path (`SQLINK_EXTENSION_LOAD`) and the SQL function
 //! `sqlink_load_ext(name, path)` route through. Same dispatch in
 //! both: resolve a path  call `host.load_extension`  walk the
 //! manifest  pApi-register scalars + aggregates on `db`.
@@ -34,6 +34,48 @@ use tokio::runtime::Runtime;
 use crate::api::{sqlite3, ApiRoutines, SQLITE_OK};
 use crate::register;
 
+/// Read an env var by its current (`new`) name, falling back to the
+/// deprecated (`old`) name if the new one is unset. The first time a
+/// deprecated name is observed, emit a one-time `tracing::warn!` so
+/// operators know to migrate.
+///
+/// The `SQLINK_LOADER_*` names were renamed to `SQLINK_EXTENSION_*`
+/// alongside the `sqlink-loader` → `sqlink-extension` crate rename.
+/// This shim keeps the old names working for one release cycle.
+///
+/// This is the ONLY place a bare `SQLINK_LOADER_*` name is read; all
+/// other call sites go through here so the deprecation stays DRY.
+pub fn env_compat(new: &str, old: &str) -> Option<std::ffi::OsString> {
+    if let Some(v) = std::env::var_os(new) {
+        return Some(v);
+    }
+    let v = std::env::var_os(old)?;
+    warn_deprecated_env(old, new);
+    Some(v)
+}
+
+/// Emit the deprecation warning at most once per old name for the
+/// lifetime of the process. A `.load`ed extension can re-run init on
+/// re-attach; we don't want a warning storm.
+fn warn_deprecated_env(old: &str, new: &str) {
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+
+    static WARNED: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    let set = WARNED.get_or_init(|| Mutex::new(std::collections::HashSet::new()));
+    let mut guard = match set.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if guard.insert(old.to_string()) {
+        tracing::warn!(
+            deprecated = %old,
+            replacement = %new,
+            "sqlink-extension: {old} is deprecated; use {new} instead"
+        );
+    }
+}
+
 /// Outcome of one `.load`-equivalent: counts of registered things.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct InstallCounts {
@@ -54,19 +96,19 @@ pub struct InstallCounts {
 /// Resolve a "name or path" hint to a concrete `.component.wasm`
 /// path. Lookup order:
 ///   1. If the hint is an existing file, use it verbatim.
-///   2. `SQLINK_LOADER_EXT_DIR` env var as the parent dir, plus
+///   2. `SQLINK_EXTENSION_DIR` env var as the parent dir, plus
 ///      `<name>_extension.component.wasm` and a few variants.
 ///   3. Walk the standard sqlink target tree:
 ///        target/wasm32-wasip2/release/<name>_extension.component.wasm
 ///        extensions/<name>/target/wasm32-wasip2/release/<name>_extension.component.wasm
-///      starting from `SQLINK_LOADER_REPO_ROOT` (env var) or CWD.
+///      starting from `SQLINK_EXTENSION_REPO_ROOT` (env var) or CWD.
 pub fn resolve_extension_path(hint: &str) -> Result<PathBuf> {
     let p = PathBuf::from(hint);
     if p.exists() {
         return Ok(p);
     }
 
-    let bases: Vec<PathBuf> = std::env::var_os("SQLINK_LOADER_EXT_DIR")
+    let bases: Vec<PathBuf> = env_compat("SQLINK_EXTENSION_DIR", "SQLINK_LOADER_EXT_DIR")
         .into_iter()
         .map(PathBuf::from)
         .collect();
@@ -92,7 +134,7 @@ pub fn resolve_extension_path(hint: &str) -> Result<PathBuf> {
         }
     }
 
-    let repo_roots: Vec<PathBuf> = std::env::var_os("SQLINK_LOADER_REPO_ROOT")
+    let repo_roots: Vec<PathBuf> = env_compat("SQLINK_EXTENSION_REPO_ROOT", "SQLINK_LOADER_REPO_ROOT")
         .map(PathBuf::from)
         .into_iter()
         .chain(std::env::current_dir().ok().into_iter())
@@ -130,7 +172,7 @@ pub fn resolve_extension_path(hint: &str) -> Result<PathBuf> {
 
     Err(anyhow!(
         "sqlink-extension: could not resolve extension '{hint}' to a .component.wasm. \
-        Set SQLINK_LOADER_EXT_DIR or SQLINK_LOADER_REPO_ROOT, or pass an absolute path."
+        Set SQLINK_EXTENSION_DIR or SQLINK_EXTENSION_REPO_ROOT, or pass an absolute path."
     ))
 }
 
@@ -143,7 +185,7 @@ pub fn resolve_extension_path(hint: &str) -> Result<PathBuf> {
 /// Spi/Prepared/Schema/Transaction are granted so extensions that
 /// call `spi.execute()` work against the secondary in-.so
 /// connection (Phase B2). The secondary connection is the host's
-/// shared_spi_conn  it opens against `SQLINK_LOADER_DB_PATH` if
+/// shared_spi_conn  it opens against `SQLINK_EXTENSION_DB_PATH` if
 /// set, else fails at the spi.execute boundary with a clear error.
 pub fn default_policy() -> Policy {
     Policy::deny_all().with_grants(vec![
@@ -161,7 +203,7 @@ pub fn default_policy() -> Policy {
 }
 
 /// Parse one capability name (case-insensitive) from the
-/// `SQLINK_LOADER_EXT_CAPS` env var. Returns `None` for unknown
+/// `SQLINK_EXTENSION_CAPS` env var. Returns `None` for unknown
 /// names; the caller logs and skips so a typo doesn't abort init.
 fn parse_capability(name: &str) -> Option<Capability> {
     match name.trim().to_ascii_lowercase().as_str() {
@@ -186,7 +228,7 @@ fn parse_capability(name: &str) -> Option<Capability> {
 }
 
 /// Build a [`Policy`] from [`default_policy`] augmented with any
-/// capabilities granted via the `SQLINK_LOADER_EXT_CAPS` env var
+/// capabilities granted via the `SQLINK_EXTENSION_CAPS` env var
 /// (comma-separated list of capability names, case-insensitive,
 /// e.g. `Http,Dns`).
 ///
@@ -198,12 +240,14 @@ fn parse_capability(name: &str) -> Option<Capability> {
 ///
 /// Unknown capability names are logged and skipped rather than
 /// failing the load — a single typo shouldn't take down all eager
-/// loads in `SQLINK_LOADER_EXTS`.
+/// loads in `SQLINK_EXTENSION_LOAD`.
 pub fn policy_from_env() -> Policy {
     let mut policy = default_policy();
-    let raw = match std::env::var("SQLINK_LOADER_EXT_CAPS") {
-        Ok(s) => s,
-        Err(_) => return policy,
+    let raw = match env_compat("SQLINK_EXTENSION_CAPS", "SQLINK_LOADER_EXT_CAPS")
+        .and_then(|v| v.into_string().ok())
+    {
+        Some(s) => s,
+        None => return policy,
     };
 
     let mut extra: Vec<Capability> = Vec::new();
@@ -217,7 +261,7 @@ pub fn policy_from_env() -> Policy {
             None => {
                 tracing::warn!(
                     cap = %trimmed,
-                    "sqlink-extension: SQLINK_LOADER_EXT_CAPS contains unknown capability; skipping"
+                    "sqlink-extension: SQLINK_EXTENSION_CAPS contains unknown capability; skipping"
                 );
             }
         }
@@ -484,7 +528,7 @@ mod tests {
 
     #[test]
     fn policy_from_env_unset_matches_default() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_CAPS"]);
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_CAPS", "SQLINK_LOADER_EXT_CAPS"]);
         let p = policy_from_env();
         assert!(!p.is_granted(Capability::Http));
         assert!(!p.is_granted(Capability::Dns));
@@ -495,8 +539,8 @@ mod tests {
 
     #[test]
     fn policy_from_env_grants_http_and_attaches_http_policy() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_CAPS"]);
-        std::env::set_var("SQLINK_LOADER_EXT_CAPS", "Http");
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_CAPS", "SQLINK_LOADER_EXT_CAPS"]);
+        std::env::set_var("SQLINK_EXTENSION_CAPS", "Http");
         let p = policy_from_env();
         assert!(p.is_granted(Capability::Http));
         p.validate()
@@ -505,8 +549,8 @@ mod tests {
 
     #[test]
     fn policy_from_env_case_insensitive_and_multivalued() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_CAPS"]);
-        std::env::set_var("SQLINK_LOADER_EXT_CAPS", "http, DNS , s3");
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_CAPS", "SQLINK_LOADER_EXT_CAPS"]);
+        std::env::set_var("SQLINK_EXTENSION_CAPS", "http, DNS , s3");
         let p = policy_from_env();
         assert!(p.is_granted(Capability::Http));
         assert!(p.is_granted(Capability::Dns));
@@ -516,11 +560,35 @@ mod tests {
 
     #[test]
     fn policy_from_env_unknown_cap_is_skipped() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_CAPS"]);
-        std::env::set_var("SQLINK_LOADER_EXT_CAPS", "Http,NotARealCapability");
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_CAPS", "SQLINK_LOADER_EXT_CAPS"]);
+        std::env::set_var("SQLINK_EXTENSION_CAPS", "Http,NotARealCapability");
         // Must not panic; unknown names get logged + skipped.
         let p = policy_from_env();
         assert!(p.is_granted(Capability::Http));
+    }
+
+    #[test]
+    fn policy_from_env_falls_back_to_deprecated_name() {
+        // Backward-compat: the deprecated SQLINK_LOADER_EXT_CAPS name
+        // still works (with a one-time deprecation warning) when the
+        // new SQLINK_EXTENSION_CAPS name is unset.
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_CAPS", "SQLINK_LOADER_EXT_CAPS"]);
+        std::env::set_var("SQLINK_LOADER_EXT_CAPS", "Http");
+        let p = policy_from_env();
+        assert!(
+            p.is_granted(Capability::Http),
+            "deprecated SQLINK_LOADER_EXT_CAPS must still be honored"
+        );
+    }
+
+    #[test]
+    fn env_compat_prefers_new_over_old() {
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_CAPS", "SQLINK_LOADER_EXT_CAPS"]);
+        std::env::set_var("SQLINK_EXTENSION_CAPS", "new");
+        std::env::set_var("SQLINK_LOADER_EXT_CAPS", "old");
+        let v = env_compat("SQLINK_EXTENSION_CAPS", "SQLINK_LOADER_EXT_CAPS")
+            .and_then(|v| v.into_string().ok());
+        assert_eq!(v.as_deref(), Some("new"));
     }
 
     // ─── InstallCounts ────────────────────────────────────────────
@@ -555,7 +623,7 @@ mod tests {
 
     #[test]
     fn resolve_returns_existing_absolute_path_verbatim() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_DIR", "SQLINK_LOADER_EXT_DIR", "SQLINK_EXTENSION_REPO_ROOT", "SQLINK_LOADER_REPO_ROOT"]);
         let tmp = tempfile::tempdir().unwrap();
         let f = tmp.path().join("any-name.bin");
         fs::write(&f, b"x").unwrap();
@@ -565,57 +633,75 @@ mod tests {
 
     #[test]
     fn resolve_finds_in_ext_dir_with_extension_suffix() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_DIR", "SQLINK_LOADER_EXT_DIR", "SQLINK_EXTENSION_REPO_ROOT", "SQLINK_LOADER_REPO_ROOT"]);
         let tmp = tempfile::tempdir().unwrap();
         let target = tmp.path().join("uuid_extension.component.wasm");
         fs::write(&target, b"\0asm").unwrap();
-        std::env::set_var("SQLINK_LOADER_EXT_DIR", tmp.path());
+        std::env::set_var("SQLINK_EXTENSION_DIR", tmp.path());
         let r = resolve_extension_path("uuid").expect("ext-dir hit");
         assert_eq!(r, target);
     }
 
     #[test]
+    fn resolve_honors_deprecated_ext_dir_name() {
+        // Backward-compat: the deprecated SQLINK_LOADER_EXT_DIR still
+        // resolves (via env_compat) when SQLINK_EXTENSION_DIR is unset.
+        let _g = EnvGuard::capture(&[
+            "SQLINK_EXTENSION_DIR",
+            "SQLINK_LOADER_EXT_DIR",
+            "SQLINK_EXTENSION_REPO_ROOT",
+            "SQLINK_LOADER_REPO_ROOT",
+        ]);
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("uuid_extension.component.wasm");
+        fs::write(&target, b"\0asm").unwrap();
+        std::env::set_var("SQLINK_LOADER_EXT_DIR", tmp.path());
+        let r = resolve_extension_path("uuid").expect("deprecated ext-dir hit");
+        assert_eq!(r, target);
+    }
+
+    #[test]
     fn resolve_replaces_hyphens_with_underscores_for_filename() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_DIR", "SQLINK_LOADER_EXT_DIR", "SQLINK_EXTENSION_REPO_ROOT", "SQLINK_LOADER_REPO_ROOT"]);
         let tmp = tempfile::tempdir().unwrap();
         // Hyphenated hint should also match the underscore-rewritten
         // filename variant.
         let target = tmp.path().join("bundle_cli_extension.component.wasm");
         fs::write(&target, b"\0asm").unwrap();
-        std::env::set_var("SQLINK_LOADER_EXT_DIR", tmp.path());
+        std::env::set_var("SQLINK_EXTENSION_DIR", tmp.path());
         let r = resolve_extension_path("bundle-cli").expect("hyphen->underscore variant");
         assert_eq!(r, target);
     }
 
     #[test]
     fn resolve_finds_via_short_component_wasm_filename() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_DIR", "SQLINK_LOADER_EXT_DIR", "SQLINK_EXTENSION_REPO_ROOT", "SQLINK_LOADER_REPO_ROOT"]);
         let tmp = tempfile::tempdir().unwrap();
         // The 4-variant rotation includes `<name>.component.wasm`
         // (no `_extension` suffix); make sure that arm is honored.
         let target = tmp.path().join("myset.component.wasm");
         fs::write(&target, b"\0asm").unwrap();
-        std::env::set_var("SQLINK_LOADER_EXT_DIR", tmp.path());
+        std::env::set_var("SQLINK_EXTENSION_DIR", tmp.path());
         let r = resolve_extension_path("myset").expect("short variant");
         assert_eq!(r, target);
     }
 
     #[test]
     fn resolve_finds_via_repo_root_target_layout() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_DIR", "SQLINK_LOADER_EXT_DIR", "SQLINK_EXTENSION_REPO_ROOT", "SQLINK_LOADER_REPO_ROOT"]);
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path().join("target/wasm32-wasip2/release");
         fs::create_dir_all(&dir).unwrap();
         let target = dir.join("json1_extension.component.wasm");
         fs::write(&target, b"\0asm").unwrap();
-        std::env::set_var("SQLINK_LOADER_REPO_ROOT", tmp.path());
+        std::env::set_var("SQLINK_EXTENSION_REPO_ROOT", tmp.path());
         let r = resolve_extension_path("json1").expect("repo-root hit");
         assert_eq!(r, target);
     }
 
     #[test]
     fn resolve_finds_via_per_extension_workspace_layout() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_DIR", "SQLINK_LOADER_EXT_DIR", "SQLINK_EXTENSION_REPO_ROOT", "SQLINK_LOADER_REPO_ROOT"]);
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp
             .path()
@@ -623,7 +709,7 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let target = dir.join("csv_extension.component.wasm");
         fs::write(&target, b"\0asm").unwrap();
-        std::env::set_var("SQLINK_LOADER_REPO_ROOT", tmp.path());
+        std::env::set_var("SQLINK_EXTENSION_REPO_ROOT", tmp.path());
         let r = resolve_extension_path("csv").expect("per-ext layout hit");
         assert_eq!(r, target);
     }
@@ -713,12 +799,12 @@ mod tests {
 
     #[test]
     fn resolve_missing_returns_err_with_hint_in_message() {
-        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let _g = EnvGuard::capture(&["SQLINK_EXTENSION_DIR", "SQLINK_LOADER_EXT_DIR", "SQLINK_EXTENSION_REPO_ROOT", "SQLINK_LOADER_REPO_ROOT"]);
         // Point both env vars at empty tempdirs so the lookup hits
         // nothing and falls through to the error.
         let tmp = tempfile::tempdir().unwrap();
-        std::env::set_var("SQLINK_LOADER_EXT_DIR", tmp.path());
-        std::env::set_var("SQLINK_LOADER_REPO_ROOT", tmp.path());
+        std::env::set_var("SQLINK_EXTENSION_DIR", tmp.path());
+        std::env::set_var("SQLINK_EXTENSION_REPO_ROOT", tmp.path());
         let r = resolve_extension_path("does-not-exist-xyz");
         let err = r.expect_err("missing extension must error");
         let s = format!("{err}");
@@ -727,7 +813,7 @@ mod tests {
             "error message should name the hint, got {s:?}"
         );
         assert!(
-            s.contains("SQLINK_LOADER_EXT_DIR") || s.contains("absolute path"),
+            s.contains("SQLINK_EXTENSION_DIR") || s.contains("absolute path"),
             "error message should hint at the env-var fix, got {s:?}"
         );
     }

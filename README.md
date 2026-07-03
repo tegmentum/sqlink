@@ -72,9 +72,9 @@ host does:
        ```bash
        cargo build --release -p sqlink-extension
        # Resolve extension names against the workspace target.
-       export SQLINK_LOADER_REPO_ROOT=$PWD
+       export SQLINK_EXTENSION_REPO_ROOT=$PWD
        # Eager-load via env, no per-extension SQL calls needed.
-       export SQLINK_LOADER_EXTS=uuid
+       export SQLINK_EXTENSION_LOAD=uuid
        sqlite3 :memory: \
            "SELECT load_extension('./target/release/libsqlink_extension');" \
            "SELECT uuid();"
@@ -93,7 +93,7 @@ host does:
 
        SPI back-channel: extensions calling `spi.execute(...)`
        route through a secondary in-.so SQLite connection. Set
-       `SQLINK_LOADER_DB_PATH=<file.db>` to make it point at the
+       `SQLINK_EXTENSION_DB_PATH=<file.db>` to make it point at the
        same file the user opened (WAL mode recommended). With
        `:memory:` the two SQLites are necessarily distinct;
        SPI-using extensions can still load but will operate on an

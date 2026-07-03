@@ -8,7 +8,7 @@
 //! to gain access to the sqlink wasm extension catalog without
 //! recompiling SQLite. After `.load`:
 //!
-//!   1. Extensions named in `SQLINK_LOADER_EXTS` (comma-separated
+//!   1. Extensions named in `SQLINK_EXTENSION_LOAD` (comma-separated
 //!      env var) are loaded eagerly during init.
 //!   2. The SQL function `sqlink_load_ext(name TEXT, path TEXT)`
 //!      is registered for runtime loading; after a successful
@@ -35,7 +35,7 @@
 //! connection is the .so's own bundled-sqlite3, NOT the user's
 //! db. Consistent state across SPI is only available when both
 //! sides target the same file db; in-memory dbs are necessarily
-//! distinct. Set `SQLINK_LOADER_DB_PATH` to point at the same
+//! distinct. Set `SQLINK_EXTENSION_DB_PATH` to point at the same
 //! file the user opened, or expect spi-calling extensions to
 //! operate on an empty schema.
 //!
@@ -95,11 +95,11 @@ unsafe fn init_inner(db: *mut sqlite3, p_api: *const sqlite3_api_routines) -> Re
     let host = state::host()?;
     let rt = state::runtime()?;
 
-    // Phase B2: if the caller set SQLINK_LOADER_DB_PATH, plumb it
+    // Phase B2: if the caller set SQLINK_EXTENSION_DB_PATH, plumb it
     // into the host so SPI calls open against that file. This is
     // best-effort  empty/missing means SPI-using extensions will
     // fail at the spi.execute boundary with a clear error.
-    if let Some(path) = std::env::var_os("SQLINK_LOADER_DB_PATH") {
+    if let Some(path) = load::env_compat("SQLINK_EXTENSION_DB_PATH", "SQLINK_LOADER_DB_PATH") {
         if let Some(s) = path.to_str() {
             host.set_db_path(s);
         }
@@ -109,8 +109,8 @@ unsafe fn init_inner(db: *mut sqlite3, p_api: *const sqlite3_api_routines) -> Re
     // users can load more extensions after .load.
     register_sqlink_load_ext(api, db, host.clone(), rt.clone())?;
 
-    // Eager loads via SQLINK_LOADER_EXTS.
-    if let Some(list) = std::env::var_os("SQLINK_LOADER_EXTS") {
+    // Eager loads via SQLINK_EXTENSION_LOAD.
+    if let Some(list) = load::env_compat("SQLINK_EXTENSION_LOAD", "SQLINK_LOADER_EXTS") {
         let s = list.to_string_lossy();
         for entry in s.split(',') {
             let entry = entry.trim();

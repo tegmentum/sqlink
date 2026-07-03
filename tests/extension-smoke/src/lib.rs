@@ -692,7 +692,7 @@ pub fn run_probe_loader(
         // SPI-using extensions open the secondary connection
         // against the same file. (Not material for scalar-only
         // probes, but consistent with the loader's contract.)
-        .env("SQLINK_LOADER_DB_PATH", &tmp)
+        .env("SQLINK_EXTENSION_DB_PATH", &tmp)
         .spawn();
     let mut child = match child {
         Ok(c) => c,
