@@ -1433,6 +1433,134 @@ fn from_wit_cap(c: &WitCapability) -> Capability {
     }
 }
 
+/// The default operator policy applied to extensions loaded through the
+/// in-WASM cli `.load` path, which carries no per-load `Policy` (only the
+/// ext name + path). Grants the safe compute capabilities unconditionally;
+/// the capability-gated network/storage surfaces (http/dns/s3) are
+/// DENY-BY-DEFAULT and opt-in via operator env vars — a cli-loaded extension
+/// reaches the network/S3 only when the operator running the shell has
+/// explicitly allow-listed it:
+///   SQLINK_ALLOW_HTTP = "*" | "example.com,api.foo.com"  (hosts; "*" = any)
+///   SQLINK_ALLOW_DNS  = "*" | "example.com,foo.com"       (domains)
+///   SQLINK_ALLOW_S3   = "1" | "true" | "yes" | "on"       (grant S3)
+pub fn default_operator_policy() -> Policy {
+    let mut caps = vec![
+        Capability::Random,
+        Capability::Hashing,
+        Capability::Encoding,
+        Capability::Text,
+        Capability::Cache,
+        Capability::State,
+        Capability::Spi,
+        Capability::Prepared,
+        Capability::Schema,
+        Capability::Transaction,
+    ];
+    // Operator opt-in for the network/storage surfaces. `*` = wildcard-all
+    // (the `"*."` suffix entry the policy allowlists use); a comma list =
+    // explicit hosts/domains.
+    let allowlist = |var: &str| -> Option<Vec<String>> {
+        let spec = std::env::var(var).ok()?;
+        let spec = spec.trim().to_string();
+        if spec.is_empty() {
+            return None;
+        }
+        Some(if spec == "*" {
+            vec!["*.".to_string()]
+        } else {
+            spec.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+    };
+    let http = allowlist("SQLINK_ALLOW_HTTP").map(|allowed_hosts| HttpPolicy {
+        allowed_hosts,
+        allowed_methods: None,
+        max_body_bytes: None,
+        timeout_ms: None,
+    });
+    let dns = allowlist("SQLINK_ALLOW_DNS").map(|allowed_domains| DnsPolicy {
+        allowed_domains,
+        timeout_ms: None,
+    });
+    let s3 = std::env::var("SQLINK_ALLOW_S3")
+        .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false);
+    if http.is_some() {
+        caps.push(Capability::Http);
+    }
+    if dns.is_some() {
+        caps.push(Capability::Dns);
+    }
+    if s3 {
+        caps.push(Capability::S3);
+    }
+    let mut policy = Policy::deny_all().with_grants(caps);
+    if let Some(h) = http {
+        policy = policy.with_http(h);
+    }
+    if let Some(d) = dns {
+        policy = policy.with_dns(d);
+    }
+    policy
+}
+
+#[cfg(test)]
+mod default_operator_policy_tests {
+    use super::{default_operator_policy, Capability};
+
+    /// Restores an env var to its pre-test value on drop (suite runs
+    /// `--test-threads=1`, so env manipulation is isolated per test).
+    struct EnvGuard(&'static str, Option<String>);
+    impl EnvGuard {
+        fn set(k: &'static str, v: &str) -> Self {
+            let old = std::env::var(k).ok();
+            std::env::set_var(k, v);
+            Self(k, old)
+        }
+        fn clear(k: &'static str) -> Self {
+            let old = std::env::var(k).ok();
+            std::env::remove_var(k);
+            Self(k, old)
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.1 {
+                Some(v) => std::env::set_var(self.0, v),
+                None => std::env::remove_var(self.0),
+            }
+        }
+    }
+
+    #[test]
+    fn denies_network_by_default_grants_compute() {
+        let _h = EnvGuard::clear("SQLINK_ALLOW_HTTP");
+        let _d = EnvGuard::clear("SQLINK_ALLOW_DNS");
+        let _s = EnvGuard::clear("SQLINK_ALLOW_S3");
+        let p = default_operator_policy();
+        assert!(p.is_granted(Capability::Spi), "grants the safe compute set");
+        assert!(p.is_granted(Capability::Text));
+        assert!(!p.is_granted(Capability::Http) && p.http.is_none(), "http deny-by-default");
+        assert!(!p.is_granted(Capability::Dns) && p.dns.is_none(), "dns deny-by-default");
+        assert!(!p.is_granted(Capability::S3), "s3 deny-by-default");
+    }
+
+    #[test]
+    fn operator_env_opt_in_grants_network() {
+        let _h = EnvGuard::set("SQLINK_ALLOW_HTTP", "api.example.com,foo.com");
+        let _s = EnvGuard::set("SQLINK_ALLOW_S3", "1");
+        let _d = EnvGuard::clear("SQLINK_ALLOW_DNS");
+        let p = default_operator_policy();
+        assert!(p.is_granted(Capability::Http), "http granted via env");
+        let http = p.http.as_ref().expect("http policy present");
+        assert_eq!(http.allowed_hosts, vec!["api.example.com", "foo.com"]);
+        assert!(p.is_granted(Capability::S3), "s3 granted via env");
+        assert!(!p.is_granted(Capability::Dns) && p.dns.is_none(), "dns still denied");
+    }
+}
+
 /// Translate the WIT `load-options` record into the host's
 /// `Policy`. Mirrors `sqlink-extension`'s `Policy::from_wit` so
 /// values port directly across deployment modes.
@@ -10687,6 +10815,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         // move onto the provider. Return a WIT manifest so the cli
         // registers ALL tiers exactly as for a bespoke-loaded extension —
         // the registration trampolines then dispatch through the warm store.
+        let op_policy = crate::default_operator_policy();
         let provider = match compose_provider::ProviderHandle::new_resident_wasm_component(
             self.host.engine().clone(),
             PathBuf::from(&path),
@@ -10699,13 +10828,13 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
             self.host.db_path(),
             // #220 full-port: thread the loader Host for loader-bridge exts.
             Some(self.host.clone()),
-            // #106/#220: the in-WASM cli `.load` callback path — deny http/dns/s3
-            // by default. Threading the operator's grant for this path (from the
-            // manifest's declared capabilities, described just below) is a further
-            // follow-up; the provider still instantiates, calls are gated.
-            None,
-            None,
-            false,
+            // #106/#220: the in-WASM cli `.load` callback carries no per-load
+            // Policy (only name + path), so apply the DEFAULT OPERATOR POLICY —
+            // safe compute caps always; http/dns/s3 deny-by-default and opt-in
+            // via SQLINK_ALLOW_{HTTP,DNS,S3}. Calls remain gated at call time.
+            op_policy.http.clone(),
+            op_policy.dns.clone(),
+            op_policy.is_granted(Capability::S3),
         ) {
             Ok(p) => p,
             Err(e) => {
