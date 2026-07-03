@@ -12400,27 +12400,7 @@ impl Host {
                 return r.map(|_| ()).map_err(|e| anyhow!("hook.update: {e}"));
             }
         }
-        let mut guard = self.hooked_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_update_hook()
-                .call_on_update(
-                    &mut cached.store,
-                    convert_update_op_to_loaded(operation),
-                    database,
-                    table,
-                    rowid,
-                )
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        r.map_err(|e| anyhow!("call_on_update: {e}"))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Route a pre-commit hook. `true` lets the commit proceed; `false`
@@ -12439,21 +12419,7 @@ impl Host {
                 Err(e) => Err(anyhow!("hook.commit: {e}")),
             };
         }
-        let mut guard = self.hooked_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_commit_hook()
-                .call_on_commit(&mut cached.store)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        r.map_err(|e| anyhow!("call_on_commit: {e}"))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Route a post-rollback notification.
@@ -12465,21 +12431,7 @@ impl Host {
         {
             return r.map(|_| ()).map_err(|e| anyhow!("hook.rollback: {e}"));
         }
-        let mut guard = self.hooked_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_commit_hook()
-                .call_on_rollback(&mut cached.store)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        r.map_err(|e| anyhow!("call_on_rollback: {e}"))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Route a WAL-commit callback. SQLite fires the wal-hook after
@@ -12511,21 +12463,7 @@ impl Host {
                 Err(e) => Err(anyhow!("hook.wal: {e}")),
             };
         }
-        let mut guard = self.hooked_locked(ext_name).await?;
-        let r = {
-            let cached = guard.as_mut().unwrap();
-            cached
-                .instance
-                .sqlite_extension_wal_hook()
-                .call_on_wal_hook(&mut cached.store, hook_id, db_name, n_frames)
-                .await
-        };
-        if let Err(ref e) = r {
-            if is_wasmtime_trap(e) {
-                *guard = None;
-            }
-        }
-        r.map_err(|e| anyhow!("call_on_wal_hook: {e}"))
+        Err(anyhow!("extension {ext_name} not loaded (no provider backing)"))
     }
 
     /// Load + run a runnable component. Instantiates the component
