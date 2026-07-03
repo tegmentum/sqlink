@@ -3947,7 +3947,7 @@ fn wal_perm_err(method: &str) -> loaded::sqlite::extension::types::SqliteError {
 /// Decode a JSON string literal (minimal subset matching what the
 /// cli encodes for state-deltas). Returns None if the input
 /// isn't a quoted string.
-fn parse_json_text(json: &str) -> Option<String> {
+pub(crate) fn parse_json_text(json: &str) -> Option<String> {
     let s = json.trim();
     if !s.starts_with('"') || !s.ends_with('"') || s.len() < 2 {
         return None;

@@ -1527,7 +1527,8 @@ pub struct ProviderCliState {
     /// #220: the cli store's own spi connection, for a streaming-dotcmd ext
     /// that ALSO imports `sqlite:extension/spi` (`archive-cli`/`core-dotcmd`/
     /// `serialize-cli`). Lazy-opened like the resident `spi_conn` (empty
-    /// `spi_db_path` => `:memory:`). Threading the cli `--db` in is a follow-up.
+    /// `spi_db_path` => `:memory:`). Seeded from the live cli session's `--db`
+    /// (the `db/path` cli-state key) in `wasm_component_invoke_cli`.
     spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
     spi_db_path: String,
 }
@@ -1715,13 +1716,24 @@ async fn wasm_component_invoke_cli(
     }
     let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
     wasi.inherit_stdio();
+    // #220 follow-up: seed the cli store's spi connection from the live cli
+    // session's `--db`, carried in the `db/path` cli-state key (JSON-encoded
+    // by the cli via `str_v`). This puts a streaming-dotcmd ext that ALSO
+    // imports spi (archive-cli/core-dotcmd/serialize-cli) on the SAME database
+    // as the rest of the session rather than an isolated `:memory:`. A missing/
+    // empty value decodes to empty, which `provider_spi_ensure_open` opens as
+    // `:memory:` (the in-memory session case, where there is no db to share).
+    let spi_db_path = state
+        .get("db/path")
+        .and_then(|j| crate::parse_json_text(j))
+        .unwrap_or_default();
     let st = ProviderCliState {
         wasi: wasi.build(),
         resources: wasmtime_wasi::ResourceTable::new(),
         cli: CliCapture::default(),
         state,
         spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
-        spi_db_path: String::new(),
+        spi_db_path,
     };
     let mut store = wasmtime::Store::new(engine, st);
     store
