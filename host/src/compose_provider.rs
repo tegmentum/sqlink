@@ -311,9 +311,15 @@ impl ProviderHandle {
         match &self.kind {
             ProviderKind::WasmComponent {
                 engine, component, ..
+            } if imports_cli_stdout(component, engine) => {
+                // Fresh-store variant carries no loader handle.
+                wasm_component_invoke_cli(method, payload, engine, component, state, None).await
             }
-            | ProviderKind::ResidentWasmComponent {
-                engine, component, ..
+            ProviderKind::ResidentWasmComponent {
+                engine,
+                component,
+                loader_host,
+                ..
             } if imports_cli_stdout(component, engine) => {
                 // The cli-aware (streaming) path needs the cli-stdout/stderr/
                 // state host imports satisfied with a per-invoke capture, which
@@ -321,8 +327,18 @@ impl ProviderHandle {
                 // (greet/dotret) holds no cross-call guest state, so driving it
                 // through the fresh cli-aware store is sound — the resident
                 // store coherence matters only for vtab/hook/aggregate, none of
-                // which import cli-stdout.
-                wasm_component_invoke_cli(method, payload, engine, component, state).await
+                // which import cli-stdout. Thread the loader `Host` so a
+                // `loader-bridge`-importing dotcmd (bundle-cli `.bundle
+                // install`) can re-enter the loader on this fresh store.
+                wasm_component_invoke_cli(
+                    method,
+                    payload,
+                    engine,
+                    component,
+                    state,
+                    loader_host.clone(),
+                )
+                .await
             }
             _ => self.invoke(method, payload).await.map(|b| (b, CliCapture::default())),
         }
@@ -1574,6 +1590,12 @@ pub struct ProviderCliState {
     /// (the `db/path` cli-state key) in `wasm_component_invoke_cli`.
     spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
     spi_db_path: String,
+    /// bundle-cli `.bundle install`: a cheap clone of the loader `Host`,
+    /// threaded so the CLI-provider path's `loader-bridge` can re-enter the
+    /// loader to load a bundle's member extensions (`load-extension-from-
+    /// bytes`) — the same handle the resident path carries. `None` off the
+    /// real `.load` path; the loader-bridge then reports "not wired".
+    loader_host: Option<crate::Host>,
 }
 
 /// #220: `HasData` marker to wire `sqlite:extension/spi` onto the cli store's
@@ -1736,78 +1758,12 @@ impl crate::loaded::sqlite::extension::build::Host for ProviderCliState {
     }
 }
 
-/// bundle-cli: the loader-bridge surface. `.bundle install` (loading peer
-/// extensions from the bridge) is deferred here — this store type carries no
-/// loader `Host` handle — so the load/registry/pin methods are stubbed. The
-/// two host-introspection methods (`host-target-triple`, `env-var`) need no
-/// loader handle and are answered for real, matching the resident impl.
-impl crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for ProviderCliState {
-    async fn load_extension_from_bytes(
-        &mut self,
-        _name_hint: String,
-        _bytes: Vec<u8>,
-        _extra_grants: Vec<String>,
-    ) -> std::result::Result<
-        crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest,
-        crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
-    > {
-        Err(
-            crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                code: 1,
-                message: "loader-bridge.load-extension-from-bytes is not available on \
-                          the CLI-provider path (.bundle install deferred)"
-                    .into(),
-            },
-        )
-    }
-
-    async fn extension_digest(&mut self, _name: String) -> String {
-        String::new()
-    }
-
-    async fn list_loaded_extensions(
-        &mut self,
-    ) -> Vec<crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension> {
-        Vec::new()
-    }
-
-    async fn host_target_triple(&mut self) -> String {
-        let arch = std::env::consts::ARCH;
-        let os = std::env::consts::OS;
-        let family = std::env::consts::FAMILY;
-        match os {
-            "macos" => format!("{arch}-apple-darwin"),
-            "linux" => format!("{arch}-unknown-linux-gnu"),
-            "windows" => format!("{arch}-pc-windows-msvc"),
-            other => format!("{arch}-unknown-{other}-{family}"),
-        }
-    }
-
-    async fn env_var(&mut self, name: String) -> Option<String> {
-        if !crate::ENV_VAR_ALLOWLIST.contains(&name.as_str()) {
-            return None;
-        }
-        std::env::var(&name).ok().filter(|v| !v.is_empty())
-    }
-
-    async fn apply_prefix_pin(
-        &mut self,
-        _function_name: String,
-        _n_args: i32,
-    ) -> std::result::Result<
-        (),
-        crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
-    > {
-        Err(
-            crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                code: 1,
-                message: "loader-bridge.apply-prefix-pin is not applicable on the \
-                          CLI-provider path"
-                    .into(),
-            },
-        )
-    }
-}
+// bundle-cli `.bundle install`: the loader-bridge surface on the CLI-provider
+// path is satisfied by the SAME `ProviderLoaderBridgeWrap` → `Host` forwarding
+// view the resident path uses (wired in `wasm_component_invoke_cli`), so
+// `load-extension-from-bytes` really loads a bundle's members. No stub impl on
+// `ProviderCliState` is needed — the real impl lives on `ProviderLoaderBridgeWrap`
+// (in lib.rs).
 
 // Task #220: the SAME cli surface on the RESIDENT store type
 // (`ProviderState`), so a streaming-dotcmd ext loaded as a warm-once
@@ -1887,6 +1843,7 @@ async fn wasm_component_invoke_cli(
     engine: &Engine,
     component: &Component,
     state: CliStateSnapshot,
+    loader_host: Option<crate::Host>,
 ) -> Result<(Vec<u8>, CliCapture), String> {
     let mut linker: Linker<ProviderCliState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
@@ -1910,10 +1867,9 @@ async fn wasm_component_invoke_cli(
         )
         .map_err(|e| format!("cli sqlite:extension/spi linker: {e}"))?;
     }
-    // bundle-cli: its `dispatch-bridge-cas` (real CAS SQL), `build` (stub), and
-    // `loader-bridge` (stub) imports are satisfied on this same store type. All
-    // are `impl ... for ProviderCliState`, so the generated `add_to_linker`
-    // threads `&mut ProviderCliState` via `ProviderCliHostData` + `|s| s`.
+    // bundle-cli: its `dispatch-bridge-cas` (real CAS SQL) + `build` imports
+    // are satisfied directly on `ProviderCliState` via `ProviderCliHostData`
+    // + `|s| s`.
     if imports_sqlite_dispatch_bridge_cas(component, engine) {
         crate::loaded_bundle_cli::sqlite::extension::dispatch_bridge_cas::add_to_linker::<
             _,
@@ -1928,11 +1884,18 @@ async fn wasm_component_invoke_cli(
         )
         .map_err(|e| format!("cli sqlite:extension/build linker: {e}"))?;
     }
+    // `.bundle install`: satisfy `loader-bridge` with the SAME real forwarding
+    // view the resident path uses (`ProviderLoaderBridgeWrap` → `Host`), so
+    // `load-extension-from-bytes` actually loads a bundle's member extensions.
+    // When `loader_host` is None (off the real .load path) the view reports
+    // "not wired", exactly as on the resident path.
     if imports_sqlite_loader_bridge(component, engine) {
         crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::add_to_linker::<
             _,
-            ProviderCliHostData,
-        >(&mut linker, |s| s)
+            ProviderLoaderBridgeData,
+        >(&mut linker, |s: &mut ProviderCliState| ProviderLoaderBridgeWrap {
+            host: s.loader_host.as_ref(),
+        })
         .map_err(|e| format!("cli sqlite:extension/loader-bridge linker: {e}"))?;
     }
     let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
@@ -1955,6 +1918,7 @@ async fn wasm_component_invoke_cli(
         state,
         spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
         spi_db_path,
+        loader_host,
     };
     let mut store = wasmtime::Store::new(engine, st);
     store
