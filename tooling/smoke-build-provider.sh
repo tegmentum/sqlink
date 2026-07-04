@@ -18,6 +18,17 @@ SHAPES="${SMOKE_SHAPES_DIR:-/tmp/p1-shapes}"
 mkdir -p "$SHAPES"
 
 extdir="$R/extensions/$BARE"
+# Some extension dirs use underscores (e.g. count_min, vec_each) while their
+# Cargo package name uses hyphens (count-min-extension). Try the underscore
+# form as a fallback before giving up.
+if [ ! -d "$extdir" ]; then
+  BARE_U="${BARE//-/_}"
+  if [ -d "$R/extensions/$BARE_U" ]; then
+    BARE="$BARE_U"
+    extdir="$R/extensions/$BARE"
+    U="${BARE//-/_}"
+  fi
+fi
 [ -d "$extdir" ] || { echo "no extension dir: extensions/$BARE" >&2; exit 1; }
 
 # 1. Build the ext component (the workspace .cargo/config supplies the wasi-sdk
