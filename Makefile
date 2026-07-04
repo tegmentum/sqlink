@@ -845,6 +845,7 @@ ext:
 	test -n "$$WASM_BASE" || (echo "no built wasm artifact found"; exit 1); \
 	mkdir -p extensions/$(NAME)/target/wasm32-wasip2/release; \
 	COMPONENT_OUT=extensions/$(NAME)/target/wasm32-wasip2/release/$${NAME_UNDERSCORE}_extension.component.wasm; \
+	bash tooling/wasm-opt-core.sh "$$WASM_BASE"; \
 	wasm-tools component new "$$WASM_BASE" \
 		--adapt wasi_snapshot_preview1=$(WASI_ADAPTER) \
 		-o "$$COMPONENT_OUT"; \

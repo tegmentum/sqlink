@@ -215,6 +215,10 @@ for wasm in $(find target/wasm32-wasip2/release extensions/*/target/wasm32-wasip
         printf '%s' "$wit_hash" > "$sidecar"
         continue
     fi
+    # Core module confirmed above (the component case `continue`d). Shrink it
+    # with `wasm-opt -Os` before wrapping — the finished component can't be
+    # optimized by Binaryen, so this is the seam.
+    bash "$REPO_ROOT/tooling/wasm-opt-core.sh" "$wasm"
     # Try plain encode first
     if wasm-tools component new "$wasm" -o "$out" 2>/dev/null; then
         printf '%s' "$wit_hash" > "$sidecar"

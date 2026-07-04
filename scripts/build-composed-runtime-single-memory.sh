@@ -48,6 +48,11 @@ echo "[2/3] build sqlite-cli (core wasm + component new)"
 #   v1.5 round 1 incorrectly believed this step was a no-op for
 #   wasm32-wasip2; v1.5 round 2 corrected: it is required for every
 #   cargo-built cdylib. KEEP this step.
+# Shrink the cli CORE module with `wasm-opt -Os` before wrapping it into a
+# component (the only seam where the core is exposed). No-op if wasm-opt is
+# missing or the artifact is already a component.
+bash "$REPO_ROOT/tooling/wasm-opt-core.sh" \
+    "$REPO_ROOT/target/wasm32-wasip2/release/sqlite_cli.wasm"
 wasm-tools component new \
     "$REPO_ROOT/target/wasm32-wasip2/release/sqlite_cli.wasm" \
     -o "$REPO_ROOT/target/wasm32-wasip2/release/sqlite_cli.component.wasm"

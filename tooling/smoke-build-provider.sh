@@ -31,18 +31,29 @@ if [ ! -d "$extdir" ]; then
 fi
 [ -d "$extdir" ] || { echo "no extension dir: extensions/$BARE" >&2; exit 1; }
 
-# 1. Build the ext component (the workspace .cargo/config supplies the wasi-sdk
-#    CC env for C-linking exts like compress).
-( cd "$extdir" && cargo component build --release --target wasm32-wasip2 ) >&2 || exit 1
+# 1. Build the ext CORE module with plain `cargo build` (wit-bindgen embeds a
+#    component-type section but leaves a core module), `wasm-opt -Os` it, then
+#    wrap it into a component with `wasm-tools component new`. We build the core
+#    ourselves — rather than `cargo component build`, which emits a finished
+#    component whose inner core Binaryen can't touch — so the ext shrinks
+#    (mirrors `make ext`). The workspace .cargo/config supplies the wasi-sdk CC
+#    env for C-linking exts like compress.
+( cd "$extdir" && cargo build --release --target wasm32-wasip2 ) >&2 || exit 1
 # Standalone-workspace exts (e.g. zstd) build to extensions/<name>/target;
 # root-workspace exts (changeset, compress) build to the root target.
-comp=""
+core=""
 for d in "$extdir/target/wasm32-wasip2/release" "$TARGET_DIR"; do
-  for cand in "$d/${U}_extension.wasm" "$d/${U}_extension.component.wasm"; do
-    [ -f "$cand" ] && comp="$cand" && break 2
-  done
+  cand="$d/${U}_extension.wasm"
+  [ -f "$cand" ] && core="$cand" && break
 done
-[ -n "$comp" ] || { echo "ext component not found for $BARE (looked in $extdir/target + $TARGET_DIR)" >&2; exit 1; }
+[ -n "$core" ] || { echo "ext core not found for $BARE (looked in $extdir/target + $TARGET_DIR)" >&2; exit 1; }
+bash "$R/tooling/wasm-opt-core.sh" "$core" >&2
+ADAPTER="${WASI_ADAPTER:-$HOME/.cache/xtran/wasi_snapshot_preview1.reactor.wasm}"
+comp="${core%.wasm}.component.wasm"
+# Reactor adapter first (most exts import wasi p1); fall back to no adapter.
+wasm-tools component new "$core" --adapt "wasi_snapshot_preview1=$ADAPTER" -o "$comp" 2>/dev/null \
+  || wasm-tools component new "$core" -o "$comp" 2>/dev/null \
+  || { echo "component new failed for $BARE" >&2; exit 1; }
 
 # 2. Infer the shape from the interfaces the ext EXPORTS (not imports).
 ifaces=$(wasm-tools component wit "$comp" 2>/dev/null \

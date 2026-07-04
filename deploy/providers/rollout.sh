@@ -34,11 +34,20 @@ for name in $NAMES; do
   i=$((i+1)); u=$(echo "$name" | tr - _)
   extdir="$R/extensions/$name"
   [ -d "$extdir" ] || { echo "[$i/$total] SKIP $name (no dir)" >>"$LOG"; continue; }
-  ( cd "$extdir" && timeout 300 cargo component build --release --target wasm32-wasip2 >/dev/null 2>&1 )
-  comp="$R/target/wasm32-wasip2/release/${u}_extension.wasm"
-  [ -f "$comp" ] || comp="$R/target/wasm32-wasip2/release/${u}_extension.component.wasm"
-  [ -f "$comp" ] || comp="$extdir/target/wasm32-wasip2/release/${u}_extension.wasm"
-  if [ ! -f "$comp" ]; then echo "[$i/$total] BUILDFAIL $name" >>"$LOG"; buildfail=$((buildfail+1)); continue; fi
+  # Build the ext CORE with plain `cargo build` (not `cargo component build`,
+  # which emits a finished component whose inner core Binaryen can't touch),
+  # `wasm-opt -Os` it, then wrap it into a component with wasm-tools — so the
+  # shipped provider ships smaller (mirrors smoke-build-provider.sh + make ext).
+  ( cd "$extdir" && timeout 300 cargo build --release --target wasm32-wasip2 >/dev/null 2>&1 )
+  core="$R/target/wasm32-wasip2/release/${u}_extension.wasm"
+  [ -f "$core" ] || core="$extdir/target/wasm32-wasip2/release/${u}_extension.wasm"
+  if [ ! -f "$core" ]; then echo "[$i/$total] BUILDFAIL $name" >>"$LOG"; buildfail=$((buildfail+1)); continue; fi
+  bash "$R/tooling/wasm-opt-core.sh" "$core" >/dev/null 2>&1
+  ADAPTER="${WASI_ADAPTER:-$HOME/.cache/xtran/wasi_snapshot_preview1.reactor.wasm}"
+  comp="${core%.wasm}.component.wasm"
+  wasm-tools component new "$core" --adapt "wasi_snapshot_preview1=$ADAPTER" -o "$comp" 2>/dev/null \
+    || wasm-tools component new "$core" -o "$comp" 2>/dev/null \
+    || { echo "[$i/$total] BUILDFAIL $name (component new)" >>"$LOG"; buildfail=$((buildfail+1)); continue; }
   # The shape is determined by the tiers the ext EXPORTS (implements), not the
   # interfaces it IMPORTS (host-satisfied deps like wal-frames/spi/session). Reading
   # imports here mis-selected the hook tier (e.g. wal-archive imports wal-frames but
