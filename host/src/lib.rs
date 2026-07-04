@@ -4275,7 +4275,13 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host
         // goes provider-only. A provider-backed ext lives in
         // `provider_manifests`, not the bespoke `components` registry, so
         // build the BridgedManifest from the provider manifest's dotcmd specs.
-        let name = match host.instantiate_provider_from_bytes(&name_hint, &bytes).await {
+        // loader-bridge sub-load: peer extensions loaded through the bridge
+        // are not granted spawn-build (only the top-level ext's own load
+        // options carry grants).
+        let name = match host
+            .instantiate_provider_from_bytes(&name_hint, &bytes, false)
+            .await
+        {
             Ok(name) => name,
             Err(e) => {
                 return Err(
@@ -5738,8 +5744,14 @@ impl Host {
         };
         // #220 loader retirement: URI loads go provider-only, same as the
         // path-based router. A non-provider component is a hard error.
-        let _ = policy;
-        self.instantiate_provider_from_bytes(&hint, &bytes).await
+        // Thread the `spawn-build` grant so a URI-loaded bundle-cli-class ext
+        // can `.bundle build` (http/dns/s3 stay deny-by-default on this path).
+        self.instantiate_provider_from_bytes(
+            &hint,
+            &bytes,
+            policy.is_granted(Capability::SpawnBuild),
+        )
+        .await
     }
 
     /// PLAN-latent-cleanup.md L3b: shared "URI → bytes" path. Used
@@ -6079,6 +6091,9 @@ impl Host {
                 policy.http.clone(),
                 policy.dns.clone(),
                 policy.is_granted(Capability::S3),
+                // bundle-cli `.bundle build`: gate the host cargo spawn on the
+                // manifest-granted `spawn-build` capability.
+                policy.is_granted(Capability::SpawnBuild),
             )
             .map_err(|e| anyhow!("compile resident provider {}: {e}", resolved.display()))?;
             // The provider's own manifest names the extension; describe it
@@ -6125,6 +6140,11 @@ impl Host {
         &self,
         name_hint: &str,
         bytes: &[u8],
+        // bundle-cli `.bundle build`: whether the ext's load options granted
+        // `spawn-build`. Threaded onto the resident provider so its
+        // `build.spawn-build` host cargo spawn is gated. `false` for the
+        // loader-bridge sub-load / introspection callers.
+        spawn_build_granted: bool,
     ) -> Result<String> {
         let component = Component::from_binary(&self.engine, bytes)
             .map_err(|e| anyhow!("compile provider {name_hint}: {e}"))?;
@@ -6163,6 +6183,7 @@ impl Host {
             None,
             None,
             false,
+            spawn_build_granted,
         )
         .map_err(|e| anyhow!("compile resident provider {name_hint}: {e}"))?;
         let (mbytes, _) = provider
@@ -6269,6 +6290,8 @@ impl Host {
             // #106/#220: describe/introspection path — no ext surfaces needed.
             None,
             None,
+            false,
+            // describe never builds.
             false,
         )
         .map_err(|e| anyhow!("compile resident provider {name_hint}: {e}"))?;
@@ -10521,10 +10544,17 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         // provider-only. A provider-backed ext lives in `provider_manifests`
         // (not the bespoke `components` registry), so build its manifest via
         // `provider_backed_bindings_manifest`.
-        let _ = options;
+        // bundle-cli `.bundle build`: honor a `spawn-build` grant in the load
+        // options (this is how `sqlink --grant spawn-build` reaches the host —
+        // the cli auto-loads bundle-cli with `Capability::SpawnBuild` in its
+        // grant list). Other grants stay handled by the existing policy paths.
+        let spawn_build_granted = options
+            .grant
+            .iter()
+            .any(|c| matches!(c, WitCapability::SpawnBuild));
         let name = self
             .host
-            .instantiate_provider_from_bytes(&name_hint, &bytes)
+            .instantiate_provider_from_bytes(&name_hint, &bytes, spawn_build_granted)
             .await
             .map_err(|e| LoaderError {
                 code: 1,
@@ -11117,6 +11147,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
             op_policy.http.clone(),
             op_policy.dns.clone(),
             op_policy.is_granted(Capability::S3),
+            op_policy.is_granted(Capability::SpawnBuild),
         ) {
             Ok(p) => p,
             Err(e) => {
@@ -11459,7 +11490,7 @@ mod contract_guard_tests {
         // still fires (before the endpoint check), same actionable message.
         let bytes = synth_component_targeting("0.1.0");
         let host = Host::new().expect("host new");
-        let err = block_on(host.instantiate_provider_from_bytes("v0_1_synth", &bytes))
+        let err = block_on(host.instantiate_provider_from_bytes("v0_1_synth", &bytes, false))
             .expect_err("v0.1 synthetic must be rejected by v1 host through instantiate_provider_from_bytes");
         let msg = err.to_string();
         assert!(msg.contains("v0_1_synth"), "names the extension: {msg}");
@@ -11477,7 +11508,7 @@ mod contract_guard_tests {
         // load into a @1.x host. Same code path, same message shape.
         let bytes = synth_component_targeting("2.0.0");
         let host = Host::new().expect("host new");
-        let err = block_on(host.instantiate_provider_from_bytes("v2_synth", &bytes))
+        let err = block_on(host.instantiate_provider_from_bytes("v2_synth", &bytes, false))
             .expect_err("v2.x synthetic must be rejected by v1 host through instantiate_provider_from_bytes");
         let msg = err.to_string();
         assert!(msg.contains("v2_synth"), "names the extension: {msg}");

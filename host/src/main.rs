@@ -778,7 +778,9 @@ async fn resolve_bundle_launch(
         // the provider-only instantiation path (a bundled member is an
         // `<ext>-provider.wasm`). Capabilities are enforced at call time.
         let _ = &policy;
-        host.instantiate_provider_from_bytes(&m.extension_name, &bytes)
+        // Bundle members are dynamic-loaded to RUN, not to build; a member is
+        // never granted spawn-build (only a top-level ext's own load grants it).
+        host.instantiate_provider_from_bytes(&m.extension_name, &bytes, false)
             .await
             .map_err(|e| anyhow!("bundle '{resolved_name}': load {}: {e}", m.extension_name))?;
         eprintln!(
