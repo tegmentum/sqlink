@@ -89,6 +89,11 @@ build_ext () {
   [ "$built" = 1 ] || { echo "FAIL $name cargo-build"; return 1; }
   local base="$outdir/${u}_extension.wasm"
   [ -f "$base" ] || { echo "FAIL $name no-base-artifact"; return 1; }
+  # Shrink the CORE module with wasm-opt -Os before componentizing (Binaryen
+  # can't touch the finished component). Deterministic for a given Binaryen
+  # version, so the digest just gets smaller + stays reproducible — as long as
+  # the publishing machine's wasm-opt version is held stable across releases.
+  bash tooling/wasm-opt-core.sh "$base" >/dev/null 2>&1
   local comp="$outdir/${u}_extension.component.wasm" tmp
   tmp="$comp.tmp.$$"
   wasm-tools component new "$base" --adapt "wasi_snapshot_preview1=$WASI_ADAPTER" -o "$tmp" 2>/dev/null \
