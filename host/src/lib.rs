@@ -423,6 +423,15 @@ pub mod provider_envelope {
         pub version: String,
         /// (name, id, num_args) for each scalar.
         pub scalar_specs: Vec<(String, u64, i32)>,
+        /// Per-scalar SQLite function flags keyed by func-id, parsed from the
+        /// same `scalars` CBOR records. Kept as a parallel map (rather than
+        /// widening `scalar_specs`) so the existing tuple consumers stay
+        /// untouched. Consumed by `register_scalar` to pass the correct
+        /// `sqlite3_create_function_v2` flags — critically, NOT marking a
+        /// nondeterministic function (e.g. `nanoid()`, `random_*`) as
+        /// `SQLITE_DETERMINISTIC`, which SQLite would otherwise cache within a
+        /// query (collapsing 1000 random ids to a handful).
+        pub scalar_flags: std::collections::HashMap<u64, ScalarFlags>,
         /// (name, id) for each collation.
         pub collations: Vec<(String, u64)>,
         pub aggregates: Vec<(String, u64)>,
@@ -445,6 +454,15 @@ pub mod provider_envelope {
         pub wal_hook_id: u64,
         /// Capabilities the extension declares (for the policy reconcile).
         pub declared_capabilities: Vec<String>,
+    }
+
+    /// SQLite scalar-function flag triple mirrored from the woco manifest's
+    /// per-scalar `deterministic` / `direct_only` / `innocuous` booleans.
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct ScalarFlags {
+        pub deterministic: bool,
+        pub direct_only: bool,
+        pub innocuous: bool,
     }
 
     /// Aggregate spec mirrored from the woco manifest.
@@ -652,12 +670,33 @@ pub mod provider_envelope {
             .collect()
     }
 
+    /// func-id → flag triple, parsed from the same `scalars` CBOR array.
+    /// A missing boolean field defaults to `false` (the safe default: a
+    /// scalar is nondeterministic unless it explicitly says otherwise).
+    fn scalar_flags(v: &Cbor) -> std::collections::HashMap<u64, ScalarFlags> {
+        arr(v)
+            .iter()
+            .filter_map(|e| {
+                let id = field(e, "id").map(|x| int(x) as u64)?;
+                Some((
+                    id,
+                    ScalarFlags {
+                        deterministic: field(e, "deterministic").map(is_true).unwrap_or(false),
+                        direct_only: field(e, "direct_only").map(is_true).unwrap_or(false),
+                        innocuous: field(e, "innocuous").map(is_true).unwrap_or(false),
+                    },
+                ))
+            })
+            .collect()
+    }
+
     pub fn decode_manifest(bytes: &[u8]) -> Result<Manifest, String> {
         let v = de(bytes)?;
         Ok(Manifest {
             name: field(&v, "name").map(text).unwrap_or_default(),
             version: field(&v, "version").map(text).unwrap_or_default(),
             scalar_specs: field(&v, "scalars").map(scalar_specs).unwrap_or_default(),
+            scalar_flags: field(&v, "scalars").map(scalar_flags).unwrap_or_default(),
             collations: field(&v, "collations")
                 .map(id_name_pairs)
                 .unwrap_or_default(),
@@ -2562,6 +2601,26 @@ fn db_err_to_bindings(
     }
 }
 
+/// Strip the internal compose-provider plumbing labels from an
+/// extension-origin error string so the user sees the extension's own
+/// message. The resident/cli invoke wraps the endpoint error as
+/// `provider <method>: …` (compose_provider.rs), and the provider shape
+/// wraps the extension's own `Err(m)` as `scalar call: m` (an
+/// `ExecTrap`-coded endpoint error, the woco endpoint). Both labels are
+/// internal noise in a SQLite error. `scalar call: ` is the unambiguous
+/// marker that the message originated from the extension's own return
+/// (not a genuine host-plumbing failure like a linker/instantiate error,
+/// which never carries it) — so we key off it and return everything after
+/// it. Absent that marker the string is returned unchanged, preserving
+/// full context for real plumbing failures.
+fn strip_provider_call_prefix(msg: String) -> String {
+    const MARK: &str = "scalar call: ";
+    match msg.find(MARK) {
+        Some(idx) => msg[idx + MARK.len()..].to_string(),
+        None => msg,
+    }
+}
+
 // bundle-cli: `loaded`-world marshalling for the `dispatch-bridge-cas`
 // surface. The bundle-cli bindgen (`loaded_bundle_cli`) shares its `types`
 // module with `loaded`, so the CAS bridge's query-result flows through
@@ -2740,13 +2799,15 @@ unsafe fn register_host_dot_command_function(db: *mut libsqlite3_sys::sqlite3, h
         let result = sync_dispatch_dot_command(host, &name, &joined, Vec::new());
         match result {
             Ok(outcome) => {
-                let cs = std::ffi::CString::new(outcome.text).unwrap_or_default();
-                let bytes = cs.as_bytes_with_nul();
+                // Raw bytes + explicit length: a `CString` would blank any
+                // result text containing an interior NUL (see the V::Text
+                // result path above).
+                let bytes = outcome.text.as_bytes();
                 unsafe {
                     libsqlite3_sys::sqlite3_result_text(
                         ctx,
                         bytes.as_ptr() as *const c_char,
-                        (bytes.len() - 1) as c_int,
+                        bytes.len() as c_int,
                         libsqlite3_sys::SQLITE_TRANSIENT(),
                     );
                 }
@@ -2852,12 +2913,18 @@ unsafe fn bindings_to_sqlite3_result(
         V::Integer(i) => libsqlite3_sys::sqlite3_result_int64(ctx, i),
         V::Real(r) => libsqlite3_sys::sqlite3_result_double(ctx, r),
         V::Text(s) => {
-            let cs = std::ffi::CString::new(s).unwrap_or_default();
-            let bytes = cs.as_bytes_with_nul();
+            // Pass the raw UTF-8 bytes with an EXPLICIT length. `CString::new`
+            // fails on any interior NUL byte, and the previous
+            // `.unwrap_or_default()` silently turned such a value into the
+            // empty string — SQLite TEXT can legitimately contain NUL bytes
+            // (e.g. natsort_key's `\0` segment terminators), and blanking them
+            // corrupts the value. An explicit byte length also means SQLite
+            // never scans for a terminator, so embedded NULs survive intact.
+            let bytes = s.as_bytes();
             libsqlite3_sys::sqlite3_result_text(
                 ctx,
                 bytes.as_ptr() as *const c_char,
-                (bytes.len() - 1) as c_int,
+                bytes.len() as c_int,
                 libsqlite3_sys::SQLITE_TRANSIENT(),
             );
         }
@@ -2896,6 +2963,11 @@ unsafe fn register_host_loaded_scalar(
     func_name: &str,
     num_args: i32,
     func_id: u64,
+    // The `sqlite3_create_function_v2` text-encoding/flag word. Callers
+    // compute this from the extension's declared func-flags so a
+    // nondeterministic scalar is NOT registered as `SQLITE_DETERMINISTIC`
+    // (which would let SQLite cache it within a query).
+    create_flags: i32,
 ) -> i32 {
     use std::os::raw::{c_char, c_int, c_void};
 
@@ -2964,7 +3036,7 @@ unsafe fn register_host_loaded_scalar(
         db,
         name_c.as_ptr() as *const c_char,
         num_args as c_int,
-        (libsqlite3_sys::SQLITE_UTF8 | libsqlite3_sys::SQLITE_DETERMINISTIC) as c_int,
+        create_flags as c_int,
         ptr,
         Some(xfunc),
         None,
@@ -6643,7 +6715,10 @@ impl Host {
             },
             // A provider invoke error is the extension's failure, surfaced
             // as the inner Err so callers treat it like any scalar error.
-            Err(e) => Some(Ok(Err(e))),
+            // Strip the internal compose-provider plumbing labels so the
+            // user sees the extension's own message (parity with the
+            // retired bespoke loader), not `provider call: scalar call: …`.
+            Err(e) => Some(Ok(Err(strip_provider_call_prefix(e)))),
         }
     }
 
@@ -8836,6 +8911,33 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         func_id: u64,
     ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
+        // Compute the create-function flag word from the extension's declared
+        // per-scalar flags (carried in the provider manifest, keyed by
+        // func-id). A nondeterministic scalar (e.g. `nanoid()`) must NOT get
+        // `SQLITE_DETERMINISTIC` — otherwise SQLite caches it within a query
+        // and 1000 calls collapse to a handful of distinct values. Absent a
+        // manifest entry, default to plain UTF8 (nondeterministic), the safe
+        // choice for an unknown scalar.
+        let create_flags = {
+            let f = self
+                .host
+                .provider_manifests
+                .read()
+                .get(&ext_name)
+                .and_then(|m| m.scalar_flags.get(&func_id).copied())
+                .unwrap_or_default();
+            let mut flags = libsqlite3_sys::SQLITE_UTF8;
+            if f.deterministic {
+                flags |= libsqlite3_sys::SQLITE_DETERMINISTIC;
+            }
+            if f.direct_only {
+                flags |= libsqlite3_sys::SQLITE_DIRECTONLY;
+            }
+            if f.innocuous {
+                flags |= libsqlite3_sys::SQLITE_INNOCUOUS;
+            }
+            flags
+        };
         // Task #216: collision-safe bare registration. Resolve the
         // effective name against the LIVE connection (PRAGMA
         // function_list) so a loaded component never silently clobbers a
@@ -8874,6 +8976,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
                     &resolved.name,
                     num_args,
                     func_id,
+                    create_flags,
                 )
             };
             (resolved.name, rc)
@@ -8921,6 +9024,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
                         &qualified,
                         num_args,
                         func_id,
+                        create_flags,
                     )
                 }
             };
