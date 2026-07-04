@@ -1,0 +1,6 @@
+# Outputs for extensions/greet/smoke.sql.
+# greet is a dot-command-only extension (no scalar functions).
+# .greet          -> default greeting
+hello, world!
+# .greet alice    -> named greeting
+hello, alice!
