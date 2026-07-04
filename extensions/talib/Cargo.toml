@@ -1,7 +1,6 @@
 # Standalone [workspace] (like extensions/color, extensions/formats): this
-# extension resolves its datalink path deps against the `datalink-talib-wt`
-# worktree (talib-core + the window template), independent of the sqlink
-# root workspace which pins `~/git/datalink` (main). `make ext NAME=talib`
+# extension resolves its datalink path deps against the main `~/git/datalink`
+# checkout, independent of the sqlink root workspace. `make ext NAME=talib`
 # detects the `[workspace]` table and builds it through the shared target.
 [workspace]
 
@@ -29,5 +28,5 @@ crate-type = ["cdylib", "rlib"]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 # Shared, DB-agnostic logic + capability declaration (datalink pull-up).
-talib-core = { path = "../../../datalink-talib-wt/extensions/talib-core" }
-datalink-extcore = { path = "../../../datalink-talib-wt/crates/datalink-extcore" }
+talib-core = { path = "../../../datalink/extensions/talib-core" }
+datalink-extcore = { path = "../../../datalink/crates/datalink-extcore" }
