@@ -133,7 +133,39 @@ impl SqliteCasStore {
             mode: StoreMode::External(path),
             config: StoreConfig::default(),
         };
-        store.install_schema()?;
+        // Concurrent first-open of a shared external cache races on the
+        // schema install: switching to WAL and the CREATE TABLE / migration
+        // lock-upgrades can return SQLITE_BUSY *without* invoking the busy
+        // handler, so busy_timeout alone doesn't cover them and all but one
+        // parallel opener errors with "database is locked" (this is what made
+        // parallel `smoke.py -jN` flaky). `install_schema` is fully idempotent
+        // (CREATE TABLE IF NOT EXISTS + version-guarded migrations), so retry
+        // it with a short bounded backoff; parallel openers serialize and all
+        // succeed. Only external mode races (internal mode is single-process).
+        let mut attempt: u32 = 0;
+        loop {
+            match store.install_schema() {
+                Ok(()) => break,
+                Err(e) => {
+                    // A failed attempt may have left a half-open transaction
+                    // (an explicit BEGIN in the migration ladder succeeded,
+                    // then a later statement hit BUSY), which would make the
+                    // retry's BEGIN error "cannot start a transaction within a
+                    // transaction". Clear it before retrying; ignore the error
+                    // when no transaction is active.
+                    let _ = store.conn.execute_batch("ROLLBACK;");
+                    if attempt < 60 && is_lock_contention(&e) {
+                        attempt += 1;
+                        // ramp 10ms -> 100ms; ~60 tries caps around a few seconds.
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            10 * u64::from(attempt.min(10)),
+                        ));
+                    } else {
+                        return Err(e);
+                    }
+                }
+            }
+        }
         Ok(store)
     }
 
@@ -253,12 +285,32 @@ impl SqliteCasStore {
         // with SQLITE_BUSY ("database is locked"). WAL lets
         // readers proceed during writes, and the busy_timeout
         // gives schema install a fair shot at the write lock.
+        //
+        // Arm `busy_timeout` FIRST, as its own statement: it needs no
+        // lock so it always succeeds, and — crucially — it must be
+        // active before the CREATE TABLE / migration writes below so a
+        // concurrent schema install waits for the write lock instead of
+        // failing with SQLITE_BUSY. This is the step that actually makes
+        // parallel opens correct.
         self.conn
-            .execute_batch(
-                "PRAGMA journal_mode = WAL;\n\
-                 PRAGMA busy_timeout = 10000;\n\
-                 PRAGMA foreign_keys = ON;",
-            )
+            .execute_batch("PRAGMA busy_timeout = 10000;")
+            .map_err(|e| anyhow!("set busy_timeout: {}", e.message))?;
+        // `journal_mode = WAL` is a best-effort OPTIMIZATION, not a
+        // correctness requirement. Switching the journal mode needs a
+        // brief exclusive lock, and SQLite returns SQLITE_BUSY for it
+        // *immediately* without invoking the busy handler — so under a
+        // concurrent first-open of a fresh db, all but one opener fails
+        // the mode switch even with busy_timeout armed. Making it fatal
+        // is what made parallel `smoke.py -jN` (and any concurrent CLI
+        // burst) flakily error with "database is locked". Tolerate the
+        // BUSY: the loser proceeds in rollback-journal mode for its
+        // session (the armed busy_timeout serializes its writes), and
+        // once any opener wins the switch the db is WAL persistently
+        // (stored in the header) for every later open.
+        let _ = self.conn.execute_batch("PRAGMA journal_mode = WAL;");
+        // FK enforcement is a no-lock per-connection setting; always safe.
+        self.conn
+            .execute_batch("PRAGMA foreign_keys = ON;")
             .map_err(|e| anyhow!("enable foreign_keys: {}", e.message))?;
         // Order matters: migrations BEFORE INSTALL_SCHEMA.
         //
@@ -952,6 +1004,17 @@ impl SqliteCasStore {
             .map_err(|e| anyhow!("purge: {}", e.message))?;
         Ok(())
     }
+}
+
+/// True if `e`'s chain looks like transient SQLite lock contention
+/// ("database is locked" / "database is busy") — the retryable case for
+/// concurrent schema install. Matched on the message because the underlying
+/// `db::Error` is flattened into an `anyhow` string by the callers here.
+fn is_lock_contention(e: &anyhow::Error) -> bool {
+    e.chain().any(|c| {
+        let msg = c.to_string().to_ascii_lowercase();
+        msg.contains("locked") || msg.contains("busy")
+    })
 }
 
 fn unix_now() -> i64 {
