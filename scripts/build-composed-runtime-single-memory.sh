@@ -28,6 +28,12 @@ SQLITE_WASM_ROOT="$REPO_ROOT/sqlite-wasm"
 echo "[1/3] build sqlite-lib (single-memory component)"
 bash "$SQLITE_WASM_ROOT/scripts/build-sqlite-lib-component-single-memory.sh"
 
+# The cli bakes the dot-command extension PROVIDERS via include_bytes! (#220:
+# plugged <name>-provider.wasm, not the raw component). Build them first, else
+# the include_bytes! paths are missing at cli compile time.
+echo "[1.5/3] build embedded dot-command providers"
+bash "$REPO_ROOT/tooling/build-embedded-providers.sh"
+
 echo "[2/3] build sqlite-cli (core wasm + component new)"
 ( cd "$REPO_ROOT" && cargo build -p sqlite-cli --target wasm32-wasip2 --release )
 # Per-artifact decision (v1.6 polish, #487 Sub-item C):

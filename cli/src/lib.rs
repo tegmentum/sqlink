@@ -2821,25 +2821,27 @@ fn embed_core_dotcmd(grant_spawn_build: bool) {
     use bindings::sqlink::wasm::extension_loader;
     use bindings::sqlite::extension::policy::{Capability, LoadOptions};
 
-    const CORE_DOTCMD_BYTES: &[u8] = include_bytes!(
-        "../../extensions/core-dotcmd/target/wasm32-wasip2/release/core_dotcmd_extension.component.wasm"
-    );
+    // #220: bake the PLUGGED provider (compose:dynlink/endpoint export), not
+    // the raw component. load_extension_from_bytes detects the endpoint export
+    // and routes through the provider path. Built by tooling/build-embedded-providers.sh.
+    const CORE_DOTCMD_BYTES: &[u8] =
+        include_bytes!("../../extensions/core-dotcmd/core-dotcmd-provider.wasm");
     /// The follow-up to PLAN-dotcmd-phase5.md moved `.sqlink`
     /// out of `cli/src/dot.rs` into its own dot-command
     /// extension that targets the new loader-bridge import.
     /// The bytes are baked into the cli binary alongside
     /// core-dotcmd; both auto-load on first conn.
     const SQLINK_META_CLI_BYTES: &[u8] = include_bytes!(
-        "../../extensions/sqlink-meta-cli/target/wasm32-wasip2/release/sqlink_meta_cli_extension.component.wasm"
+        "../../extensions/sqlink-meta-cli/sqlink-meta-cli-provider.wasm"
     );
     const SHA3SUM_CLI_BYTES: &[u8] = include_bytes!(
-        "../../extensions/sha3sum-cli/target/wasm32-wasip2/release/sha3sum_cli_extension.component.wasm"
+        "../../extensions/sha3sum-cli/sha3sum-cli-provider.wasm"
     );
     const SERIALIZE_CLI_BYTES: &[u8] = include_bytes!(
-        "../../extensions/serialize-cli/target/wasm32-wasip2/release/serialize_cli_extension.component.wasm"
+        "../../extensions/serialize-cli/serialize-cli-provider.wasm"
     );
     const ARCHIVE_CLI_BYTES: &[u8] = include_bytes!(
-        "../../extensions/archive-cli/target/wasm32-wasip2/release/archive_cli_extension.component.wasm"
+        "../../extensions/archive-cli/archive-cli-provider.wasm"
     );
     /// Stage 6: `.session` migrated from `cli/src/dot.rs` to its own
     /// dot-command extension targeting the new
@@ -2847,46 +2849,46 @@ fn embed_core_dotcmd(grant_spawn_build: bool) {
     /// extension keys session handles by user-chosen name; the
     /// `sqlite3_session` state lives host-side in Host::session_handles.
     const SESSION_CLI_BYTES: &[u8] = include_bytes!(
-        "../../extensions/session-cli/target/wasm32-wasip2/release/session_cli_extension.component.wasm"
+        "../../extensions/session-cli/session-cli-provider.wasm"
     );
     /// PLAN-sqlite-utils-port.md Stage 1: schema-shaped sqlite-utils
     /// commands (.views .triggers .create_table .create_index
     /// .create_view .drop_table .drop_view .rename_table .duplicate
     /// .add_column .transform .extract .add_fk .add_fks .index_fks).
     const SQLITE_UTILS_SCHEMA_BYTES: &[u8] = include_bytes!(
-        "../../extensions/sqlite-utils-schema/target/wasm32-wasip2/release/sqlite_utils_schema_extension.component.wasm"
+        "../../extensions/sqlite-utils-schema/sqlite-utils-schema-provider.wasm"
     );
     /// PLAN-sqlite-utils-port.md Stage 2: data-manipulation
     /// sqlite-utils commands (.rows .analyze_tables .insert .upsert
     /// .bulk .insert_files .convert .memory). JSON/JSONL/CSV/TSV
     /// ingest with schema inference + auto-ALTER.
     const SQLITE_UTILS_DATA_BYTES: &[u8] = include_bytes!(
-        "../../extensions/sqlite-utils-data/target/wasm32-wasip2/release/sqlite_utils_data_extension.component.wasm"
+        "../../extensions/sqlite-utils-data/sqlite-utils-data-provider.wasm"
     );
     /// PLAN-sqlite-utils-port.md Stage 3: FTS5 helpers ported from
     /// the sqlite-utils CLI (.enable_fts / .disable_fts / .rebuild_fts
     /// / .populate_fts / .search). Pure SQL on the host's shared spi
     /// connection  no new spi imports required.
     const SQLITE_UTILS_FTS_BYTES: &[u8] = include_bytes!(
-        "../../extensions/sqlite-utils-fts/target/wasm32-wasip2/release/sqlite_utils_fts_extension.component.wasm"
+        "../../extensions/sqlite-utils-fts/sqlite-utils-fts-provider.wasm"
     );
     /// PLAN-sqlite-utils-port.md Stage 4: maintenance commands
     /// (.vacuum / .analyze / .optimize / .enable_wal / .disable_wal
     /// / .enable_counts / .reset_counts / .create_database).
     const SQLITE_UTILS_MAINT_BYTES: &[u8] = include_bytes!(
-        "../../extensions/sqlite-utils-maint/target/wasm32-wasip2/release/sqlite_utils_maint_extension.component.wasm"
+        "../../extensions/sqlite-utils-maint/sqlite-utils-maint-provider.wasm"
     );
     /// PLAN-bundles.md #446: `.bundle` dot-cmd backed by the bundles
     /// SPI. Auto-loaded in every cli session with a Bundles-only
     /// grant (no SpawnBuild  the build path is held back for v1.1).
     const BUNDLE_CLI_BYTES: &[u8] = include_bytes!(
-        "../../extensions/bundle-cli/target/wasm32-wasip2/release/bundle_cli_extension.component.wasm"
+        "../../extensions/bundle-cli/bundle-cli-provider.wasm"
     );
     /// PLAN-prefixes.md: `.prefix` dot-cmd over the __sqlink_prefix*
     /// registry. Auto-loaded with Spi only  reads + writes the
     /// registry tables via spi.execute against the user db.
     const PREFIX_CLI_BYTES: &[u8] = include_bytes!(
-        "../../extensions/prefix-cli/target/wasm32-wasip2/release/prefix_cli_extension.component.wasm"
+        "../../extensions/prefix-cli/prefix-cli-provider.wasm"
     );
     let options = LoadOptions {
         grant: Vec::new(),
