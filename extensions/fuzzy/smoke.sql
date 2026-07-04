@@ -43,14 +43,21 @@ SELECT damerau_levenshtein('abc','abc');
  *   "Robert" → "R163"
  *   "Rupert" → "R163"   (intentional collision; plan acceptance)
  *   "Tymczak" → "T522"
- *   "Honeyman" → "H555" */
-SELECT soundex('Robert');
-SELECT soundex('Rupert');
-SELECT soundex('Tymczak');
-SELECT soundex('Honeyman');
+ *   "Honeyman" → "H555"
+ *
+ * NOTE: bare `soundex` is a SQLite core built-in (SQLITE_SOUNDEX), so the
+ * #216 collision-safe loader registers this extension's rphonetic soundex
+ * under the DuckDB-style prefixed name `fuzzy_soundex` rather than clobbering
+ * the built-in. Call that name here to exercise THIS extension's encoder
+ * (the built-in `soundex('')`/`soundex(NULL)` return `?000`, not the
+ * rphonetic empty/NULL forms this test asserts). */
+SELECT fuzzy_soundex('Robert');
+SELECT fuzzy_soundex('Rupert');
+SELECT fuzzy_soundex('Tymczak');
+SELECT fuzzy_soundex('Honeyman');
 
 /* Same code → SQL-level collision (the whole point of soundex). */
-SELECT soundex('Robert') = soundex('Rupert');
+SELECT fuzzy_soundex('Robert') = fuzzy_soundex('Rupert');
 
 /* ─── Metaphone ───
  * rphonetic (commons-codec port) outputs:
@@ -84,7 +91,7 @@ SELECT caverphone('Pittsburgh');
  * because rphonetic returns an empty string for those, and the
  * smoke harness drops bare blank lines. Caverphone 2.0 always pads
  * to 10 chars, so its empty-input output is visible by itself. */
-SELECT '[' || soundex('') || ']';
+SELECT '[' || fuzzy_soundex('') || ']';
 SELECT '[' || metaphone('') || ']';
 SELECT '[' || double_metaphone_primary('') || ']';
 SELECT '[' || double_metaphone_secondary('') || ']';
@@ -96,7 +103,7 @@ SELECT jaro('x', NULL);
 SELECT jaro_winkler(NULL, 'x');
 SELECT damerau_levenshtein(NULL, 'x');
 SELECT levenshtein('x', NULL);
-SELECT soundex(NULL);
+SELECT fuzzy_soundex(NULL);
 SELECT metaphone(NULL);
 SELECT double_metaphone_primary(NULL);
 SELECT double_metaphone_secondary(NULL);
