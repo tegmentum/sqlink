@@ -72,11 +72,22 @@ fi
 [ -z "$shape" ] && { echo "could not infer shape for $BARE (ifaces: $ifaces)" >&2; exit 1; }
 
 # 3. Build the shape from the woco provider if not already cached.
+#    Force a CORE module (linker=rust-lld + --no-entry bypasses rustc's wasip2
+#    driver that would emit a finished component), wasm-opt it, then wrap it
+#    into a component ourselves — so the SHARED shape (~258K, the bulk of a
+#    provider) ships opted too. Done entirely via cargo --config, so the woco
+#    repo needs no change.
 if [ ! -f "$SHAPES/$shape.wasm" ]; then
   [ -d "$PROVSRC" ] || { echo "woco provider source not found: $PROVSRC (set PROVSRC)" >&2; exit 1; }
-  ( cd "$PROVSRC" && cargo build --release --target wasm32-wasip2 --no-default-features --features "$shape" ) >&2 \
-    && cp "$PROVSRC/target/wasm32-wasip2/release/sqlite_extension_endpoint.wasm" "$SHAPES/$shape.wasm" \
+  ( cd "$PROVSRC" && RUSTFLAGS="-C link-arg=--no-entry" cargo build --release --target wasm32-wasip2 \
+      --no-default-features --features "$shape" \
+      --config 'target.wasm32-wasip2.linker="rust-lld"' ) >&2 \
     || { echo "failed to build shape $shape" >&2; exit 1; }
+  shcore="$PROVSRC/target/wasm32-wasip2/release/sqlite_extension_endpoint.wasm"
+  bash "$R/tooling/wasm-opt-core.sh" "$shcore" >&2
+  wasm-tools component new "$shcore" --adapt "wasi_snapshot_preview1=$ADAPTER" -o "$SHAPES/$shape.wasm" 2>/dev/null \
+    || wasm-tools component new "$shcore" -o "$SHAPES/$shape.wasm" 2>/dev/null \
+    || { echo "shape component new failed for $shape" >&2; exit 1; }
 fi
 
 # 4. Plug -> the root workspace target dir (build_output; engine then copies it

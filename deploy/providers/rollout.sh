@@ -11,10 +11,21 @@ mkdir -p "$ROLLOUT" /tmp/p1-shapes
 LOG="$ROLLOUT/rollout.log"; : > "$LOG"
 
 echo "building 8 provider shapes..." | tee -a "$LOG"
+ADAPTER="${WASI_ADAPTER:-$HOME/.cache/xtran/wasi_snapshot_preview1.reactor.wasm}"
 for s in scalar aggregate collation vtab vtab-mut hooks hooks-noauth dotcmd; do
-  ( cd "$PROVSRC" && cargo build --release --target wasm32-wasip2 --no-default-features --features "$s" >/dev/null 2>&1 \
-    && cp target/wasm32-wasip2/release/sqlite_extension_endpoint.wasm "/tmp/p1-shapes/$s.wasm" ) \
-    && echo "  shape $s ok" >>"$LOG" || echo "  shape $s FAIL" >>"$LOG"
+  # Build the shape as a CORE (linker=rust-lld + --no-entry bypasses rustc's
+  # wasip2 component driver), wasm-opt it, then componentize — so the shared
+  # shape ships opted. Done via cargo --config; woco needs no change.
+  if ( cd "$PROVSRC" && RUSTFLAGS="-C link-arg=--no-entry" cargo build --release --target wasm32-wasip2 \
+         --no-default-features --features "$s" \
+         --config 'target.wasm32-wasip2.linker="rust-lld"' >/dev/null 2>&1 ); then
+    shcore="$PROVSRC/target/wasm32-wasip2/release/sqlite_extension_endpoint.wasm"
+    bash "$R/tooling/wasm-opt-core.sh" "$shcore" >/dev/null 2>&1
+    if wasm-tools component new "$shcore" --adapt "wasi_snapshot_preview1=$ADAPTER" -o "/tmp/p1-shapes/$s.wasm" 2>/dev/null \
+       || wasm-tools component new "$shcore" -o "/tmp/p1-shapes/$s.wasm" 2>/dev/null; then
+      echo "  shape $s ok" >>"$LOG"
+    else echo "  shape $s FAIL (component new)" >>"$LOG"; fi
+  else echo "  shape $s FAIL (build)" >>"$LOG"; fi
 done
 
 iface_to_shape() {

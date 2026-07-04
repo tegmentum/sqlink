@@ -938,11 +938,17 @@ ext-provider:
 	esac; \
 	echo "==> [ext-provider] $(NAME) shape=$$SHAPE"; \
 	PROV_DIR="$(WOCO_ROOT)/sqlite-extension-endpoint"; \
-	PROV_WASM="$$PROV_DIR/provider/target/wasm32-wasip2/release/sqlite_extension_endpoint.wasm"; \
+	PROV_CORE="$$PROV_DIR/provider/target/wasm32-wasip2/release/sqlite_extension_endpoint.wasm"; \
+	PROV_WASM="$$PROV_DIR/provider/target/wasm32-wasip2/release/sqlite_extension_endpoint.component.wasm"; \
 	NAME_UNDERSCORE=$$(echo "$(NAME)" | tr - _); \
-	echo "==> building provider shape '$$SHAPE'"; \
-	( cd "$$PROV_DIR/provider" && cargo build --release --target wasm32-wasip2 \
-		--no-default-features --features "$$SHAPE" >/dev/null ); \
+	echo "==> building provider shape '$$SHAPE' (core -> wasm-opt -> component)"; \
+	( cd "$$PROV_DIR/provider" && RUSTFLAGS="-C link-arg=--no-entry" cargo build --release \
+		--target wasm32-wasip2 --no-default-features --features "$$SHAPE" \
+		--config 'target.wasm32-wasip2.linker="rust-lld"' >/dev/null ); \
+	bash tooling/wasm-opt-core.sh "$$PROV_CORE"; \
+	wasm-tools component new "$$PROV_CORE" \
+		--adapt wasi_snapshot_preview1=$(WASI_ADAPTER) -o "$$PROV_WASM" 2>/dev/null \
+		|| wasm-tools component new "$$PROV_CORE" -o "$$PROV_WASM"; \
 	echo "==> building + componentizing extension $(NAME)"; \
 	$(MAKE) ext NAME=$(NAME) >/dev/null 2>&1 || true; \
 	EXT_COMP=""; \
