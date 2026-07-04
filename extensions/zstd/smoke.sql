@@ -56,8 +56,8 @@ SELECT length(zstd_decompress_dict(
 SELECT length(zstd_compress(replace(hex(zeroblob(100)), '00', 'abcdef'), 3)) < 200;
 
 /* NULL propagates rather than erroring  matches the `compress`
- * extension convention and SQL semantics for unary scalars. Rendered via
- * typeof() so the NULL result is a visible "null" row (the cli has no working
- * .nullvalue — see tooling/datalink.config.json). */
-SELECT typeof(zstd_compress(NULL));
-SELECT typeof(zstd_decompress(NULL));
+ * extension convention and SQL semantics for unary scalars. Rendered as the
+ * null_token via the `.nullvalue` preamble (now working — core-dotcmd is
+ * provider-backed and its state-deltas propagate). */
+SELECT zstd_compress(NULL);
+SELECT zstd_decompress(NULL);

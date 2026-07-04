@@ -37,8 +37,8 @@
     "package_suffix": "",
     "db": ":memory:",
     "prompt_pattern": "^(sqlite>\\s*|\\s*\\.\\.\\.>\\s*)+",
-    "$comment_preamble": "No .nullvalue preamble: the cli component embeds a stale pre-#220 core-dotcmd (auto-load fails), so .nullvalue reads 'Unknown command' and would shift every result by one line. Until the cli ships a provider-backed core-dotcmd, smoke.sql should render NULLs explicitly (e.g. typeof(...)/quote(...)) rather than relying on a null display token.",
-    "sql_preamble": "",
+    "$comment_preamble": "core-dotcmd is provider-backed and its state-deltas now propagate, so .nullvalue works end-to-end; NULLs render as null_token.",
+    "sql_preamble": ".nullvalue <NULL>\n",
     "null_token": "<NULL>",
     "banner_prefixes": ["Loaded extension:"],
     "panic_markers": [

@@ -1101,15 +1101,70 @@ pub mod provider_envelope {
         ]))
     }
 
-    /// Decode a `DotInvokeResp` into (text, ok, exit_code, stdout, stderr).
-    pub fn decode_dot_invoke(bytes: &[u8]) -> Result<(String, bool, i32, String, String), String> {
+    /// Encode a `SqlValue` into the cli's value-json wire (Integer/Real bare,
+    /// Text `"..."`, Blob `X'..'` as a json string, Null `null`) — the format
+    /// `settings::apply_dotcmd_delta` decodes.
+    fn sqlval_to_value_json(v: &SqlValue) -> String {
+        fn json_str(s: &str) -> String {
+            let mut out = String::with_capacity(s.len() + 2);
+            out.push('"');
+            for c in s.chars() {
+                match c {
+                    '"' => out.push_str("\\\""),
+                    '\\' => out.push_str("\\\\"),
+                    '\n' => out.push_str("\\n"),
+                    '\r' => out.push_str("\\r"),
+                    '\t' => out.push_str("\\t"),
+                    c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+                    c => out.push(c),
+                }
+            }
+            out.push('"');
+            out
+        }
+        match v {
+            SqlValue::Null => "null".to_string(),
+            SqlValue::Integer(i) => i.to_string(),
+            SqlValue::Real(f) => f.to_string(),
+            SqlValue::Text(s) => json_str(s),
+            SqlValue::Blob(b) => {
+                use std::fmt::Write;
+                let mut h = String::with_capacity(b.len() * 2 + 3);
+                h.push_str("X'");
+                for byte in b {
+                    let _ = write!(h, "{byte:02x}");
+                }
+                h.push('\'');
+                json_str(&h)
+            }
+            SqlValue::WitValue(_) => "null".to_string(),
+        }
+    }
+
+    /// Decode a `DotInvokeResp` into (text, ok, exit_code, stdout, stderr,
+    /// state_deltas) — the deltas are (key, value-json) pairs the cli applies.
+    #[allow(clippy::type_complexity)]
+    pub fn decode_dot_invoke(
+        bytes: &[u8],
+    ) -> Result<(String, bool, i32, String, String, Vec<(String, String)>), String> {
         let v = de(bytes)?;
+        let deltas: Vec<(String, String)> = field(&v, "state_deltas")
+            .map(arr)
+            .unwrap_or(&[])
+            .iter()
+            .filter_map(|d| {
+                let key = field(d, "key").map(text)?;
+                let val = field(d, "value").and_then(|x| cbor_to_sqlval(x).ok())?;
+                Some((key, sqlval_to_value_json(&val)))
+            })
+            .collect();
         Ok((
             field(&v, "text").map(text).unwrap_or_default(),
             field(&v, "ok").map(is_true).unwrap_or(false),
             field(&v, "exit_code").map(|x| int(x) as i32).unwrap_or(0),
             field(&v, "stdout").map(text).unwrap_or_default(),
             field(&v, "stderr").map(text).unwrap_or_default(),
+            deltas,
         ))
     }
 
@@ -6304,7 +6359,7 @@ impl Host {
                 .invoke_cli("dotcmd.invoke", &payload, snapshot)
                 .await
                 .map_err(|e| anyhow!("provider dotcmd.invoke: {e}"))?;
-            let (text, ok, exit_code, stdout, _stderr) =
+            let (text, ok, exit_code, stdout, _stderr, deltas) =
                 provider_envelope::decode_dot_invoke(&resp)
                     .map_err(|e| anyhow!("decode dotcmd resp: {e}"))?;
             // Fold the streamed stdout into the outcome text (the cli
@@ -6320,7 +6375,10 @@ impl Host {
             };
             return Ok(DotCommandOutcome {
                 text: combined,
-                state_deltas: vec![],
+                state_deltas: deltas
+                    .into_iter()
+                    .map(|(key, value_json)| StateDeltaOut { key, value_json })
+                    .collect(),
                 exit_code: if ok { exit_code } else { exit_code.max(1) },
             });
         }
