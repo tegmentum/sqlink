@@ -1827,25 +1827,35 @@ impl crate::loaded::sqlite::extension::build::Host for ProviderCliState {
                 format!("build.spawn-build: cargo {}: {tail}", output.status),
             ));
         }
-        // The produced binary: the LAST `compiler-artifact` record carrying an
-        // `executable` path (cargo emits one per built bin; the final is the
-        // top-level target we asked for).
+        // The produced artifact: the LAST `compiler-artifact` record. Prefer an
+        // `executable` (bin crates) but fall back to `filenames[0]` (cdylib /
+        // staticlib crates like sqlite-cli, which cargo reports with no
+        // `executable`). Cargo emits one artifact per built target; the final
+        // is the top-level `-p` package we asked for.
         let mut binary_path = String::new();
         for line in stdout.lines() {
             let Ok(v) = serde_json::from_slice::<serde_json::Value>(line.as_bytes()) else {
                 continue;
             };
-            if v.get("reason").and_then(|r| r.as_str()) == Some("compiler-artifact") {
-                if let Some(exe) = v.get("executable").and_then(|e| e.as_str()) {
-                    binary_path = exe.to_string();
-                }
+            if v.get("reason").and_then(|r| r.as_str()) != Some("compiler-artifact") {
+                continue;
+            }
+            if let Some(exe) = v.get("executable").and_then(|e| e.as_str()) {
+                binary_path = exe.to_string();
+            } else if let Some(f) = v
+                .get("filenames")
+                .and_then(|f| f.as_array())
+                .and_then(|a| a.first())
+                .and_then(|f| f.as_str())
+            {
+                binary_path = f.to_string();
             }
         }
         if binary_path.is_empty() {
             return Err(err(
                 1,
-                "build.spawn-build: cargo succeeded but produced no executable \
-                 artifact (is the target a bin/cdylib the -p package builds?)"
+                "build.spawn-build: cargo succeeded but reported no artifact path \
+                 (no executable/filenames in the compiler-artifact records)"
                     .into(),
             ));
         }
