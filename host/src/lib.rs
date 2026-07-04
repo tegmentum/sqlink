@@ -2562,6 +2562,59 @@ fn db_err_to_bindings(
     }
 }
 
+// bundle-cli: `loaded`-world marshalling for the `dispatch-bridge-cas`
+// surface. The bundle-cli bindgen (`loaded_bundle_cli`) shares its `types`
+// module with `loaded`, so the CAS bridge's query-result flows through
+// `loaded::sqlite::extension::types` — a DISTINCT set of Rust types from the
+// `bindings` copies above. Mirror the three converters against them.
+pub(crate) fn loaded_value_to_db(
+    v: loaded::sqlite::extension::types::SqlValue,
+) -> sqlite_component_core::db::Value {
+    use loaded::sqlite::extension::types::SqlValue as V;
+    use sqlite_component_core::db;
+    match v {
+        V::Null => db::Value::Null,
+        V::Integer(i) => db::Value::Integer(i),
+        V::Real(r) => db::Value::Real(r),
+        V::Text(s) => db::Value::Text(s),
+        V::Blob(b) => db::Value::Blob(b),
+        V::WitValue(p) => db::Value::WitValue(db::WitValuePayload {
+            type_id: type_id_from_wit(&p.type_id),
+            bytes: p.bytes,
+            symbolic_name: p.symbolic_name,
+        }),
+    }
+}
+
+pub(crate) fn db_value_to_loaded(
+    v: sqlite_component_core::db::Value,
+) -> loaded::sqlite::extension::types::SqlValue {
+    use loaded::sqlite::extension::types::SqlValue as V;
+    use sqlite_component_core::db;
+    match v {
+        db::Value::Null => V::Null,
+        db::Value::Integer(i) => V::Integer(i),
+        db::Value::Real(r) => V::Real(r),
+        db::Value::Text(s) => V::Text(s),
+        db::Value::Blob(b) => V::Blob(b),
+        db::Value::WitValue(p) => V::WitValue(loaded::sqlite::extension::types::WitValuePayload {
+            type_id: p.type_id.to_vec(),
+            bytes: p.bytes,
+            symbolic_name: p.symbolic_name,
+        }),
+    }
+}
+
+pub(crate) fn db_err_to_loaded(
+    e: sqlite_component_core::db::Error,
+) -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: e.code,
+        extended_code: e.extended_code,
+        message: e.message,
+    }
+}
+
 /// Ensure the shared spi connection is open; same lazy-open
 /// semantics as `spi_ensure_open` on the bespoke loader but the
 /// connection lives on Host (one per cli session).
@@ -4272,7 +4325,7 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host
 /// Allowlist of host env vars an Spi-granted extension may read via
 /// `loader-bridge.env-var`. Adding here is a policy change  any new
 /// entry is readable by every extension with Spi.
-const ENV_VAR_ALLOWLIST: &[&str] = &["SQLINK_DEV_ROOT"];
+pub(crate) const ENV_VAR_ALLOWLIST: &[&str] = &["SQLINK_DEV_ROOT"];
 
 
 /// State carried by a runnable component's per-run Store. Holds WASI

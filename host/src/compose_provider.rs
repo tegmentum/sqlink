@@ -695,6 +695,27 @@ pub fn imports_sqlite_compression(component: &Component, engine: &Engine) -> boo
         .any(|(name, _)| name.starts_with("sqlite:extension/compression"))
 }
 
+/// bundle-cli: true if `component` imports `sqlite:extension/build` — the
+/// `.bundle build` surface. Host-satisfied with a v1.1 stub (returns a
+/// SQLITE_PERM error) on the CLI-provider linker; a real cargo spawn lands later.
+pub fn imports_sqlite_build(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/build"))
+}
+
+/// bundle-cli: true if `component` imports `sqlite:extension/dispatch-bridge-cas`
+/// — the CAS-backed SQL bridge that `.bundle list`/`.bundle show` run their
+/// queries through. Host-satisfied on the CLI-provider linker by opening the
+/// shared CAS db (`~/.cache/sqlink/cas.sqlite`) and marshalling a query-result.
+pub fn imports_sqlite_dispatch_bridge_cas(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/dispatch-bridge-cas"))
+}
+
 /// #220 full-port: true if `component` imports `sqlite:extension/session` —
 /// the changeset/session extension (`session-cli`). Host-satisfied on the
 /// resident linker against this provider's own `spi_conn` + `session_handles`
@@ -1635,6 +1656,159 @@ impl cli_ext::cli_state::Host for ProviderCliState {
     }
 }
 
+// bundle-cli CLI-provider path: the `bundle-cli` ext imports `cli-stdout`
+// (it streams `.bundle` output) so it instantiates through
+// `wasm_component_invoke_cli` (state = `ProviderCliState`), NOT the resident
+// path. That means its `build` + `dispatch-bridge-cas` + `loader-bridge`
+// imports must be satisfied ON THIS store type. `dispatch-bridge-cas` is the
+// real surface `.bundle list`/`.bundle show` run through; `build` +
+// `loader-bridge` are stubbed here (`.bundle install`/`build` are deferred),
+// which still leaves the read-only `.bundle` commands fully working.
+
+/// bundle-cli: the CAS-cache SQL bridge. Opens the shared cas db
+/// (`~/.cache/sqlink/cas.sqlite`) via `Cache::open` — idempotently installing
+/// the `__cas_*` schema (including the `__cas_bundle*` tables `.bundle list`
+/// queries) — and runs the caller's `(sql, params)` against it, marshalling a
+/// `loaded`-typed query-result. Bodies are sync across the cache lock (no
+/// await), so the `parking_lot` guard never crosses a suspend point.
+impl crate::loaded_bundle_cli::sqlite::extension::dispatch_bridge_cas::Host for ProviderCliState {
+    async fn bridged_execute_cas(
+        &mut self,
+        sql: String,
+        params: Vec<crate::loaded::sqlite::extension::types::SqlValue>,
+    ) -> std::result::Result<
+        crate::loaded::sqlite::extension::types::QueryResult,
+        crate::loaded::sqlite::extension::types::SqliteError,
+    > {
+        let cas_err = |msg: String| crate::loaded::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: msg,
+        };
+        let root = crate::cache::Cache::default_root(None)
+            .map_err(|e| cas_err(format!("cas root: {e}")))?;
+        let cache = crate::cache::Cache::open(root)
+            .map_err(|e| cas_err(format!("open cas: {e}")))?;
+        cache.with_bundles_conn(|conn| {
+            let mut stmt = conn.prepare(&sql).map_err(crate::db_err_to_loaded)?;
+            let columns: Vec<String> = stmt.column_names();
+            let bound: Vec<_> = params.into_iter().map(crate::loaded_value_to_db).collect();
+            stmt.bind_all(&bound).map_err(crate::db_err_to_loaded)?;
+            let rows = stmt.collect_rows().map_err(crate::db_err_to_loaded)?;
+            drop(stmt);
+            let out_rows: Vec<Vec<crate::loaded::sqlite::extension::types::SqlValue>> = rows
+                .into_iter()
+                .map(|r| r.into_iter().map(crate::db_value_to_loaded).collect())
+                .collect();
+            Ok(crate::loaded::sqlite::extension::types::QueryResult {
+                columns,
+                rows: out_rows,
+                changes: conn.changes(),
+                last_insert_rowid: conn.last_insert_rowid(),
+            })
+        })
+    }
+}
+
+/// bundle-cli: the host build SPI. `.bundle build` (materializing a baked
+/// sqlink binary) is deferred on the CLI-provider path, so this is a v1.1
+/// stub reporting SQLITE_PERM — the ext instantiates and `.bundle list`/`show`
+/// work; only `.bundle build` surfaces the clear "not available" error.
+impl crate::loaded::sqlite::extension::build::Host for ProviderCliState {
+    async fn spawn_build(
+        &mut self,
+        _crate_root: String,
+        _target_triple: Option<String>,
+        _env: Vec<(String, String)>,
+        _cargo_package: Option<String>,
+        _features: Vec<String>,
+    ) -> std::result::Result<
+        crate::loaded::sqlite::extension::build::BuildOut,
+        crate::loaded::sqlite::extension::types::SqliteError,
+    > {
+        Err(crate::loaded::sqlite::extension::types::SqliteError {
+            code: 3, // SQLITE_PERM
+            extended_code: 3,
+            message: "build.spawn-build is not available on the CLI-provider \
+                      path (.bundle build/install deferred)"
+                .into(),
+        })
+    }
+}
+
+/// bundle-cli: the loader-bridge surface. `.bundle install` (loading peer
+/// extensions from the bridge) is deferred here — this store type carries no
+/// loader `Host` handle — so the load/registry/pin methods are stubbed. The
+/// two host-introspection methods (`host-target-triple`, `env-var`) need no
+/// loader handle and are answered for real, matching the resident impl.
+impl crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for ProviderCliState {
+    async fn load_extension_from_bytes(
+        &mut self,
+        _name_hint: String,
+        _bytes: Vec<u8>,
+        _extra_grants: Vec<String>,
+    ) -> std::result::Result<
+        crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest,
+        crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
+    > {
+        Err(
+            crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                code: 1,
+                message: "loader-bridge.load-extension-from-bytes is not available on \
+                          the CLI-provider path (.bundle install deferred)"
+                    .into(),
+            },
+        )
+    }
+
+    async fn extension_digest(&mut self, _name: String) -> String {
+        String::new()
+    }
+
+    async fn list_loaded_extensions(
+        &mut self,
+    ) -> Vec<crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension> {
+        Vec::new()
+    }
+
+    async fn host_target_triple(&mut self) -> String {
+        let arch = std::env::consts::ARCH;
+        let os = std::env::consts::OS;
+        let family = std::env::consts::FAMILY;
+        match os {
+            "macos" => format!("{arch}-apple-darwin"),
+            "linux" => format!("{arch}-unknown-linux-gnu"),
+            "windows" => format!("{arch}-pc-windows-msvc"),
+            other => format!("{arch}-unknown-{other}-{family}"),
+        }
+    }
+
+    async fn env_var(&mut self, name: String) -> Option<String> {
+        if !crate::ENV_VAR_ALLOWLIST.contains(&name.as_str()) {
+            return None;
+        }
+        std::env::var(&name).ok().filter(|v| !v.is_empty())
+    }
+
+    async fn apply_prefix_pin(
+        &mut self,
+        _function_name: String,
+        _n_args: i32,
+    ) -> std::result::Result<
+        (),
+        crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
+    > {
+        Err(
+            crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                code: 1,
+                message: "loader-bridge.apply-prefix-pin is not applicable on the \
+                          CLI-provider path"
+                    .into(),
+            },
+        )
+    }
+}
+
 // Task #220: the SAME cli surface on the RESIDENT store type
 // (`ProviderState`), so a streaming-dotcmd ext loaded as a warm-once
 // resident provider (`archive-cli`/`core-dotcmd`/`serialize-cli`/
@@ -1735,6 +1909,31 @@ async fn wasm_component_invoke_cli(
             },
         )
         .map_err(|e| format!("cli sqlite:extension/spi linker: {e}"))?;
+    }
+    // bundle-cli: its `dispatch-bridge-cas` (real CAS SQL), `build` (stub), and
+    // `loader-bridge` (stub) imports are satisfied on this same store type. All
+    // are `impl ... for ProviderCliState`, so the generated `add_to_linker`
+    // threads `&mut ProviderCliState` via `ProviderCliHostData` + `|s| s`.
+    if imports_sqlite_dispatch_bridge_cas(component, engine) {
+        crate::loaded_bundle_cli::sqlite::extension::dispatch_bridge_cas::add_to_linker::<
+            _,
+            ProviderCliHostData,
+        >(&mut linker, |s| s)
+        .map_err(|e| format!("cli sqlite:extension/dispatch-bridge-cas linker: {e}"))?;
+    }
+    if imports_sqlite_build(component, engine) {
+        crate::loaded::sqlite::extension::build::add_to_linker::<_, ProviderCliHostData>(
+            &mut linker,
+            |s| s,
+        )
+        .map_err(|e| format!("cli sqlite:extension/build linker: {e}"))?;
+    }
+    if imports_sqlite_loader_bridge(component, engine) {
+        crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::add_to_linker::<
+            _,
+            ProviderCliHostData,
+        >(&mut linker, |s| s)
+        .map_err(|e| format!("cli sqlite:extension/loader-bridge linker: {e}"))?;
     }
     let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
     wasi.inherit_stdio();
