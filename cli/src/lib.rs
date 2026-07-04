@@ -164,7 +164,20 @@ impl RunGuest for CliCommand {
 
             line.clear();
             match stdin.lock().read_line(&mut line) {
-                Ok(0) => break,
+                Ok(0) => {
+                    // EOF: flush any pending statement. `is_statement_complete`
+                    // treats a trailing `-- comment` after the final `;` as
+                    // incomplete (trailing_trivial_start skips whitespace, not
+                    // comments), so a last `SELECT ...;  -- note` would otherwise
+                    // never execute. eval_input no-ops on comment-only input.
+                    if !buffered.trim().is_empty() {
+                        let out = eval_input(&buffered);
+                        if !out.is_empty() {
+                            write_output(&out, &mut stdout);
+                        }
+                    }
+                    break;
+                }
                 Ok(_) => {}
                 Err(_) => break,
             }
