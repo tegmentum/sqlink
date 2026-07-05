@@ -216,6 +216,10 @@ for e in d["extensions"]:
     e["checksum"]="sha256:"+art[n]["digest"]
     e["content_digest"]=art[n]["digest"]
     e["size_bytes"]=art[n]["size"]
+    # Direct content-addressed URL served straight from R2 (get.sqlink.dev /
+    # sqlink.dev are R2 custom-domain-bound to this bucket — no Worker, no
+    # /asset/ resolver). The client (sqlink-js) reads artifact_url verbatim.
+    e["artifact_url"]=f"/wasm/sha256/{art[n]['digest']}/{n}.wasm"
     keep.append(e)
 cat["extensions"]=keep
 json.dump(cat,open(out,"w"),indent=1)
@@ -224,9 +228,12 @@ PY
 
 if [ "$DRY_RUN" = 1 ]; then echo "dry-run: catalog written to $CATALOG, not uploaded"; rm -f "$MANIFEST" "$VALID"; exit 0; fi
 
-"$AWS" s3api put-object --bucket "$BUCKET" --endpoint-url "$EP" --key "sqlink/catalog.json" \
+# Root key: get.sqlink.dev / sqlink.dev are R2-bound to this bucket at root, so
+# the catalog lives at get.sqlink.dev/catalog.json (was sqlink/catalog.json,
+# which the direct binding doesn't serve).
+"$AWS" s3api put-object --bucket "$BUCKET" --endpoint-url "$EP" --key "catalog.json" \
   --body "$CATALOG" --content-type application/json --cache-control "public, max-age=300" >/dev/null \
-  && echo "catalog uploaded: sqlink/catalog.json" || { echo "catalog upload FAIL" >&2; exit 1; }
+  && echo "catalog uploaded: catalog.json" || { echo "catalog upload FAIL" >&2; exit 1; }
 
 rm -f "$MANIFEST" "$VALID"
 echo "done"
