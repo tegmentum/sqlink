@@ -29,7 +29,7 @@ static PROVIDER: OnceCell<CompressionResidentProvider> = OnceCell::const_new();
 /// The default catalog manifest URL (override via `SQLINK_PROVIDERS_MANIFEST_URL`).
 /// Its `residents.compression-endpoint` entry carries the content-addressed
 /// artifact url + sha256.
-const DEFAULT_MANIFEST_URL: &str = "https://ext.sqlink.dev/providers/manifest.json";
+const DEFAULT_MANIFEST_URL: &str = "https://get.sqlink.dev/providers/manifest.json";
 
 /// The in-tree datalink build output, tried before fetching (developer machines).
 fn dev_wasm_path() -> PathBuf {
@@ -75,6 +75,54 @@ fn sha256_hex(bytes: &[u8]) -> String {
     s
 }
 
+/// Rebase `artifact` onto the scheme+host of `base` (the manifest URL). An
+/// absolute `artifact` keeps only its path/query; a relative one is used as-is
+/// under the base origin. Falls back to `artifact` verbatim if either can't be
+/// parsed. Kept dependency-free (simple `://` + first-`/` split) — these are
+/// always plain `https://host/path` URLs.
+fn rebase_to_origin(base: &str, artifact: &str) -> String {
+    let origin = base
+        .split_once("://")
+        .and_then(|(scheme, rest)| rest.split('/').next().map(|host| format!("{scheme}://{host}")));
+    let Some(origin) = origin else {
+        return artifact.to_string();
+    };
+    let path = match artifact.split_once("://") {
+        Some((_scheme, rest)) => match rest.split_once('/') {
+            Some((_host, p)) => format!("/{p}"),
+            None => "/".to_string(),
+        },
+        None if artifact.starts_with('/') => artifact.to_string(),
+        None => format!("/{artifact}"),
+    };
+    format!("{origin}{path}")
+}
+
+#[cfg(test)]
+mod rebase_tests {
+    use super::rebase_to_origin;
+    #[test]
+    fn absolute_artifact_follows_manifest_origin() {
+        assert_eq!(
+            rebase_to_origin(
+                "https://get.sqlink.dev/providers/manifest.json",
+                "https://ext.sqlink.dev/providers/compression-endpoint-abc.wasm",
+            ),
+            "https://get.sqlink.dev/providers/compression-endpoint-abc.wasm"
+        );
+    }
+    #[test]
+    fn relative_artifact_gets_base_origin() {
+        assert_eq!(
+            rebase_to_origin(
+                "https://get.sqlink.dev/providers/manifest.json",
+                "/providers/x.wasm",
+            ),
+            "https://get.sqlink.dev/providers/x.wasm"
+        );
+    }
+}
+
 /// Fetch the compression-endpoint from the catalog `residents` entry and cache
 /// it under `~/.cache/sqlink/residents`, verified against the manifest sha256.
 fn fetch_from_catalog() -> Result<PathBuf, String> {
@@ -113,6 +161,15 @@ fn fetch_from_catalog() -> Result<PathBuf, String> {
         .and_then(|s| s.as_str())
         .ok_or("residents.compression-endpoint missing sha256")?;
 
+    // Resolve the artifact against the MANIFEST's origin, not the host baked
+    // into the manifest. The published manifest may carry an absolute URL to a
+    // legacy host (e.g. ext.sqlink.dev); the artifact is content-addressed +
+    // sha-verified and served identically at whichever host serves the
+    // manifest (get.sqlink.dev), so we follow the manifest's origin. This lets
+    // repointing SQLINK_PROVIDERS_MANIFEST_URL / DEFAULT_MANIFEST_URL fully move
+    // off a retired host without waiting on a manifest re-publish.
+    let fetch_url = rebase_to_origin(&manifest_url, url);
+
     let home = std::env::var("HOME").unwrap_or_default();
     let cache_dir = PathBuf::from(&home).join(".cache/sqlink/residents");
     let sha12 = want_sha.get(..12).unwrap_or(want_sha);
@@ -127,10 +184,10 @@ fn fetch_from_catalog() -> Result<PathBuf, String> {
 
     // Download + verify.
     let bytes = client
-        .get(url)
+        .get(&fetch_url)
         .send()
         .and_then(|r| r.error_for_status())
-        .map_err(|e| format!("compression fetch: GET {url}: {e}"))?
+        .map_err(|e| format!("compression fetch: GET {fetch_url}: {e}"))?
         .bytes()
         .map_err(|e| format!("compression fetch: read body: {e}"))?;
     let got = sha256_hex(&bytes);
