@@ -1634,7 +1634,7 @@ dependencies = [
 [[package]]
 name = "datalink-dynlink"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git?rev=80010adf7c9ec3d07674bba12585c787328217f5#80010adf7c9ec3d07674bba12585c787328217f5"
+source = "git+https://github.com/tegmentum/datalink.git?rev=9a150a4b467474b0fc965786c5fe92361c413d58#9a150a4b467474b0fc965786c5fe92361c413d58"
 dependencies = [
  "async-trait",
  "tokio",
