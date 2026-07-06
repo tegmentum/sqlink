@@ -135,6 +135,35 @@ jobs:
         working-directory: host
         run: cargo test --lib compose_provider --all-features -- --test-threads=1
 
+  native-checks:
+    name: sqlink-native crate — build + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install pinned Rust toolchain
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --default-toolchain none --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup show
+      - name: cargo test (sqlink-native crate)
+        # 14 argv-parser unit tests plus a full compile of the
+        # sqlink-native binary. This job exists because sqlink-native
+        # depends on sqlink-host's public API surface
+        # (ProviderHandle::new_resident_wasm_component, the post-#220
+        # install loop, etc.) and drift there surfaced three times in
+        # one session before this job existed. Segregated from
+        # host-checks so a native-only break has its own red job in
+        # the CI log for fast triage. --test-threads=1 mirrors
+        # host-checks (belt-and-braces for any global-state paths
+        # reachable via libsqlite3-sys; #823).
+        run: cargo test -p sqlink-native --all-features -- --test-threads=1
+
 # Wasm-side build + extension-smoke live in a separate workflow:
 # .github/workflows/wasm-smoke.yml. It downloads wasi-sdk, installs
 # wasm-tools, builds every extension component, and runs the smoke
