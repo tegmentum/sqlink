@@ -427,27 +427,44 @@ mod tests {
     //! smoke tests (it requires a live wasmtime engine + a real
     //! `.component.wasm`); we cover the pure-logic surface here.
     //!
-    //! Env-var tests use `--test-threads=1` (process-global env)
-    //! and clean up via a small RAII guard so test order doesn't
-    //! matter.
+    //! Env-var tests mutate the process-global env; the guard both
+    //! captures/restores state AND holds a module-wide mutex so
+    //! sibling tests observe a stable window (the suite is otherwise
+    //! multi-threaded, so `--test-threads=1` is not enforced).
     use super::*;
     use sqlink_host::Capability;
     use std::fs;
+    use std::sync::{Mutex, MutexGuard};
+
+    /// Serializes env-var manipulation across every test in this module.
+    /// Ordering doesn't matter; mutual exclusion during each test's
+    /// captured window does.
+    static ENV_SERIAL: Mutex<()> = Mutex::new(());
 
     /// Save env-var state at construction; restore on drop. Cargo
     /// tests share one process; without restore, leaked env-var
-    /// state contaminates sibling tests.
+    /// state contaminates sibling tests. The guard also holds
+    /// `ENV_SERIAL` for its lifetime so parallel tests don't observe
+    /// each other's mid-test writes.
     struct EnvGuard {
         keys: Vec<(&'static str, Option<std::ffi::OsString>)>,
+        // Held across the captured window. Dropped AFTER `keys` restore
+        // via the impl Drop order (fields dropped top-to-bottom).
+        _serial: MutexGuard<'static, ()>,
     }
     impl EnvGuard {
         fn capture(keys: &[&'static str]) -> Self {
+            // Take the mutex FIRST so another test's set_var can't race the
+            // capture. A poisoned mutex still yields a usable guard (the
+            // prior test's panic left env in whatever state it left it in;
+            // we still capture + restore around this test).
+            let serial = ENV_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
             let mut saved = Vec::with_capacity(keys.len());
             for k in keys {
                 saved.push((*k, std::env::var_os(k)));
                 std::env::remove_var(k);
             }
-            Self { keys: saved }
+            Self { keys: saved, _serial: serial }
         }
     }
     impl Drop for EnvGuard {
@@ -762,7 +779,7 @@ mod tests {
         // message (not a cryptic wasmtime trap, not a silent succeed).
         let bytes = synth_component_targeting("0.1.0");
         let host = sqlink_host::Host::new().expect("host new");
-        let err = block_on(host.instantiate_provider_from_bytes("synth_legacy", &bytes))
+        let err = block_on(host.instantiate_provider_from_bytes("synth_legacy", &bytes, false))
             .expect_err("legacy @0.1 must be rejected by @1.x host via the provider path");
         let msg = err.to_string();
         assert!(msg.contains("synth_legacy"), "names the extension: {msg}");
@@ -783,7 +800,7 @@ mod tests {
         // into a @1.x host. Same path, same message shape.
         let bytes = synth_component_targeting("2.0.0");
         let host = sqlink_host::Host::new().expect("host new");
-        let err = block_on(host.instantiate_provider_from_bytes("synth_future", &bytes))
+        let err = block_on(host.instantiate_provider_from_bytes("synth_future", &bytes, false))
             .expect_err("future @2.x must be rejected by @1.x host via the provider path");
         let msg = err.to_string();
         assert!(msg.contains("synth_future"), "names the extension: {msg}");

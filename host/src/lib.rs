@@ -1638,9 +1638,16 @@ pub fn default_operator_policy() -> Policy {
 #[cfg(test)]
 mod default_operator_policy_tests {
     use super::{default_operator_policy, Capability};
+    use std::sync::Mutex;
 
-    /// Restores an env var to its pre-test value on drop (suite runs
-    /// `--test-threads=1`, so env manipulation is isolated per test).
+    /// The suite is otherwise multi-threaded, so both tests in this module
+    /// take this mutex to serialize their process-env manipulation — one
+    /// test setting `SQLINK_ALLOW_HTTP` used to race with the other's
+    /// "cleared" observation and flip the assertion. Ordering doesn't
+    /// matter; mutual exclusion does.
+    static ENV_SERIAL: Mutex<()> = Mutex::new(());
+
+    /// Restores an env var to its pre-test value on drop.
     struct EnvGuard(&'static str, Option<String>);
     impl EnvGuard {
         fn set(k: &'static str, v: &str) -> Self {
@@ -1667,6 +1674,7 @@ mod default_operator_policy_tests {
     fn grants_full_surface_by_default() {
         // "If you loaded it, you consent to use it": all caps granted,
         // network allow-all when no restriction env is set.
+        let _serial = ENV_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let _h = EnvGuard::clear("SQLINK_ALLOW_HTTP");
         let _d = EnvGuard::clear("SQLINK_ALLOW_DNS");
         let p = default_operator_policy();
@@ -1688,6 +1696,7 @@ mod default_operator_policy_tests {
     #[test]
     fn operator_env_restricts_network() {
         // The operator can still tighten the allowlist despite grant-by-consent.
+        let _serial = ENV_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let _h = EnvGuard::set("SQLINK_ALLOW_HTTP", "api.example.com,foo.com");
         let _d = EnvGuard::clear("SQLINK_ALLOW_DNS");
         let p = default_operator_policy();
