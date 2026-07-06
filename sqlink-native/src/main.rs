@@ -177,25 +177,17 @@ async fn do_load(host: &Host, input: &str) -> String {
         Ok(n) => n,
         Err(e) => return format!("Error loading {path}: {e}\n"),
     };
-    // #220: `install_loaded_extension` retired; the provider path installs
-    // the tiers as part of `load_extension`. Derive the per-tier counts
-    // from the provider manifest for the same operator-facing summary.
-    let (s, a, c, h, v) = match host.provider_backed_bindings_manifest(&name) {
-        Some(m) => {
-            let hooks = (m.has_authorizer as u32)
-                + (m.has_update_hook as u32)
-                + (m.has_commit_hook as u32)
-                + (m.has_wal_hook as u32);
-            (
-                m.scalar_functions.len() as u32,
-                m.aggregate_functions.len() as u32,
-                m.collations.len() as u32,
-                hooks,
-                m.vtabs.len() as u32,
-            )
-        }
-        None => (0, 0, 0, 0, 0),
-    };
+    // #220: `install_loaded_extension` retired; the provider path stores
+    // the extension in the compose_providers registry as part of
+    // `load_extension`, but doesn't install sqlite trampolines on the
+    // shared SPI connection — that's a separate step. The wasm CLI does
+    // it by walking the WIT manifest and calling `spi_loader::register_*`
+    // for each tier; Scenario 1 (`sqlink-native`) has no cli component,
+    // so we route through `Host::install_provider_backed_on_shared_conn`
+    // (which does the equivalent registrations directly). Without this,
+    // `.load` succeeds but every `SELECT ext_fn(...)` returns "no such
+    // function".
+    let (s, a, c, h, v) = host.install_provider_backed_on_shared_conn(&name).await;
     let total = s + a + c + h + v;
     let mut bits = Vec::new();
     if s > 0 {

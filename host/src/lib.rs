@@ -6722,6 +6722,175 @@ impl Host {
         Some(manifest_for_provider(&m, r.as_ref()))
     }
 
+    /// Install a provider-backed extension's tiers as sqlite trampolines
+    /// on the shared SPI connection.
+    ///
+    /// The wasm CLI (Scenario 2) walks the manifest returned by the WIT
+    /// `extension_loader::load_extension_as_provider` and calls
+    /// `spi_loader::register_scalar/collation/aggregate/vtab/authorizer/
+    /// update_hook/commit_hook/wal_hook` to install each tier. Scenario 1
+    /// (`sqlink-native`) has no wasm cli, so it must trigger the same
+    /// registrations directly on the host. Call this immediately after
+    /// `load_extension` returns the extension name.
+    ///
+    /// Returns per-tier counts of successful registrations (scalars,
+    /// aggregates, collations, hooks, vtabs). A tier absent from the
+    /// manifest counts as zero. Registration failures are logged but do
+    /// not propagate — matches the CLI's do_load loop which prints an
+    /// eprintln for each failure and keeps going.
+    pub async fn install_provider_backed_on_shared_conn(
+        &self,
+        name: &str,
+    ) -> (u32, u32, u32, u32, u32) {
+        let manifest = match self.provider_backed_bindings_manifest(name) {
+            Some(m) => m,
+            None => return (0, 0, 0, 0, 0),
+        };
+        // Construct a HostWrap over a mutable borrow. `Host` is Clone
+        // (Arc-based interior mutability), so calls through the clone
+        // affect the same underlying registries. `resources` is only
+        // needed by the compose:dynlink linker.instance methods; the
+        // spi_loader::Host trait methods we call here never touch it.
+        let mut host_mut = self.clone();
+        let mut wrap = HostWrap {
+            host: &mut host_mut,
+            resources: None,
+        };
+        use bindings::sqlite::extension::spi_loader::Host as SpiLoaderHost;
+        let mut s = 0u32;
+        for spec in &manifest.scalar_functions {
+            match SpiLoaderHost::register_scalar(
+                &mut wrap,
+                name.to_string(),
+                spec.name.clone(),
+                spec.num_args,
+                spec.id,
+            )
+            .await
+            {
+                Ok(()) => s += 1,
+                Err(e) => tracing::warn!(
+                    ext = %name,
+                    func = %spec.name,
+                    arity = spec.num_args,
+                    err = %e.message,
+                    "install_provider_backed: register_scalar failed"
+                ),
+            }
+        }
+        let mut c = 0u32;
+        for spec in &manifest.collations {
+            match SpiLoaderHost::register_collation(
+                &mut wrap,
+                name.to_string(),
+                spec.name.clone(),
+                spec.id,
+            )
+            .await
+            {
+                Ok(()) => c += 1,
+                Err(e) => tracing::warn!(
+                    ext = %name,
+                    coll = %spec.name,
+                    err = %e.message,
+                    "install_provider_backed: register_collation failed"
+                ),
+            }
+        }
+        let mut a = 0u32;
+        for spec in &manifest.aggregate_functions {
+            match SpiLoaderHost::register_aggregate(
+                &mut wrap,
+                name.to_string(),
+                spec.name.clone(),
+                spec.num_args,
+                spec.id,
+                spec.is_window,
+            )
+            .await
+            {
+                Ok(()) => a += 1,
+                Err(e) => tracing::warn!(
+                    ext = %name,
+                    func = %spec.name,
+                    arity = spec.num_args,
+                    err = %e.message,
+                    "install_provider_backed: register_aggregate failed"
+                ),
+            }
+        }
+        let mut h = 0u32;
+        if manifest.has_authorizer {
+            match SpiLoaderHost::register_authorizer(&mut wrap, name.to_string()).await {
+                Ok(()) => h += 1,
+                Err(e) => tracing::warn!(
+                    ext = %name,
+                    err = %e.message,
+                    "install_provider_backed: register_authorizer failed"
+                ),
+            }
+        }
+        if manifest.has_update_hook {
+            match SpiLoaderHost::register_update_hook(&mut wrap, name.to_string()).await {
+                Ok(()) => h += 1,
+                Err(e) => tracing::warn!(
+                    ext = %name,
+                    err = %e.message,
+                    "install_provider_backed: register_update_hook failed"
+                ),
+            }
+        }
+        if manifest.has_commit_hook {
+            match SpiLoaderHost::register_commit_hook(&mut wrap, name.to_string()).await {
+                Ok(()) => h += 1,
+                Err(e) => tracing::warn!(
+                    ext = %name,
+                    err = %e.message,
+                    "install_provider_backed: register_commit_hook failed"
+                ),
+            }
+        }
+        if manifest.has_wal_hook {
+            match SpiLoaderHost::register_wal_hook(
+                &mut wrap,
+                name.to_string(),
+                manifest.wal_hook_id,
+            )
+            .await
+            {
+                Ok(()) => h += 1,
+                Err(e) => tracing::warn!(
+                    ext = %name,
+                    err = %e.message,
+                    "install_provider_backed: register_wal_hook failed"
+                ),
+            }
+        }
+        let mut v = 0u32;
+        for spec in &manifest.vtabs {
+            match SpiLoaderHost::register_vtab(
+                &mut wrap,
+                name.to_string(),
+                spec.name.clone(),
+                spec.id,
+                spec.eponymous,
+                spec.mutable,
+                spec.batched,
+            )
+            .await
+            {
+                Ok(()) => v += 1,
+                Err(e) => tracing::warn!(
+                    ext = %name,
+                    vtab = %spec.name,
+                    err = %e.message,
+                    "install_provider_backed: register_vtab failed"
+                ),
+            }
+        }
+        (s, a, c, h, v)
+    }
+
     /// If `ext_name` is provider-backed, dispatch the scalar `func_id`
     /// through the provider's woco `call` envelope. Returns `Some(...)`
     /// when handled, `None` when the extension is not provider-backed
