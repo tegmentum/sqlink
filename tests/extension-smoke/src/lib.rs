@@ -161,18 +161,34 @@ pub fn sqlite3_bin_for_loader() -> Option<PathBuf> {
     None
 }
 
-/// Resolve the .component.wasm artifact for a given plugin.
-/// Plugins put their build output under both
-///   extensions/<plugin>/target/wasm32-wasip2/release/
-///   target/wasm32-wasip2/release/ (workspace-shared)
-/// Underscore vs dash: cargo emits `<crate_name>_extension`,
-/// where crate_name often replaces dashes with underscores.
+/// Resolve the compose:dynlink `<plugin>-provider.wasm` artifact
+/// for a given plugin. Post-#220 the host retired the bespoke
+/// loader; `.load` requires a provider artifact whose endpoint
+/// export routes every tier (scalar/aggregate/vtab/collation/
+/// hook/dotcmd) through the resident provider. Passing the raw
+/// `<plugin>_extension.component.wasm` (which pre-#220 worked)
+/// now hard-errors with "no <ext>-provider.wasm resolved; the
+/// bespoke loader has been retired (#220)".
 ///
-/// Search order:
-///   1. `EXTENSION_SMOKE_REPO_ROOT` (env): for build-side runs in
-///      a worktree that doesn't carry the wasm artifacts but
-///      shares them with another tree.
-///   2. `repo_root()` (the cargo manifest dir's grandparent).
+/// Search order (first hit wins):
+///   1. `build/smoke-providers/<plugin>-provider.wasm` — the
+///      canonical output of `tooling/smoke-build-provider.sh`
+///      (mirrors `SQLINK_EXT_DIR` in tooling/datalink.config.json).
+///   2. `target/wasm32-wasip2/release/<und>_provider.wasm` — the
+///      per-crate build artifact (underscored variant, direct
+///      cargo output before the smoke-build wrapper stages it).
+///   3. `target/wasm32-wasip2/release/<plugin>-provider.wasm`
+///   4. `extensions/<plugin>/target/wasm32-wasip2/release/*_provider.wasm`
+///      (standalone-workspace exts like zstd).
+///
+/// The `<und>_extension.component.wasm` legacy fallback stays
+/// only as a last-resort — it will fail the actual .load with
+/// the #220 hard error, but returning it lets tests self-skip
+/// with a clearer "artifact present but bespoke-loader-retired"
+/// diagnostic vs the raw "component not built" SKIP.
+///
+/// `EXTENSION_SMOKE_REPO_ROOT` (env) is honored for the same
+/// build-side runs the pre-#220 impl supported.
 pub fn component_path(plugin: &str) -> Option<PathBuf> {
     let roots: Vec<PathBuf> = std::env::var_os("EXTENSION_SMOKE_REPO_ROOT")
         .map(PathBuf::from)
@@ -180,17 +196,29 @@ pub fn component_path(plugin: &str) -> Option<PathBuf> {
         .chain(std::iter::once(repo_root()))
         .collect();
     let und = plugin.replace('-', "_");
-    let names = [
-        format!("{plugin}_extension.component.wasm"),
-        format!("{und}_extension.component.wasm"),
+    // Provider artifact filenames the host recognizes as
+    // compose:dynlink providers (matches host/src/lib.rs
+    // resolve_catalog_artifact's `<name>-provider.wasm` /
+    // `<und>_provider.wasm` search order).
+    let provider_names = [
+        format!("{plugin}-provider.wasm"),
+        format!("{und}_provider.wasm"),
     ];
     for root in &roots {
-        for name in &names {
+        // 1. build/smoke-providers/ — post-#220 canonical.
+        for name in &provider_names {
+            let p = root.join(format!("build/smoke-providers/{name}"));
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        // 2 + 3 + 4. workspace/target and per-ext target.
+        for name in &provider_names {
             let candidates = [
+                root.join(format!("target/wasm32-wasip2/release/{name}")),
                 root.join(format!(
                     "extensions/{plugin}/target/wasm32-wasip2/release/{name}"
                 )),
-                root.join(format!("target/wasm32-wasip2/release/{name}")),
             ];
             for p in &candidates {
                 if p.exists() {
