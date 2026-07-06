@@ -77,6 +77,7 @@ async fn resident_provider_satisfies_spi_import() {
         None,
         None,
         false,
+        false,
     )
     .expect("compile eval-provider");
     assert!(provider.is_resident());
@@ -111,6 +112,7 @@ async fn eval_scalar_reenters_spi_execute() {
         None,
         None,
         None,
+        false,
         false,
     )
     .expect("compile eval-provider");

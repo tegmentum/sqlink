@@ -48,6 +48,7 @@ async fn resident_provider_satisfies_http_import() {
         None,
         None,
         false,
+        false,
     )
     .expect("compile http-provider");
     assert!(provider.is_resident());
@@ -79,6 +80,7 @@ async fn resident_provider_satisfies_dns_import() {
         None,
         None,
         None,
+        false,
         false,
     )
     .expect("compile dns-provider");

@@ -2,7 +2,9 @@
 //!
 //! Native SQLite (via sqlite-component-core's libsqlite3-sys wrapper),
 //! wasm extension components loaded through sqlink-host's existing
-//! `Host::load_extension` + `Host::install_loaded_extension` paths.
+//! `Host::load_extension` path. #220: the bespoke `install_loaded_extension`
+//! step is retired; provider-backing installs the tiers as part of
+//! `load_extension`, and per-tier counts come from the provider manifest.
 //!
 //! Contrast with `sqlink` (Scenario 2), which wraps a wasm cli
 //! component that drives the REPL. Here the binary IS the loader; the
@@ -175,9 +177,24 @@ async fn do_load(host: &Host, input: &str) -> String {
         Ok(n) => n,
         Err(e) => return format!("Error loading {path}: {e}\n"),
     };
-    let (s, a, c, h, v) = match host.install_loaded_extension(&name).await {
-        Ok(t) => t,
-        Err(e) => return format!("Error loading {path}: install: {e}\n"),
+    // #220: `install_loaded_extension` retired; the provider path installs
+    // the tiers as part of `load_extension`. Derive the per-tier counts
+    // from the provider manifest for the same operator-facing summary.
+    let (s, a, c, h, v) = match host.provider_backed_bindings_manifest(&name) {
+        Some(m) => {
+            let hooks = (m.has_authorizer as u32)
+                + (m.has_update_hook as u32)
+                + (m.has_commit_hook as u32)
+                + (m.has_wal_hook as u32);
+            (
+                m.scalar_functions.len() as u32,
+                m.aggregate_functions.len() as u32,
+                m.collations.len() as u32,
+                hooks,
+                m.vtabs.len() as u32,
+            )
+        }
+        None => (0, 0, 0, 0, 0),
     };
     let total = s + a + c + h + v;
     let mut bits = Vec::new();

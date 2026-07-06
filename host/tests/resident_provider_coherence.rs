@@ -42,6 +42,7 @@ fn resident(host: &Host, file: &str) -> Option<ProviderHandle> {
             None,
             None,
             false,
+            false,
         )
             .unwrap_or_else(|e| panic!("compile resident {file}: {e}")),
     )
