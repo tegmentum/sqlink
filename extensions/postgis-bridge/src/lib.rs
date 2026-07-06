@@ -10,6 +10,17 @@
 //! pattern-matched: macros below collapse the boilerplate so
 //! adding the next batch of postgis-wasm exports is one line of
 //! manifest + one line of dispatch each.
+//!
+//! The whole crate is wasm-only: `wit_bindgen::generate!` emits
+//! `extern` symbols for the `sqlite:extension/*` component ABI
+//! that only resolve when the artifact is a wasm component. The
+//! crate declares only `crate-type = ["cdylib"]`, so gating the
+//! module at `target_arch = "wasm32"` yields an empty cdylib on
+//! native (`cargo build --workspace` from the repo root) while
+//! `cargo wbuild -p postgis-bridge-extension` compiles it as
+//! before. See #823 for the workspace-wide native gate.
+
+#![cfg(target_arch = "wasm32")]
 
 extern crate alloc;
 
