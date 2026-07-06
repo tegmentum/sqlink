@@ -128,7 +128,11 @@ jobs:
               extensions/sys-compat extensions/list extensions/excel; do
             if [ -f "$d/Cargo.toml" ]; then
               echo "::group::build $d"
-              (cd "$d" && cargo build --target wasm32-wasip2 --release)
+              # cargo wbuild alias applies `--target wasm32-wasip2` and
+              # layers `-DSQLITE_THREADSAFE=0` via --config env override
+              # (workspace .cargo/config.toml). Keeps THREADSAFE=0 off
+              # native builds — see #823.
+              (cd "$d" && cargo wbuild --release)
               echo "::endgroup::"
             fi
           done
@@ -154,7 +158,9 @@ jobs:
         # .component.wasm files from extensions/<X>-cli/target/
         # wasm32-wasip2/release/.
         run: |
-          cargo build --target wasm32-wasip2 --release \
+          # cargo wbuild = build --target wasm32-wasip2 + wasm-only
+          # -DSQLITE_THREADSAFE=0 (see .cargo/config.toml, #823).
+          cargo wbuild --release \
             -p sqlite-cli \
             -p sqlink-cli-argv \
             -p sqlink-parsers \

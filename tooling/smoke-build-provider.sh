@@ -38,7 +38,9 @@ fi
 #    component whose inner core Binaryen can't touch — so the ext shrinks
 #    (mirrors `make ext`). The workspace .cargo/config supplies the wasi-sdk CC
 #    env for C-linking exts like compress.
-( cd "$extdir" && cargo build --release --target wasm32-wasip2 ) >&2 || exit 1
+# cargo wbuild = build --target wasm32-wasip2 + wasm-only
+# -DSQLITE_THREADSAFE=0 (workspace .cargo/config.toml, #823).
+( cd "$extdir" && cargo wbuild --release ) >&2 || exit 1
 # Standalone-workspace exts (e.g. zstd) build to extensions/<name>/target;
 # root-workspace exts (changeset, compress) build to the root target.
 core=""

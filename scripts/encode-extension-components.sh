@@ -136,10 +136,12 @@ rebuild_pkg() {
             if [ -z "$extdir" ]; then
                 return 1
             fi
-            ( cd "$REPO_ROOT/$extdir" && cargo build --target wasm32-wasip2 --release >/dev/null 2>&1 )
+            # cargo wbuild = build --target wasm32-wasip2 + wasm-only
+            # -DSQLITE_THREADSAFE=0 (see .cargo/config.toml, #823).
+            ( cd "$REPO_ROOT/$extdir" && cargo wbuild --release >/dev/null 2>&1 )
             ;;
         *)
-            ( cd "$REPO_ROOT" && cargo build -p "$pkg" --target wasm32-wasip2 --release >/dev/null 2>&1 )
+            ( cd "$REPO_ROOT" && cargo wbuild -p "$pkg" --release >/dev/null 2>&1 )
             ;;
     esac
 }

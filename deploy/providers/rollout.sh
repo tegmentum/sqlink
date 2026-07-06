@@ -49,7 +49,9 @@ for name in $NAMES; do
   # which emits a finished component whose inner core Binaryen can't touch),
   # `wasm-opt -Os` it, then wrap it into a component with wasm-tools — so the
   # shipped provider ships smaller (mirrors smoke-build-provider.sh + make ext).
-  ( cd "$extdir" && timeout 300 cargo build --release --target wasm32-wasip2 >/dev/null 2>&1 )
+  # cargo wbuild = build --target wasm32-wasip2 + wasm-only
+  # -DSQLITE_THREADSAFE=0 (workspace .cargo/config.toml, #823).
+  ( cd "$extdir" && timeout 300 cargo wbuild --release >/dev/null 2>&1 )
   core="$R/target/wasm32-wasip2/release/${u}_extension.wasm"
   [ -f "$core" ] || core="$extdir/target/wasm32-wasip2/release/${u}_extension.wasm"
   if [ ! -f "$core" ]; then echo "[$i/$total] BUILDFAIL $name" >>"$LOG"; buildfail=$((buildfail+1)); continue; fi

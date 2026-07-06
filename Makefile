@@ -827,13 +827,11 @@ ext:
 	@#   3. top-level target (workspace-member extensions like uuid / crypto)
 	@NAME_UNDERSCORE=$$(echo "$(NAME)" | tr - _); \
 	if grep -q '^\[workspace\]' extensions/$(NAME)/Cargo.toml 2>/dev/null; then \
-		CARGO_TARGET_DIR=$(EXT_SHARED_TARGET) $(if $(BOOTSTRAP),RUSTC_BOOTSTRAP=1 )cargo build --release \
-			--manifest-path extensions/$(NAME)/Cargo.toml \
-			--target wasm32-wasip2; \
+		CARGO_TARGET_DIR=$(EXT_SHARED_TARGET) $(if $(BOOTSTRAP),RUSTC_BOOTSTRAP=1 )cargo wbuild --release \
+			--manifest-path extensions/$(NAME)/Cargo.toml; \
 	else \
-		$(if $(BOOTSTRAP),RUSTC_BOOTSTRAP=1) cargo build --release \
-			--manifest-path extensions/$(NAME)/Cargo.toml \
-			--target wasm32-wasip2; \
+		$(if $(BOOTSTRAP),RUSTC_BOOTSTRAP=1) cargo wbuild --release \
+			--manifest-path extensions/$(NAME)/Cargo.toml; \
 	fi; \
 	WASM_BASE=""; \
 	for D in $(EXT_SHARED_TARGET)/wasm32-wasip2/release \

@@ -27,7 +27,13 @@ env:
   # local dev. The template is gitignored after
   # scripts/setup-cargo-config.sh substitutes wasi-sdk path; CI
   # doesn't need wasi-sdk for native checks so export directly here.
-  LIBSQLITE3_FLAGS: "-DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_DEFAULT_MEMSTATUS=0 -DSQLITE_THREADSAFE=0 -DSQLITE_LIKE_DOESNT_MATCH_BLOBS -DSQLITE_MAX_EXPR_DEPTH=0 -DSQLITE_OMIT_DEPRECATED -DSQLITE_DEFAULT_AUTOMATIC_INDEX=0 -DSQLITE_USE_ALLOCA"
+  #
+  # `-DSQLITE_THREADSAFE=0` is NOT in this list — see #823. Native
+  # builds need THREADSAFE=1 so parallel tests (sqlite-cas-cache,
+  # host session) don't race on global VFS state. The wasm build
+  # re-adds THREADSAFE=0 via the `cargo wbuild` alias defined in
+  # the workspace .cargo/config.toml.
+  LIBSQLITE3_FLAGS: "-DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_DEFAULT_MEMSTATUS=0 -DSQLITE_LIKE_DOESNT_MATCH_BLOBS -DSQLITE_MAX_EXPR_DEPTH=0 -DSQLITE_OMIT_DEPRECATED -DSQLITE_DEFAULT_AUTOMATIC_INDEX=0 -DSQLITE_USE_ALLOCA"
 
 jobs:
   host-checks:
@@ -78,9 +84,10 @@ jobs:
         # test gracefully skips when the fiji_hello.wasm artifact is
         # absent — this job is native-only by design; wasm-side build
         # + extension-smoke are in .github/workflows/wasm-smoke.yml.
-        # --test-threads=1: LIBSQLITE3_FLAGS sets SQLITE_THREADSAFE=0
-        # so parallel tests race on global VFS state ("no such vfs"
-        # / mid-init unwraps). Mirrors the wasm-smoke runner.
+        # --test-threads=1 preserved from when native LIBSQLITE3_FLAGS
+        # forced SQLITE_THREADSAFE=0 (#823 moved that to a wasm-only
+        # alias; kept single-threaded as belt-and-braces for any other
+        # global-state paths not yet audited).
         run: cargo test --all-features -- --test-threads=1
 
   cache-tests:

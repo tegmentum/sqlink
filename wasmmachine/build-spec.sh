@@ -27,7 +27,9 @@ SPEC_TEMPLATE="$OUT_DIR/sqlite-cli.json.template"
 SPEC_OUT="$OUT_DIR/sqlite-cli.json"
 
 echo "==> Building sqlite-cli for wasm32-wasip2..."
-(cd "$ROOT" && cargo build -p sqlite-cli --target wasm32-wasip2 --release)
+# cargo wbuild = build --target wasm32-wasip2 + wasm-only
+# -DSQLITE_THREADSAFE=0 (workspace .cargo/config.toml, #823).
+(cd "$ROOT" && cargo wbuild -p sqlite-cli --release)
 
 echo "==> Wrapping core module as wasi-p2 component..."
 wasm-tools component new "$CLI_RELEASE" -o "$CLI_COMPONENT"

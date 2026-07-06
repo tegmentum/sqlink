@@ -35,7 +35,10 @@ echo "[1.5/3] build embedded dot-command providers"
 bash "$REPO_ROOT/tooling/build-embedded-providers.sh"
 
 echo "[2/3] build sqlite-cli (core wasm + component new)"
-( cd "$REPO_ROOT" && cargo build -p sqlite-cli --target wasm32-wasip2 --release )
+# cargo wbuild = `cargo build --target wasm32-wasip2` + wasm-only
+# `-DSQLITE_THREADSAFE=0` layered on via --config env override
+# (defined in workspace .cargo/config.toml). #823.
+( cd "$REPO_ROOT" && cargo wbuild -p sqlite-cli --release )
 # Per-artifact decision (v1.6 polish, #487 Sub-item C):
 #   sqlite_cli.wasm is built from cli/ with `crate-type = ["cdylib"]`
 #   via `cargo build --target wasm32-wasip2` (NOT `cargo component build`).

@@ -43,7 +43,7 @@ trap cleanup EXIT
 
 echo "=== Setup ==="
 echo "Ensuring uuid-extension is built and encoded..."
-cargo build -p uuid-extension --target wasm32-wasip2 --release >/dev/null 2>&1 \
+cargo wbuild -p uuid-extension --release >/dev/null 2>&1 \
     || fail "uuid-extension build failed"
 bash scripts/encode-extension-components.sh >/dev/null 2>&1 \
     || fail "initial encode run failed"
