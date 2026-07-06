@@ -834,9 +834,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "changeset-core"
+version = "0.1.0"
+dependencies = [
+ "datalink-extcore",
+]
+
+[[package]]
 name = "changeset-extension"
 version = "0.1.0"
 dependencies = [
+ "changeset-core",
+ "datalink-extcore",
  "libsqlite3-sys",
  "sqlite-embed",
  "wit-bindgen 0.44.0",
@@ -1636,6 +1645,7 @@ name = "datalink-dynlink"
 version = "0.1.0"
 source = "git+https://github.com/tegmentum/datalink.git?rev=9a150a4b467474b0fc965786c5fe92361c413d58#9a150a4b467474b0fc965786c5fe92361c413d58"
 dependencies = [
+ "anyhow",
  "async-trait",
  "tokio",
  "wasmtime",
@@ -5806,6 +5816,7 @@ dependencies = [
  "serde_json",
  "series-extension",
  "setops-extension",
+ "sha2 0.10.9",
  "sha3-extension",
  "sketches-extension",
  "sqlink-parsers",
