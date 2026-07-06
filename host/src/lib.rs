@@ -6636,6 +6636,23 @@ impl Host {
         let manifest = provider_envelope::decode_manifest(&mbytes)
             .map_err(|e| anyhow!("decode manifest: {e}"))?;
 
+        // #823 canonical-key normalization: the caller's `ext_name` is a
+        // hint (e.g. the `<stem>-provider.wasm` filename stem, which is
+        // kebab-cased for multi-word extensions like `geo-distance`), but
+        // the manifest's declared name is the SNAKE-CASE identity every
+        // downstream dispatch path uses (register_scalar, sqlink-extension
+        // trampolines, `provider_backed_bindings_manifest` lookup, unload,
+        // list). Key `provider_backed` / `provider_manifests` /
+        // `compose_providers` by the manifest name so the CLI's kebab
+        // filename hint doesn't leave dispatch unable to find the backing.
+        // Fall back to the caller's hint only when the manifest name is
+        // empty (defensive — every real extension declares one).
+        let key = if manifest.name.is_empty() {
+            ext_name.to_string()
+        } else {
+            manifest.name.clone()
+        };
+
         // Task #227: WARM-ONCE RESIDENT providers persist guest state
         // across calls, so vtab/hook/aggregate (the coherence-sensitive
         // tiers) are now resident-backed and move onto the provider too.
@@ -6649,14 +6666,14 @@ impl Host {
             manifest.has_vtab || manifest.has_any_hook || !manifest.aggregates.is_empty();
         if coherence_sensitive && !resident {
             return Err(anyhow!(
-                "extension {ext_name} declares vtab/hook/aggregate tiers \
+                "extension {key} declares vtab/hook/aggregate tiers \
                  that need cross-call coherence, but its provider is not \
                  resident (fresh-store-per-invoke); use the bespoke loader \
                  or load it as a resident provider"
             ));
         }
 
-        let provider_id = format!("ext:{ext_name}");
+        let provider_id = format!("ext:{key}");
         self.register_compose_provider(&provider_id, provider);
 
         let backing = ProviderBacking {
@@ -6682,12 +6699,12 @@ impl Host {
         };
         self.provider_backed
             .write()
-            .insert(ext_name.to_string(), backing);
+            .insert(key.clone(), backing);
         // Task #228: stash the full manifest so the cli `.load` loader
         // handler can report the provider-backed extension's surface.
         self.provider_manifests
             .write()
-            .insert(ext_name.to_string(), manifest.clone());
+            .insert(key, manifest.clone());
         Ok(manifest)
     }
 
