@@ -58,17 +58,38 @@ The components' digests in each plan are byte arrays of the
 component file's SHA-256. They change every time the input
 components are rebuilt — i.e. EVERY release.
 
-The right pattern (deferred to Tier 1.1.b enablement; see substrate
-gaps) is a build-script step that:
+The plan files in this directory capture the **shape** (components,
+bindings, policy) with placeholder digest bytes
+(`[171, 205, 239, 0, 1, 2, …]`). The real digests are filled in at
+build time by [`scripts/render-shim-plan.sh`](../scripts/render-shim-plan.sh)
+(Tier 1.1.b), which:
 
-1. Hashes each input component;
-2. Writes them into the plan template;
-3. Hands the rendered plan to `composectl emit`.
+1. Hashes each input `.wasm` component (peer-repo build artifacts
+   for the postgis / mobilitydb shims, e.g.
+   `~/git/postgis-wasm/postgis-composed.wasm`);
+2. Substitutes the SHA-256 into `components[i].digest` in the plan;
+3. Writes the rendered plan to `composition-plans/build/{shim}-shim.rendered.plan.json`;
+4. Optionally (`--emit` / `SQLINK_COMPOSECTL_EMIT=1`) hands the
+   rendered plan to `composectl emit build`, staging the input
+   blobs into the local CAS beforehand.
 
-The plan files in this directory currently capture the **shape**
-(components, bindings, policy) rather than a specific build's
-digests. They are validated against the schema; the digests are
-placeholders that the build-script step will fill in.
+Usage:
+
+```sh
+scripts/render-shim-plan.sh postgis        # writes composition-plans/build/postgis-shim.rendered.plan.json
+scripts/render-shim-plan.sh mobilitydb --emit  # renders + calls composectl emit build
+```
+
+`sqlink-runtime.plan.json` is rendered inline by
+`scripts/build-composed-runtime.sh` (`emit_via_composectl()`)
+because its inputs are built in the same script; the shim plans
+render via `render-shim-plan.sh` because their inputs come from
+peer repos.
+
+The rendered plans live in a gitignored `build/` subdirectory so
+the templates in `composition-plans/*.plan.json` stay stable
+across builds. Only the placeholder-carrying templates are
+committed.
 
 ## See also
 

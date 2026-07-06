@@ -14,6 +14,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex, OnceLock};
 
 /// Concurrency cap on sqlink subprocess spawns. Without this,
@@ -334,8 +335,19 @@ pub fn run_probe(
             )),
         };
     }
-    // Throwaway db per (plugin, kind).
-    let tmp = std::env::temp_dir().join(format!("sw_smoke_{plugin}_{kind}.db"));
+    // Throwaway db per invocation. Historically the path was keyed
+    // only on `(plugin, kind)`, which meant proptest cases sharing
+    // the same `(plugin, "proptest")` tuple raced through the same
+    // file. SUBPROCESS_LIMITER (cap 6) + the `remove_file` below
+    // masked the collision in practice, but the path is theoretically
+    // reusable across concurrent invocations. Suffix with pid + a
+    // monotonic counter so every call gets a fresh path — the
+    // remove-before-start invariant still holds since the fresh
+    // path is by construction unused (#823).
+    static PROBE_COUNTER: AtomicU64 = AtomicU64::new(0);
+    let seq = PROBE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let tmp = std::env::temp_dir().join(format!("sw_smoke_{plugin}_{kind}_{pid}_{seq}.db"));
     let _ = std::fs::remove_file(&tmp);
     let mut stdin_buf = String::new();
     if grants.is_empty() {
