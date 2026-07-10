@@ -46,6 +46,10 @@ mod compression_resident;
 #[cfg(not(feature = "native-http"))]
 mod http_resident;
 pub mod session_ffi;
+/// #823 Phase D: per-sub-extension bridge resolver. Sqlink sibling of
+/// `ducklink-host::sub_ext::SubExtLoader`. Ships the prebuilt
+/// short-circuit path; plan-driven compose is a follow-up port.
+pub mod sub_ext;
 pub mod typed_value;
 pub mod vtab;
 
@@ -4828,6 +4832,13 @@ pub struct Host {
     /// at extension-init time and the codec slot can fill in lazily
     /// (or be swapped under test).
     pub typed_value_codecs: typed_value::TypedValueCodecs,
+    /// #823 Phase D: per-sub-extension bridge resolver. Populated
+    /// from `SQLINK_SUB_EXT_BRIDGES` + `SQLINK_SUB_EXT_PREBUILT` at
+    /// `Host::new()`. Consulted at the top of `load_extension` — a
+    /// bare-name argument that matches a registered sub-ext gets
+    /// resolved through the loader (bridge wasm + prebuilt provider)
+    /// instead of the catalog / on-disk resolver path.
+    pub sub_ext_loader: sub_ext::SubExtLoader,
 }
 
 /// Atomic counters for the cache tiers + cumulative wall-clock
@@ -5322,6 +5333,7 @@ impl Host {
             component_cache_stats: Arc::new(ComponentCacheStats::default()),
             typed_values: typed_value::TypedValueRegistry::new(),
             typed_value_codecs: typed_value::TypedValueCodecs::new(),
+            sub_ext_loader: sub_ext::SubExtLoader::from_env(),
         })
     }
 
@@ -6013,6 +6025,55 @@ impl Host {
     /// added by a wasmtime::component::Linker — sketched in the
     /// README, planned as the natural next iteration).
     pub async fn load_extension(&self, path: PathBuf, policy: Policy) -> Result<String> {
+        // #823 Phase D sub-ext branch: `.load postgis_core` where the
+        // argument matches a name in `sub_ext_loader.bridge_paths` /
+        // `.prebuilt_paths` gets resolved through the compose:dynlink
+        // sub-ext resolver — the bridge wasm is picked from
+        // `bridge_paths[name]` (falling back to `prebuilt_paths[name]`
+        // for pure-monolith mode) and the prebuilt is registered as
+        // the composed provider under `<name>-composed` for the
+        // bridge's `resolve-by-id` import to hit. Sits BEFORE the
+        // file-exists check so a bare sub-ext name never accidentally
+        // shadows an unrelated on-disk artifact with the same name.
+        let sub_ext_name = path.to_string_lossy().to_string();
+        if !path.exists() && self.sub_ext_loader.has_bridge(&sub_ext_name) {
+            if let Some(prebuilt) = self.sub_ext_loader.prebuilt_path(&sub_ext_name) {
+                let provider_id = sub_ext::sub_ext_provider_id(&sub_ext_name);
+                let provider = compose_provider::ProviderHandle::new_resident_wasm_component(
+                    self.engine.clone(),
+                    prebuilt.to_path_buf(),
+                    Some(self.dynlink_bridge.clone()),
+                    self.db_path(),
+                    Some(self.clone()),
+                    policy.http.clone(),
+                    policy.dns.clone(),
+                    policy.is_granted(Capability::S3),
+                    policy.is_granted(Capability::SpawnBuild),
+                )
+                .map_err(|e| {
+                    anyhow!(
+                        "sub-ext '{}' prebuilt {} not usable as provider: {e}",
+                        sub_ext_name,
+                        prebuilt.display()
+                    )
+                })?;
+                self.register_compose_provider(&provider_id, provider);
+                tracing::info!(
+                    sub_ext = %sub_ext_name,
+                    provider_id = %provider_id,
+                    prebuilt = %prebuilt.display(),
+                    "sub-ext prebuilt registered as composed provider"
+                );
+            }
+            if let Some(bridge) = self.sub_ext_loader.bridge_path(&sub_ext_name) {
+                // Recurse through the normal load path on the bridge
+                // wasm — it will hit the `is_provider` guard or the
+                // bespoke-loader path just like any other component.
+                let bridge_path = bridge.to_path_buf();
+                return Box::pin(self.load_extension(bridge_path, policy)).await;
+            }
+        }
+
         // #142 resolver spine: `.load <name>` where the argument is a
         // bare catalog name (e.g. `sha1`) rather than an existing file
         // or a URI resolves against the sqlink extension catalog plus
