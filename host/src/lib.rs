@@ -6037,8 +6037,18 @@ impl Host {
         // shadows an unrelated on-disk artifact with the same name.
         let sub_ext_name = path.to_string_lossy().to_string();
         if !path.exists() && self.sub_ext_loader.has_bridge(&sub_ext_name) {
-            if let Some(prebuilt) = self.sub_ext_loader.prebuilt_path(&sub_ext_name) {
-                let provider_id = sub_ext::sub_ext_provider_id(&sub_ext_name);
+            // Phase 9.1 shared-shim alias. postgis_topology / _3d /
+            // _metadata / _clustering resolve to postgis_core through
+            // this map — the aliased bridge is emitted with
+            // `--provider-id postgis_core-composed` at codegen time, so
+            // the prebuilt path AND the provider id we register under
+            // both come from the upstream (postgis_core), not the
+            // sub-ext being loaded. Non-aliased subs pass through
+            // unchanged (`resolve_shim_alias` returns the input).
+            let provider_sub_ext =
+                self.sub_ext_loader.resolve_shim_alias(&sub_ext_name).to_string();
+            if let Some(prebuilt) = self.sub_ext_loader.prebuilt_path(&provider_sub_ext) {
+                let provider_id = sub_ext::sub_ext_provider_id(&provider_sub_ext);
                 let provider = compose_provider::ProviderHandle::new_resident_wasm_component(
                     self.engine.clone(),
                     prebuilt.to_path_buf(),
@@ -6053,13 +6063,16 @@ impl Host {
                 .map_err(|e| {
                     anyhow!(
                         "sub-ext '{}' prebuilt {} not usable as provider: {e}",
-                        sub_ext_name,
+                        provider_sub_ext,
                         prebuilt.display()
                     )
                 })?;
+                // register_compose_provider is idempotent on id, so a
+                // second `LOAD` from a sibling aliased sub is a no-op.
                 self.register_compose_provider(&provider_id, provider);
                 tracing::info!(
                     sub_ext = %sub_ext_name,
+                    provider_sub_ext = %provider_sub_ext,
                     provider_id = %provider_id,
                     prebuilt = %prebuilt.display(),
                     "sub-ext prebuilt registered as composed provider"

@@ -64,6 +64,16 @@ pub fn sub_ext_provider_id(sub_ext: &str) -> String {
 pub struct SubExtLoader {
     pub bridge_paths: BTreeMap<String, PathBuf>,
     pub prebuilt_paths: BTreeMap<String, PathBuf>,
+    /// Phase 9.1 shared-shim alias: `sub_ext -> upstream_sub_ext_id`.
+    /// Sub-exts whose composed provider IS an upstream sub-ext's
+    /// provider (rather than a distinct shim) route through this map.
+    /// Example: `postgis_topology` / `postgis_3d` / `postgis_metadata`
+    /// / `postgis_clustering` all share `postgis_core-composed` — one
+    /// 30 MB wasm instead of 4 independent registrations. Bridges for
+    /// aliased subs are emitted with `--provider-id <upstream>-composed`
+    /// so their `resolve-by-id` import lands on the shared registration.
+    /// Populated from `SQLINK_SUB_EXT_ALIAS`.
+    pub shim_alias: BTreeMap<String, String>,
 }
 
 impl SubExtLoader {
@@ -71,13 +81,22 @@ impl SubExtLoader {
         Self::default()
     }
 
-    /// Seed from `SQLINK_SUB_EXT_BRIDGES` and `SQLINK_SUB_EXT_PREBUILT`.
-    /// Malformed entries are logged to stderr and skipped so a typo
-    /// doesn't abort startup.
+    /// Seed from `SQLINK_SUB_EXT_BRIDGES`, `SQLINK_SUB_EXT_PREBUILT`,
+    /// and `SQLINK_SUB_EXT_ALIAS`. Malformed entries are logged to
+    /// stderr and skipped so a typo doesn't abort startup.
     pub fn from_env() -> Self {
+        // `SQLINK_SUB_EXT_ALIAS` uses the same `<name>=<upstream>:...`
+        // shape as the path-valued env vars but the RHS is a sub-ext
+        // id string, not a filesystem path. Reuse the parser and
+        // convert the PathBuf-typed values to strings.
+        let shim_alias = parse_map_env("SQLINK_SUB_EXT_ALIAS")
+            .into_iter()
+            .map(|(k, v)| (k, v.to_string_lossy().into_owned()))
+            .collect();
         Self {
             bridge_paths: parse_map_env("SQLINK_SUB_EXT_BRIDGES"),
             prebuilt_paths: parse_map_env("SQLINK_SUB_EXT_PREBUILT"),
+            shim_alias,
         }
     }
 
@@ -105,6 +124,33 @@ impl SubExtLoader {
     /// `resolve-by-id` import finds it.
     pub fn prebuilt_path(&self, sub_ext: &str) -> Option<&Path> {
         self.prebuilt_paths.get(sub_ext).map(|p| p.as_path())
+    }
+
+    /// Resolve a sub-ext through the shim-alias chain. Returns the
+    /// terminal sub-ext id (the one whose prebuilt_path is meant to be
+    /// registered as the composed provider) and never recurses more
+    /// than 8 hops so a misconfigured cycle doesn't hang the loader.
+    /// When no alias is configured, returns the input unchanged.
+    ///
+    /// The caller uses the returned id both as the key into
+    /// `prebuilt_path` AND as the input to `sub_ext_provider_id` so the
+    /// aliased bridge's baked-in provider id (which was set at codegen
+    /// time via `--provider-id <upstream>-composed`) matches the
+    /// registration.
+    pub fn resolve_shim_alias<'a>(&'a self, sub_ext: &'a str) -> &'a str {
+        let mut current = sub_ext;
+        for _ in 0..8 {
+            match self.shim_alias.get(current) {
+                Some(next) => current = next.as_str(),
+                None => return current,
+            }
+        }
+        // Cycle (or ≥8-hop chain): fall back to whatever we last had.
+        // A cycle would be an env-var typo, not a runtime concern.
+        eprintln!(
+            "[sub-ext] shim-alias resolution exceeded 8 hops for '{sub_ext}'; using '{current}'"
+        );
+        current
     }
 }
 
@@ -158,6 +204,42 @@ mod tests {
             loader.bridge_path("postgis_core").map(Path::to_path_buf),
             Some(PathBuf::from("/tmp/postgis-core.wasm"))
         );
+    }
+
+    #[test]
+    fn shim_alias_resolves_to_upstream() {
+        let mut loader = SubExtLoader::new();
+        loader
+            .prebuilt_paths
+            .insert("postgis_core".into(), PathBuf::from("/tmp/core.wasm"));
+        loader
+            .shim_alias
+            .insert("postgis_topology".into(), "postgis_core".into());
+        loader
+            .shim_alias
+            .insert("postgis_3d".into(), "postgis_core".into());
+
+        // Non-aliased sub returns itself.
+        assert_eq!(loader.resolve_shim_alias("postgis_core"), "postgis_core");
+        // Aliased subs resolve to upstream.
+        assert_eq!(
+            loader.resolve_shim_alias("postgis_topology"),
+            "postgis_core"
+        );
+        assert_eq!(loader.resolve_shim_alias("postgis_3d"), "postgis_core");
+        // Non-existent sub returns itself unchanged.
+        assert_eq!(loader.resolve_shim_alias("unknown_sub"), "unknown_sub");
+    }
+
+    #[test]
+    fn shim_alias_terminates_on_cycle_or_long_chain() {
+        let mut loader = SubExtLoader::new();
+        // A → B → A cycle.
+        loader.shim_alias.insert("a".into(), "b".into());
+        loader.shim_alias.insert("b".into(), "a".into());
+        // Doesn't hang; returns something (bounded to 8 hops).
+        let r = loader.resolve_shim_alias("a");
+        assert!(r == "a" || r == "b");
     }
 
     #[test]
