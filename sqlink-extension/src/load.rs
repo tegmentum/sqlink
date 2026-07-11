@@ -308,7 +308,22 @@ pub unsafe fn load_and_install(
     name_or_path: &str,
     policy: Policy,
 ) -> Result<InstallCounts> {
-    let path = resolve_extension_path(name_or_path)?;
+    // Phase 9 sub-ext branch: when `name_or_path` is a bare name and
+    // matches a `SQLINK_SUB_EXT_BRIDGES` / `SQLINK_SUB_EXT_PREBUILT`
+    // entry (or an aliased entry), pass the bare name straight to
+    // `host.load_extension`. The host's own sub-ext branch will pick
+    // the bridge wasm + register the composed prebuilt as a provider,
+    // no path resolution needed. Falls through to
+    // `resolve_extension_path` for names that aren't sub-ext-registered
+    // — preserves the existing catalog / on-disk resolver behavior for
+    // regular extensions.
+    let path = if !std::path::Path::new(name_or_path).exists()
+        && host.sub_ext_loader.has_bridge(name_or_path)
+    {
+        std::path::PathBuf::from(name_or_path)
+    } else {
+        resolve_extension_path(name_or_path)?
+    };
     let host_for_dispatch = host.clone();
     let ext_name = rt.block_on(host.load_extension(path, policy))?;
 
