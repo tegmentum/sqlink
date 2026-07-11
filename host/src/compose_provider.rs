@@ -639,6 +639,59 @@ pub fn imports_dynlink_linker(component: &Component, engine: &Engine) -> bool {
         .any(|(name, _)| name.starts_with("compose:dynlink/linker"))
 }
 
+/// True if `component` exports a `sqlite:extension/metadata` or
+/// `sqlite:extension/scalar-function` interface — i.e. the WIT contract
+/// shape emitted by `sqlink-shim-codegen --dynlink --target-dialect sqlite`.
+///
+/// Sqlink-emitted dynlink bridges are a distinct component shape:
+/// they IMPORT `compose:dynlink/linker@0.1.0` (like any provider that
+/// wants reentrant resolve) and EXPORT `sqlite:extension` interfaces
+/// (like any pre-#220 bespoke extension), but do NOT export
+/// `compose:dynlink/endpoint@0.1.0` (so they're not providers
+/// themselves — they're a lightweight dispatch surface backed by a
+/// separately-registered composed provider).
+///
+/// The full loader for this shape is a follow-up. It needs to:
+///
+///   1. Instantiate the bridge with a linker that wires
+///      compose:dynlink/linker → this host's ProviderRegistry, and
+///      sqlite:extension/{types,policy} → the standard host imports.
+///   2. Call `sqlite:extension/metadata::describe()` to fetch the
+///      manifest (scalar names, arities, return types).
+///   3. Register those scalars on the SPI conn as pApi trampolines
+///      that call back into `sqlite:extension/scalar-function::call`
+///      (which the bridge routes through `linker.resolve_by_id +
+///      invoke` to the resident composed provider).
+///
+/// Ports the retired bespoke loader's minimum surface — no session,
+/// no vtab, no cross-conn hooks. Just scalar dispatch. The full
+/// scope is analogous to `ducklink-host`'s `load_component_with_dynlink`.
+///
+/// The reason sqlink can't just take the #220 `is_provider` branch:
+/// dynlink bridges don't export `compose:dynlink/endpoint`, so the
+/// provider-back path bails. Adding that export would make the
+/// bridge self-recursive (endpoint.invoke → scalar-function.call →
+/// linker.resolve_by_id → its own endpoint again). The bridge is
+/// legitimately a third shape.
+pub fn exports_sqlite_extension_metadata(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .exports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/metadata"))
+}
+
+/// True if `component` is a compose:dynlink bridge:
+/// imports the linker + exports sqlite:extension/metadata + does NOT
+/// export compose:dynlink/endpoint. Used by `Host::load_extension`
+/// to detect the "sqlink-shim-codegen --dynlink" shape and route
+/// through the (forthcoming) dynlink-bridge loader instead of the
+/// retired-bespoke error path.
+pub fn is_dynlink_bridge(component: &Component, engine: &Engine) -> bool {
+    imports_dynlink_linker(component, engine)
+        && exports_sqlite_extension_metadata(component, engine)
+        && !exports_endpoint(component, engine)
+}
+
 /// Task #220: true if `component` imports `sqlite:extension/spi` — i.e. a
 /// reentrant extension (e.g. `define`/`eval`/`closure`) that calls back
 /// into SQLite. Its static spi import cannot be satisfied by composition

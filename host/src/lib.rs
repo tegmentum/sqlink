@@ -6195,6 +6195,33 @@ impl Host {
             self.load_extension_as_provider(&ext_name, provider).await?;
             return Ok(ext_name);
         }
+        // Phase 9.3 compose:dynlink bridge detection. A component that
+        // imports compose:dynlink/linker + exports sqlite:extension is
+        // neither a bespoke-loader extension nor a provider — it's a
+        // dynlink bridge (sqlink-shim-codegen --dynlink output). Route
+        // to a dedicated loader that instantiates it with the linker
+        // wired to this host's ProviderRegistry, reads the manifest
+        // via sqlite:extension/metadata::describe, and installs the
+        // scalars as SPI-conn trampolines that call back into
+        // sqlite:extension/scalar-function::call.
+        if resolved_component
+            .as_ref()
+            .map(|c| compose_provider::is_dynlink_bridge(c, &self.engine))
+            .unwrap_or(false)
+        {
+            return Err(anyhow!(
+                "extension '{hint}': compose:dynlink bridge shape detected \
+                 (imports compose:dynlink/linker + exports sqlite:extension, \
+                 but does NOT export compose:dynlink/endpoint). This is the \
+                 sqlink-shim-codegen --dynlink output shape (Phase 9). \
+                 Sqlink-host's dedicated dynlink-bridge loader is a follow-up; \
+                 today the analogous path exists in ducklink-host \
+                 (`load_component_with_dynlink`) — port that shape to sqlink to \
+                 close the gap. See sqlink/host/src/compose_provider.rs \
+                 exports_sqlite_extension_metadata comment for the loader's \
+                 3-step contract."
+            ));
+        }
         // #220 loader retirement — the bespoke `loaded::*` loader is RETIRED.
         // Every buildable wasm extension runs provider-only (the full port:
         // scalar/collation/aggregate/vtab/hook + session/authorizer/
