@@ -627,6 +627,145 @@ impl wasmtime::component::HasData for ProviderStateHostData {
     type Data<'a> = ProviderStateHostWrap<'a>;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 9.3 compose:dynlink-bridge loader — the WARM-ONCE resident Store
+// for a `sqlink-shim-codegen --dynlink --target-dialect sqlite` bridge.
+//
+// A dynlink bridge is a distinct component shape (see
+// `is_dynlink_bridge`): imports `compose:dynlink/linker@0.1.0` +
+// type-only `sqlite:extension/{types,policy}`, exports
+// `sqlite:extension/{metadata, scalar-function, aggregate-function,
+// vtab}`. It does NOT export `compose:dynlink/endpoint`, so the
+// resident-provider path bails; and it does not import wasi/spi, so the
+// bespoke resident-store surface is unnecessary. This narrow Store type
+// carries just what the bridge world needs — the dynlink bridge (routes
+// `resolve-by-id.invoke` calls back to the engine's provider registry)
+// and the resource table those `instance` handles live in.
+//
+// Analog: ducklink-runtime's `load_component_with_dynlink` machinery.
+// The linker satisfies more than the bridge strictly imports (WASI is
+// added defensively for a bridge world extended with wasi imports); the
+// wasmtime `Linker` model tolerates unused entries.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Store state for a resident dynlink-bridge instance.
+pub struct BridgeState {
+    resources: wasmtime_wasi::ResourceTable,
+    /// Wasi ctx: added defensively so a bridge world that widens to include
+    /// wasi imports still instantiates. The postgis bridge's world does not
+    /// import wasi; the field is a cheap default.
+    wasi: wasmtime_wasi::WasiCtx,
+    /// The shared cli dynlink bridge — this is the resolve-by-id /
+    /// instance.invoke surface the bridge's guest routes scalar dispatch
+    /// through (`linker::resolve_by_id("<sub_ext>-composed")` +
+    /// `endpoint.invoke("call", cbor(func_id, args))`).
+    dynlink_bridge: datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>,
+}
+
+impl wasmtime_wasi::WasiView for BridgeState {
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.resources,
+        }
+    }
+}
+
+/// Per-call view the `compose:dynlink/linker` async-host macro consumes.
+/// Splits the (immutable) bridge and the (mutable) resource table as two
+/// non-aliasing borrows so the generated `Linker.Host` impl can drive both
+/// on a single `&mut BridgeState`.
+pub struct BridgeStateHostWrap<'a> {
+    bridge: &'a datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>,
+    resources: &'a mut wasmtime_wasi::ResourceTable,
+}
+
+impl<'a> BridgeStateHostWrap<'a> {
+    fn split(
+        &mut self,
+    ) -> (
+        &datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>,
+        &mut wasmtime_wasi::ResourceTable,
+    ) {
+        (self.bridge, self.resources)
+    }
+}
+
+datalink_dynlink::impl_datalink_dynlink_async_host!(
+    'a; BridgeStateHostWrap<'a>,
+    HostWrapBackend,
+    split
+);
+
+/// `HasData` marker so `compose:dynlink/linker::add_to_linker` can thread a
+/// `BridgeStateHostWrap` accessor built from `&mut BridgeState`.
+pub struct BridgeStateHostData;
+impl wasmtime::component::HasData for BridgeStateHostData {
+    type Data<'a> = BridgeStateHostWrap<'a>;
+}
+
+/// Warm-once resident dynlink-bridge instance. Held under an async mutex
+/// by the loader so per-call `scalar-function::call` sequentializes on the
+/// one Store.
+pub struct BridgeInstance {
+    pub store: Store<BridgeState>,
+    pub instance: crate::loaded::Minimal,
+}
+
+/// Instantiate a compose:dynlink bridge component.
+///
+/// - `dynlink_bridge` is the shared async provider bridge (the same one
+///   the cli's `HostWrap` path uses) — routed onto the bridge Store's
+///   linker so its `linker::resolve-by-id("<sub_ext>-composed")` +
+///   `instance::invoke("call", cbor)` calls hit whichever composed
+///   provider the sub-ext loader (or an explicit register) placed under
+///   that id.
+/// - `bytes` are the bridge wasm; `Component::from_binary` compiles them.
+///
+/// Returns a warm resident `BridgeInstance` (Store + `loaded::Minimal`
+/// bindings). The loader then calls `.sqlite_extension_metadata().
+/// call_describe()` and, per scalar spec, `.sqlite_extension_scalar_function()
+/// .call_call(func_id, args)`.
+pub async fn instantiate_dynlink_bridge(
+    engine: &Engine,
+    dynlink_bridge: datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>,
+    bytes: &[u8],
+) -> Result<BridgeInstance, String> {
+    let component = Component::from_binary(engine, bytes)
+        .map_err(|e| format!("compile dynlink bridge: {e}"))?;
+    let mut linker: Linker<BridgeState> = Linker::new(engine);
+    // WASI: added defensively (the bridge's own world doesn't import wasi,
+    // but a future bridge variant might; unused linker entries are free).
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+        .map_err(|e| format!("dynlink-bridge wasi linker: {e}"))?;
+    // compose:dynlink/linker — the actual resolve/invoke surface the
+    // bridge's guest drives per scalar call.
+    crate::compose::compose::dynlink::linker::add_to_linker::<_, BridgeStateHostData>(
+        &mut linker,
+        |state: &mut BridgeState| BridgeStateHostWrap {
+            bridge: &state.dynlink_bridge,
+            resources: &mut state.resources,
+        },
+    )
+    .map_err(|e| format!("dynlink-bridge compose:dynlink linker: {e}"))?;
+    let mut wasi_builder = wasmtime_wasi::WasiCtxBuilder::new();
+    wasi_builder.inherit_stdio();
+    let state = BridgeState {
+        resources: wasmtime_wasi::ResourceTable::new(),
+        wasi: wasi_builder.build(),
+        dynlink_bridge,
+    };
+    let mut store = wasmtime::Store::new(engine, state);
+    store
+        .set_fuel(u64::MAX / 2)
+        .map_err(|e| format!("set_fuel: {e}"))?;
+    store.set_epoch_deadline(1_000_000_000_000);
+    let instance = crate::loaded::Minimal::instantiate_async(&mut store, &component, &linker)
+        .await
+        .map_err(|e| format!("instantiate dynlink bridge: {e}"))?;
+    Ok(BridgeInstance { store, instance })
+}
+
 /// True if `component` imports `compose:dynlink/linker` — i.e. it's a
 /// REENTRANT provider that calls back into the engine (or further
 /// providers) via the dynlink bridge. Task #228: the resident store adds
@@ -651,17 +790,21 @@ pub fn imports_dynlink_linker(component: &Component, engine: &Engine) -> bool {
 /// themselves — they're a lightweight dispatch surface backed by a
 /// separately-registered composed provider).
 ///
-/// The full loader for this shape is a follow-up. It needs to:
+/// The loader for this shape is `instantiate_dynlink_bridge` (below) +
+/// `Host::load_extension_as_dynlink_bridge` (in `lib.rs`). Its 3-step
+/// contract:
 ///
 ///   1. Instantiate the bridge with a linker that wires
-///      compose:dynlink/linker → this host's ProviderRegistry, and
-///      sqlite:extension/{types,policy} → the standard host imports.
-///   2. Call `sqlite:extension/metadata::describe()` to fetch the
-///      manifest (scalar names, arities, return types).
-///   3. Register those scalars on the SPI conn as pApi trampolines
-///      that call back into `sqlite:extension/scalar-function::call`
-///      (which the bridge routes through `linker.resolve_by_id +
-///      invoke` to the resident composed provider).
+///      compose:dynlink/linker → this host's `AsyncDynLinkBridge`, and
+///      the type-only sqlite:extension/{types,policy} imports (no host
+///      Host impl needed — they're erased at composition).
+///   2. Call `sqlite:extension/metadata::describe()` on the instantiated
+///      bridge to fetch the manifest (scalar names, arities, return
+///      types).
+///   3. Register those scalars on the SPI conn as pApi trampolines that
+///      call back into `sqlite:extension/scalar-function::call` (which
+///      the bridge routes through `linker.resolve_by_id + invoke` to the
+///      composed provider registered under `<sub_ext>-composed`).
 ///
 /// Ports the retired bespoke loader's minimum surface — no session,
 /// no vtab, no cross-conn hooks. Just scalar dispatch. The full

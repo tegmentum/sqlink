@@ -4772,6 +4772,15 @@ pub struct Host {
     /// registers the right trampolines, which dispatch through the
     /// resident provider.
     provider_manifests: Arc<RwLock<HashMap<String, provider_envelope::Manifest>>>,
+    /// Phase 9.3 compose:dynlink-bridge loader: warm-once resident
+    /// `BridgeInstance` per bridge-loaded extension, keyed by ext name.
+    /// The bridge world (imports `compose:dynlink/linker`, exports
+    /// `sqlite:extension/{metadata,scalar-function,...}`) can't be provider-
+    /// backed (no endpoint export) and can't be bespoke-loaded (that path is
+    /// retired), so its scalar dispatch is its own tier: `dispatch_scalar`
+    /// checks `try_bridge_scalar` before `try_provider_scalar` and drives
+    /// the bridge's `scalar-function::call` on this persisted Store.
+    dynlink_bridges: Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<compose_provider::BridgeInstance>>>>>,
     /// Trust policy applied to wasm-component provider registration.
     /// Default `TrustPolicy::AllowAll` preserves the original
     /// behavior (any file path can be registered). Operators that
@@ -5324,6 +5333,7 @@ impl Host {
             compose_providers,
             provider_backed: Arc::new(RwLock::new(HashMap::new())),
             provider_manifests: Arc::new(RwLock::new(HashMap::new())),
+            dynlink_bridges: Arc::new(RwLock::new(HashMap::new())),
             trust_policy,
             dynlink_bridge,
             signature_verifier,
@@ -6199,28 +6209,27 @@ impl Host {
         // imports compose:dynlink/linker + exports sqlite:extension is
         // neither a bespoke-loader extension nor a provider — it's a
         // dynlink bridge (sqlink-shim-codegen --dynlink output). Route
-        // to a dedicated loader that instantiates it with the linker
-        // wired to this host's ProviderRegistry, reads the manifest
-        // via sqlite:extension/metadata::describe, and installs the
-        // scalars as SPI-conn trampolines that call back into
-        // sqlite:extension/scalar-function::call.
+        // to the dedicated loader (`load_extension_as_dynlink_bridge`):
+        // instantiates with a linker wired to this host's shared
+        // AsyncDynLinkBridge, reads the manifest via
+        // `sqlite:extension/metadata::describe`, and stashes the warm
+        // instance so `dispatch_scalar` routes per-call
+        // `sqlite:extension/scalar-function::call` back through it.
         if resolved_component
             .as_ref()
             .map(|c| compose_provider::is_dynlink_bridge(c, &self.engine))
             .unwrap_or(false)
         {
-            return Err(anyhow!(
-                "extension '{hint}': compose:dynlink bridge shape detected \
-                 (imports compose:dynlink/linker + exports sqlite:extension, \
-                 but does NOT export compose:dynlink/endpoint). This is the \
-                 sqlink-shim-codegen --dynlink output shape (Phase 9). \
-                 Sqlink-host's dedicated dynlink-bridge loader is a follow-up; \
-                 today the analogous path exists in ducklink-host \
-                 (`load_component_with_dynlink`) — port that shape to sqlink to \
-                 close the gap. See sqlink/host/src/compose_provider.rs \
-                 exports_sqlite_extension_metadata comment for the loader's \
-                 3-step contract."
-            ));
+            let bridge = compose_provider::instantiate_dynlink_bridge(
+                &self.engine,
+                self.dynlink_bridge.clone(),
+                &bytes,
+            )
+            .await
+            .map_err(|e| anyhow!("instantiate dynlink bridge {hint}: {e}"))?;
+            let ext_name = self.load_extension_as_dynlink_bridge(&hint, bridge).await?;
+            let _ = policy; // policy consumed by the bridge's downstream provider
+            return Ok(ext_name);
         }
         // #220 loader retirement — the bespoke `loaded::*` loader is RETIRED.
         // Every buildable wasm extension runs provider-only (the full port:
@@ -6809,6 +6818,186 @@ impl Host {
         Ok(manifest)
     }
 
+    /// Phase 9.3 dynlink-bridge loader: after `instantiate_dynlink_bridge`
+    /// hands back a warm `BridgeInstance`, read its manifest via
+    /// `sqlite:extension/metadata::describe`, stash the instance so
+    /// `dispatch_scalar` can route `scalar-function::call` back through
+    /// it, and populate `provider_manifests` so `provider_backed_bindings_manifest`
+    /// surfaces the bridge's scalar surface to sqlink-extension / the cli
+    /// (they walk it to install pApi trampolines on the caller's db and on
+    /// the shared spi conn, respectively). Returns the extension name.
+    ///
+    /// Scope 1 (this port): pure scalar dispatch. Aggregate / vtab tiers
+    /// come as follow-ups in Phase 9.3 Agent B — the manifest's aggregate /
+    /// vtab specs are stashed so the surrounding registration machinery
+    /// works, but no bridge-side dispatch is wired for those tiers yet.
+    pub async fn load_extension_as_dynlink_bridge(
+        &self,
+        hint: &str,
+        mut bridge: compose_provider::BridgeInstance,
+    ) -> Result<String> {
+        // Step 2 (per the plan doc): read the manifest.
+        // The store's fuel budget was set at instantiation; refresh it
+        // before the describe call so a long-lived resident store does
+        // not exhaust fuel on the first ext-visible surface.
+        bridge
+            .store
+            .set_fuel(u64::MAX / 2)
+            .map_err(|e| anyhow!("refresh fuel (describe): {e}"))?;
+        let wit_manifest = bridge
+            .instance
+            .sqlite_extension_metadata()
+            .call_describe(&mut bridge.store)
+            .await
+            .map_err(|e| anyhow!("dynlink bridge describe: {e}"))?;
+        let ext_name = if wit_manifest.name.is_empty() {
+            hint.to_string()
+        } else {
+            wit_manifest.name.clone()
+        };
+        // Translate the WIT `loaded::sqlite::extension::metadata::Manifest`
+        // into the `provider_envelope::Manifest` shape the CLI +
+        // sqlink-extension consume. Scope 1: scalars are exhaustive;
+        // aggregates/vtabs get their specs mirrored so the outer
+        // registration machinery can enumerate them, but per-tier
+        // dispatch through the bridge is a follow-up.
+        let envelope_manifest = provider_envelope::Manifest {
+            name: wit_manifest.name.clone(),
+            version: wit_manifest.version.clone(),
+            scalar_specs: wit_manifest
+                .scalar_functions
+                .iter()
+                .map(|s| (s.name.clone(), s.id, s.num_args))
+                .collect(),
+            scalar_flags: wit_manifest
+                .scalar_functions
+                .iter()
+                .map(|s| {
+                    (
+                        s.id,
+                        provider_envelope::ScalarFlags {
+                            deterministic: s
+                                .func_flags
+                                .contains(loaded::sqlite::extension::types::FunctionFlags::DETERMINISTIC),
+                            direct_only: s
+                                .func_flags
+                                .contains(loaded::sqlite::extension::types::FunctionFlags::DIRECT_ONLY),
+                            innocuous: s
+                                .func_flags
+                                .contains(loaded::sqlite::extension::types::FunctionFlags::INNOCUOUS),
+                        },
+                    )
+                })
+                .collect(),
+            collations: wit_manifest
+                .collations
+                .iter()
+                .map(|c| (c.name.clone(), c.id))
+                .collect(),
+            aggregates: wit_manifest
+                .aggregate_functions
+                .iter()
+                .map(|a| (a.name.clone(), a.id))
+                .collect(),
+            has_vtab: !wit_manifest.vtabs.is_empty(),
+            has_any_hook: wit_manifest.has_authorizer
+                || wit_manifest.has_update_hook
+                || wit_manifest.has_commit_hook
+                || wit_manifest.has_wal_hook,
+            aggregate_specs: wit_manifest
+                .aggregate_functions
+                .iter()
+                .map(|a| provider_envelope::AggSpec {
+                    id: a.id,
+                    name: a.name.clone(),
+                    num_args: a.num_args,
+                    is_window: a.is_window,
+                })
+                .collect(),
+            vtab_specs: wit_manifest
+                .vtabs
+                .iter()
+                .map(|v| provider_envelope::VtabSpecE {
+                    id: v.id,
+                    name: v.name.clone(),
+                    eponymous: v.eponymous,
+                    mutable: v.mutable,
+                    batched: v.batched,
+                })
+                .collect(),
+            dotcmd_specs: Vec::new(),
+            has_authorizer: wit_manifest.has_authorizer,
+            has_update_hook: wit_manifest.has_update_hook,
+            has_commit_hook: wit_manifest.has_commit_hook,
+            has_wal_hook: wit_manifest.has_wal_hook,
+            wal_hook_id: wit_manifest.wal_hook_id,
+            declared_capabilities: Vec::new(),
+        };
+        // Stash the warm bridge so `dispatch_scalar`'s `try_bridge_scalar`
+        // can find it, keyed by the ext name every downstream registration
+        // path uses.
+        self.dynlink_bridges
+            .write()
+            .insert(ext_name.clone(), Arc::new(tokio::sync::Mutex::new(bridge)));
+        // Stash the envelope-shape manifest so `provider_backed_bindings_manifest`
+        // (consumed by sqlink-extension and the cli's do_load) surfaces the
+        // bridge's scalar/aggregate/vtab surface — the same shape a
+        // resident-provider-backed ext exposes.
+        self.provider_manifests
+            .write()
+            .insert(ext_name.clone(), envelope_manifest);
+        tracing::info!(
+            ext = %ext_name,
+            scalars = wit_manifest.scalar_functions.len(),
+            aggregates = wit_manifest.aggregate_functions.len(),
+            vtabs = wit_manifest.vtabs.len(),
+            "dynlink bridge loaded"
+        );
+        Ok(ext_name)
+    }
+
+    /// Phase 9.3 dynlink-bridge scalar dispatch. Consulted by
+    /// `dispatch_scalar` BEFORE the compose:dynlink provider path so a
+    /// bridge-backed extension routes per-call
+    /// `sqlite:extension/scalar-function::call(func_id, args)` on its warm
+    /// resident Store (which in turn dispatches back through
+    /// `compose:dynlink/linker.resolve_by_id + endpoint.invoke` to the
+    /// composed provider under `<sub_ext>-composed`). `None` when the
+    /// extension isn't bridge-backed — dispatch falls through to
+    /// `try_provider_scalar`.
+    async fn try_bridge_scalar(
+        &self,
+        ext_name: &str,
+        func_id: u64,
+        args: &[bindings::sqlite::extension::types::SqlValue],
+    ) -> Option<Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>>>
+    {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        // Convert bindings::SqlValue → loaded::SqlValue (the same shape
+        // ferried across the bridge world). Existing pass-through
+        // converters used elsewhere on the dispatch path.
+        let loaded_args: Vec<loaded::sqlite::extension::types::SqlValue> = args
+            .iter()
+            .cloned()
+            .map(convert_sql_value_to_loaded)
+            .collect();
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (call): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_scalar_function()
+            .call_call(&mut bridge.store, func_id, &loaded_args)
+            .await;
+        Some(match result {
+            Ok(Ok(v)) => Ok(Ok(convert_sql_value_from_loaded(v))),
+            Ok(Err(ext_err)) => Ok(Err(ext_err)),
+            Err(trap) => Ok(Err(format!("dynlink bridge scalar trap: {trap}"))),
+        })
+    }
+
     /// Task #228: the bindings `Manifest` for a provider-backed extension
     /// loaded via `.load <ext>-provider.wasm`, or `None` if `name` is not
     /// provider-backed. The cli `.load` loader handler returns this when
@@ -7161,6 +7350,15 @@ impl Host {
         func_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+        // Phase 9.3: dynlink-bridge dispatch. If the extension was loaded
+        // as a compose:dynlink bridge (sqlink-shim-codegen --dynlink
+        // shape), drive the scalar through its warm resident Store's
+        // `sqlite:extension/scalar-function::call(func_id, args)` — which
+        // the bridge internally routes through `compose:dynlink/linker.
+        // resolve_by_id + endpoint.invoke` to the composed provider.
+        if let Some(r) = self.try_bridge_scalar(ext_name, func_id, &args).await {
+            return r;
+        }
         // Task #226: if this extension was loaded as a compose:dynlink
         // provider, drive the scalar through the provider's `call`
         // envelope. Provider-backing is only granted to pure
