@@ -712,6 +712,16 @@ impl wasmtime::component::HasData for BridgeStateHostData {
 /// vtab exports). The `minimal` world's scalar-only exports are a
 /// subset — every bridge shape that only calls scalar/metadata methods
 /// remains compatible.
+///
+/// vtab-update (mutating) dispatch is deferred: instantiating a bridge
+/// that DOES export `sqlite:extension/vtab-update@1.0.0` under the
+/// `tabular-mutating` world would require dual bindings whose exported
+/// types (Manifest, VtabRow, IndexPlan, ...) are DISTINCT from tabular's
+/// even though structurally identical — bindgen's `with:` clause only
+/// remaps IMPORTS. Unifying the two bindings needs either a wit-bindgen
+/// enhancement or a manual delegate layer at every call site. Tracked
+/// as follow-up; postgis-sqlink-bridge is read-only so this doesn't
+/// block anything today.
 pub struct BridgeInstance {
     pub store: Store<BridgeState>,
     pub instance: crate::loaded_tabular::Tabular,
@@ -770,6 +780,19 @@ pub async fn instantiate_dynlink_bridge(
             .await
             .map_err(|e| format!("instantiate dynlink bridge: {e}"))?;
     Ok(BridgeInstance { store, instance })
+}
+
+/// True if `component` exports `sqlite:extension/vtab-update@1.0.0` —
+/// i.e. it advertises at least one `mutable: true` vtab. Used by the
+/// (future) mutating-dispatch tier to decide whether to instantiate
+/// under the tabular-mutating world. Read-only bridges return false;
+/// the default `tabular` world's vtab (read) export is compatible with
+/// both shapes.
+pub fn exports_sqlite_extension_vtab_update(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .exports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/vtab-update"))
 }
 
 /// True if `component` imports `compose:dynlink/linker` — i.e. it's a

@@ -7181,6 +7181,37 @@ impl Host {
         })
     }
 
+    async fn try_bridge_vtab_fetch_batch(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+        max_rows: u32,
+    ) -> Option<
+        Result<
+            std::result::Result<
+                Vec<loaded_tabular::exports::sqlite::extension::vtab::VtabRow>,
+                String,
+            >,
+        >,
+    > {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.fetch-batch): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_fetch_batch(&mut bridge.store, vtab_id, cursor_id, max_rows)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab.fetch-batch trap: {trap}"))),
+        })
+    }
+
     async fn try_bridge_vtab_next(
         &self,
         ext_name: &str,
@@ -8169,6 +8200,12 @@ impl Host {
     ) -> Result<
         std::result::Result<Vec<loaded_tabular::exports::sqlite::extension::vtab::VtabRow>, String>,
     > {
+        if let Some(r) = self
+            .try_bridge_vtab_fetch_batch(ext_name, vtab_id, cursor_id, max_rows)
+            .await
+        {
+            return r;
+        }
         if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
