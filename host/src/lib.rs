@@ -6998,6 +6998,284 @@ impl Host {
         })
     }
 
+    // ── Bridge vtab dispatch (Phase 9.3 follow-up) ──────────────
+    //
+    // Each try_bridge_vtab_* fetches the warm resident bridge instance,
+    // locks it, refreshes fuel, and calls the corresponding
+    // `sqlite:extension/vtab` export on the tabular world. The
+    // provider-backed path (try_provider_invoke) never fired for
+    // dynlink-bridge extensions because load_extension_as_dynlink_bridge
+    // populates dynlink_bridges + provider_manifests but not
+    // provider_backed. These methods bridge that gap so vtab-tier
+    // dispatch is available for the sqlink UDTF surface.
+    //
+    // The IndexInfo/IndexPlan/ConstraintOp types are shape-identical
+    // on both sides (dispatch-side vs. loaded_tabular vtab exports); the
+    // converters below fold one into the other so the outer function
+    // signatures don't leak the loaded_tabular world through them.
+
+    async fn try_bridge_vtab_connect(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        db_name: String,
+        table_name: String,
+        args: Vec<String>,
+    ) -> Option<Result<std::result::Result<String, String>>> {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.connect): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_connect(
+                &mut bridge.store,
+                vtab_id,
+                instance_id,
+                &db_name,
+                &table_name,
+                &args,
+            )
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab.connect trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_disconnect(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.disconnect): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_disconnect(&mut bridge.store, vtab_id, instance_id)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab.disconnect trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_best_index(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        info: bindings::sqlite::extension::vtab::IndexInfo,
+    ) -> Option<Result<std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>>>
+    {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let loaded_info = convert_index_info_to_loaded_tabular(&info);
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.best-index): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_best_index(&mut bridge.store, vtab_id, instance_id, &loaded_info)
+            .await;
+        Some(match result {
+            Ok(Ok(plan)) => Ok(Ok(convert_index_plan_from_loaded_tabular(plan))),
+            Ok(Err(e)) => Ok(Err(e)),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab.best-index trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_open(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        cursor_id: u64,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.open): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_open(&mut bridge.store, vtab_id, instance_id, cursor_id)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab.open trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_close(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.close): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_close(&mut bridge.store, vtab_id, cursor_id)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab.close trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_filter(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+        idx_num: i32,
+        idx_str: Option<String>,
+        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let loaded_args: Vec<loaded::sqlite::extension::types::SqlValue> = args
+            .into_iter()
+            .map(convert_sql_value_to_loaded)
+            .collect();
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.filter): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_filter(
+                &mut bridge.store,
+                vtab_id,
+                cursor_id,
+                idx_num,
+                idx_str.as_deref(),
+                &loaded_args,
+            )
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab.filter trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_next(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.next): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_next(&mut bridge.store, vtab_id, cursor_id)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab.next trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_eof(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> Option<Result<bool>> {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.eof): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_eof(&mut bridge.store, vtab_id, cursor_id)
+            .await;
+        Some(match result {
+            Ok(b) => Ok(b),
+            Err(trap) => Err(anyhow!("dynlink bridge vtab.eof trap: {trap}")),
+        })
+    }
+
+    async fn try_bridge_vtab_column(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+        col: i32,
+    ) -> Option<Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>>>
+    {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.column): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_column(&mut bridge.store, vtab_id, cursor_id, col)
+            .await;
+        Some(match result {
+            Ok(Ok(v)) => Ok(Ok(convert_sql_value_from_loaded(v))),
+            Ok(Err(e)) => Ok(Err(e)),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab.column trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_rowid(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> Option<Result<std::result::Result<i64, String>>> {
+        let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab.rowid): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab()
+            .call_rowid(&mut bridge.store, vtab_id, cursor_id)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab.rowid trap: {trap}"))),
+        })
+    }
+
     /// Task #228: the bindings `Manifest` for a provider-backed extension
     /// loaded via `.load <ext>-provider.wasm`, or `None` if `name` is not
     /// provider-backed. The cli `.load` loader handler returns this when
@@ -7560,6 +7838,24 @@ impl Host {
         table_name: String,
         args: Vec<String>,
     ) -> Result<std::result::Result<String, String>> {
+        // Phase 9.3 dynlink-bridge dispatch: try the warm resident
+        // bridge instance BEFORE the provider path. The provider
+        // resident path only sees extensions loaded via
+        // load_extension_as_provider; dynlink-bridge extensions
+        // populate dynlink_bridges instead.
+        if let Some(r) = self
+            .try_bridge_vtab_connect(
+                ext_name,
+                vtab_id,
+                instance_id,
+                db_name.clone(),
+                table_name.clone(),
+                args.clone(),
+            )
+            .await
+        {
+            return r;
+        }
         // Task #227: resident provider — vtab.connect on the warm store.
         if let Some(r) = self
             .try_provider_invoke(
@@ -7605,6 +7901,12 @@ impl Host {
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
         if let Some(r) = self
+            .try_bridge_vtab_disconnect(ext_name, vtab_id, instance_id)
+            .await
+        {
+            return r;
+        }
+        if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
                 "vtab.disconnect",
@@ -7624,6 +7926,12 @@ impl Host {
         instance_id: u64,
         info: bindings::sqlite::extension::vtab::IndexInfo,
     ) -> Result<std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>> {
+        if let Some(r) = self
+            .try_bridge_vtab_best_index(ext_name, vtab_id, instance_id, info.clone())
+            .await
+        {
+            return r;
+        }
         // Task #227: resident provider — best_index on the warm store. Map
         // the WIT IndexInfo to the woco request and the response back.
         if self.resident_provider_handle(ext_name).is_some() {
@@ -7664,6 +7972,12 @@ impl Host {
         cursor_id: u64,
     ) -> Result<std::result::Result<(), String>> {
         if let Some(r) = self
+            .try_bridge_vtab_open(ext_name, vtab_id, instance_id, cursor_id)
+            .await
+        {
+            return r;
+        }
+        if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
                 "vtab.open",
@@ -7682,6 +7996,9 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self.try_bridge_vtab_close(ext_name, vtab_id, cursor_id).await {
+            return r;
+        }
         if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
@@ -7704,6 +8021,19 @@ impl Host {
         idx_str: Option<String>,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_bridge_vtab_filter(
+                ext_name,
+                vtab_id,
+                cursor_id,
+                idx_num,
+                idx_str.clone(),
+                args.clone(),
+            )
+            .await
+        {
+            return r;
+        }
         if self.resident_provider_handle(ext_name).is_some() {
             let payload = provider_envelope::encode_vtab_filter(
                 vtab_id,
@@ -7725,6 +8055,9 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self.try_bridge_vtab_next(ext_name, vtab_id, cursor_id).await {
+            return r;
+        }
         if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
@@ -7744,6 +8077,9 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<bool> {
+        if let Some(r) = self.try_bridge_vtab_eof(ext_name, vtab_id, cursor_id).await {
+            return r;
+        }
         if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
@@ -7770,6 +8106,12 @@ impl Host {
         col: i32,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
         if let Some(r) = self
+            .try_bridge_vtab_column(ext_name, vtab_id, cursor_id, col)
+            .await
+        {
+            return r;
+        }
+        if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
                 "vtab.column",
@@ -7792,6 +8134,9 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<i64, String>> {
+        if let Some(r) = self.try_bridge_vtab_rowid(ext_name, vtab_id, cursor_id).await {
+            return r;
+        }
         if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
@@ -12160,4 +12505,88 @@ pub async fn run_cli_capture(
         .map_err(|e| anyhow!("wasi:cli/run.run: {e}"))?;
     drop(store);
     Ok(String::from_utf8_lossy(&stdout.contents()).into_owned())
+}
+
+// ---------------------------------------------------------------------------
+// Vtab type converters — dispatch-side <-> loaded_tabular::exports
+// ---------------------------------------------------------------------------
+// The `tabular` world's vtab interface produces its own copy of the
+// ConstraintOp/Constraint/OrderBy/IndexInfo/ConstraintUsage/IndexPlan
+// records because the `with:` clause only remaps IMPORT-side types.
+// These converters fold shape-identical records between the
+// dispatch-side (`bindings::sqlite::extension::vtab`) and the loaded
+// bindings so try_bridge_vtab_* signatures don't leak the tabular
+// world through the outer dispatch_vtab_* API.
+
+fn convert_constraint_op_to_loaded_tabular(
+    op: bindings::sqlite::extension::vtab::ConstraintOp,
+) -> loaded_tabular::exports::sqlite::extension::vtab::ConstraintOp {
+    use bindings::sqlite::extension::vtab::ConstraintOp as From;
+    use loaded_tabular::exports::sqlite::extension::vtab::ConstraintOp as To;
+    match op {
+        From::Eq => To::Eq,
+        From::Gt => To::Gt,
+        From::Le => To::Le,
+        From::Lt => To::Lt,
+        From::Ge => To::Ge,
+        From::Ne => To::Ne,
+        From::Match => To::Match,
+        From::Like => To::Like,
+        From::Regexp => To::Regexp,
+        From::Glob => To::Glob,
+        From::IsNull => To::IsNull,
+        From::IsNotNull => To::IsNotNull,
+        From::Limit => To::Limit,
+        From::Offset => To::Offset,
+        From::Function => To::Function,
+    }
+}
+
+fn convert_index_info_to_loaded_tabular(
+    info: &bindings::sqlite::extension::vtab::IndexInfo,
+) -> loaded_tabular::exports::sqlite::extension::vtab::IndexInfo {
+    loaded_tabular::exports::sqlite::extension::vtab::IndexInfo {
+        constraints: info
+            .constraints
+            .iter()
+            .map(
+                |c| loaded_tabular::exports::sqlite::extension::vtab::Constraint {
+                    column: c.column,
+                    op: convert_constraint_op_to_loaded_tabular(c.op),
+                    usable: c.usable,
+                },
+            )
+            .collect(),
+        orderbys: info
+            .orderbys
+            .iter()
+            .map(
+                |o| loaded_tabular::exports::sqlite::extension::vtab::Orderby {
+                    column: o.column,
+                    desc: o.desc,
+                },
+            )
+            .collect(),
+        col_used: info.col_used,
+    }
+}
+
+fn convert_index_plan_from_loaded_tabular(
+    plan: loaded_tabular::exports::sqlite::extension::vtab::IndexPlan,
+) -> bindings::sqlite::extension::vtab::IndexPlan {
+    bindings::sqlite::extension::vtab::IndexPlan {
+        constraint_usage: plan
+            .constraint_usage
+            .into_iter()
+            .map(|u| bindings::sqlite::extension::vtab::ConstraintUsage {
+                argv_index: u.argv_index,
+                omit: u.omit,
+            })
+            .collect(),
+        idx_num: plan.idx_num,
+        idx_str: plan.idx_str,
+        estimated_cost: plan.estimated_cost,
+        estimated_rows: plan.estimated_rows,
+        orderby_consumed: plan.orderby_consumed,
+    }
 }

@@ -707,9 +707,14 @@ impl wasmtime::component::HasData for BridgeStateHostData {
 /// Warm-once resident dynlink-bridge instance. Held under an async mutex
 /// by the loader so per-call `scalar-function::call` sequentializes on the
 /// one Store.
+///
+/// Instantiated under the `tabular` world (metadata + scalar-function +
+/// vtab exports). The `minimal` world's scalar-only exports are a
+/// subset — every bridge shape that only calls scalar/metadata methods
+/// remains compatible.
 pub struct BridgeInstance {
     pub store: Store<BridgeState>,
-    pub instance: crate::loaded::Minimal,
+    pub instance: crate::loaded_tabular::Tabular,
 }
 
 /// Instantiate a compose:dynlink bridge component.
@@ -760,9 +765,10 @@ pub async fn instantiate_dynlink_bridge(
         .set_fuel(u64::MAX / 2)
         .map_err(|e| format!("set_fuel: {e}"))?;
     store.set_epoch_deadline(1_000_000_000_000);
-    let instance = crate::loaded::Minimal::instantiate_async(&mut store, &component, &linker)
-        .await
-        .map_err(|e| format!("instantiate dynlink bridge: {e}"))?;
+    let instance =
+        crate::loaded_tabular::Tabular::instantiate_async(&mut store, &component, &linker)
+            .await
+            .map_err(|e| format!("instantiate dynlink bridge: {e}"))?;
     Ok(BridgeInstance { store, instance })
 }
 
