@@ -4781,6 +4781,19 @@ pub struct Host {
     /// checks `try_bridge_scalar` before `try_provider_scalar` and drives
     /// the bridge's `scalar-function::call` on this persisted Store.
     dynlink_bridges: Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<compose_provider::BridgeInstance>>>>>,
+    /// Sibling of `dynlink_bridges` for bridges whose component ALSO
+    /// exports `sqlite:extension/vtab-update` (any manifested vtab
+    /// has `mutable: true`). Populated at load time by a second
+    /// `instantiate_dynlink_bridge_mutating` call on the same bytes;
+    /// the read tier still dispatches through `dynlink_bridges`, and
+    /// the mutating tier (`dispatch_vtab_{update, begin, sync, commit,
+    /// rollback, rename, savepoint, release, rollback_to,
+    /// is_shadow_name, integrity}`) tries this map first via the
+    /// `try_bridge_vtab_*` helpers. Both Stores share the same
+    /// host-side `AsyncDynLinkBridge`, so provider-held state
+    /// (cursors, accumulators, buffered writes) is coherent across
+    /// the two paths.
+    mutating_bridges: Arc<RwLock<HashMap<String, Arc<tokio::sync::Mutex<compose_provider::MutatingBridgeInstance>>>>>,
     /// Trust policy applied to wasm-component provider registration.
     /// Default `TrustPolicy::AllowAll` preserves the original
     /// behavior (any file path can be registered). Operators that
@@ -5334,6 +5347,7 @@ impl Host {
             provider_backed: Arc::new(RwLock::new(HashMap::new())),
             provider_manifests: Arc::new(RwLock::new(HashMap::new())),
             dynlink_bridges: Arc::new(RwLock::new(HashMap::new())),
+            mutating_bridges: Arc::new(RwLock::new(HashMap::new())),
             trust_policy,
             dynlink_bridge,
             signature_verifier,
@@ -6227,7 +6241,43 @@ impl Host {
             )
             .await
             .map_err(|e| anyhow!("instantiate dynlink bridge {hint}: {e}"))?;
+            // Sibling mutating instantiation: if the bridge component
+            // also exports `sqlite:extension/vtab-update`, stand up a
+            // second instance under the `tabular-mutating` world so
+            // the mutating dispatch tier can route xUpdate + txn
+            // callbacks through it. Read-only bridges skip this and
+            // pay nothing.
+            let mutating = if resolved_component
+                .as_ref()
+                .map(|c| {
+                    compose_provider::exports_sqlite_extension_vtab_update(c, &self.engine)
+                })
+                .unwrap_or(false)
+            {
+                Some(
+                    compose_provider::instantiate_dynlink_bridge_mutating(
+                        &self.engine,
+                        self.dynlink_bridge.clone(),
+                        &bytes,
+                    )
+                    .await
+                    .map_err(|e| {
+                        anyhow!("instantiate dynlink bridge (mutating) {hint}: {e}")
+                    })?,
+                )
+            } else {
+                None
+            };
             let ext_name = self.load_extension_as_dynlink_bridge(&hint, bridge).await?;
+            if let Some(m) = mutating {
+                self.mutating_bridges
+                    .write()
+                    .insert(ext_name.clone(), Arc::new(tokio::sync::Mutex::new(m)));
+                tracing::info!(
+                    ext = %ext_name,
+                    "dynlink bridge mutating instance loaded"
+                );
+            }
             let _ = policy; // policy consumed by the bridge's downstream provider
             return Ok(ext_name);
         }
@@ -7307,6 +7357,302 @@ impl Host {
         })
     }
 
+    // ── Bridge mutating-vtab dispatch ─────────────────────────────
+    //
+    // Route xUpdate + transactional callbacks + xRename + xShadowName
+    // + xIntegrity through the sibling `mutating_bridges` map. The
+    // `sqlite:extension/vtab-update` interface reuses the shared
+    // `sql-value` type from the `types` module (remapped via bindgen
+    // `with:`) and otherwise takes only primitives, so the Rust
+    // signatures below cross no per-world divergent types — the
+    // reason a separate mutating instance suffices where the read
+    // path's IndexInfo / IndexPlan / VtabRow would have required
+    // per-world converters.
+    //
+    // All 11 methods share the same shape as the read-path
+    // `try_bridge_vtab_*` above: `read().get().cloned()?` short-
+    // circuits when the ext isn't a mutating bridge, so dispatch
+    // falls through to the provider-backed path.
+
+    async fn try_bridge_vtab_update(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        args: &[bindings::sqlite::extension::types::SqlValue],
+    ) -> Option<Result<std::result::Result<i64, String>>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let loaded_args: Vec<loaded::sqlite::extension::types::SqlValue> = args
+            .iter()
+            .cloned()
+            .map(convert_sql_value_to_loaded)
+            .collect();
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.update): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_update(&mut bridge.store, vtab_id, instance_id, &loaded_args)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab-update.update trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_begin(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.begin): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_begin(&mut bridge.store, vtab_id, instance_id)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab-update.begin trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_sync(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.sync): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_sync(&mut bridge.store, vtab_id, instance_id)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab-update.sync trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_commit(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.commit): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_commit(&mut bridge.store, vtab_id, instance_id)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab-update.commit trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_rollback(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.rollback): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_rollback(&mut bridge.store, vtab_id, instance_id)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab-update.rollback trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_rename(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        new_name: &str,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.rename): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_rename(&mut bridge.store, vtab_id, instance_id, new_name)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab-update.rename trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_savepoint(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        savepoint: i32,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.savepoint): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_savepoint(&mut bridge.store, vtab_id, instance_id, savepoint)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab-update.savepoint trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_release(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        savepoint: i32,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.release): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_release(&mut bridge.store, vtab_id, instance_id, savepoint)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!("dynlink bridge vtab-update.release trap: {trap}"))),
+        })
+    }
+
+    async fn try_bridge_vtab_rollback_to(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        savepoint: i32,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.rollback-to): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_rollback_to(&mut bridge.store, vtab_id, instance_id, savepoint)
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!(
+                "dynlink bridge vtab-update.rollback-to trap: {trap}"
+            ))),
+        })
+    }
+
+    async fn try_bridge_vtab_is_shadow_name(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        name: &str,
+    ) -> Option<Result<bool>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.is-shadow-name): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_is_shadow_name(&mut bridge.store, vtab_id, name)
+            .await;
+        Some(match result {
+            Ok(b) => Ok(b),
+            Err(trap) => Err(anyhow!(
+                "dynlink bridge vtab-update.is-shadow-name trap: {trap}"
+            )),
+        })
+    }
+
+    async fn try_bridge_vtab_integrity(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        schema: &str,
+        table_name: &str,
+        mode_flags: u32,
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
+        let mut guard = bridge_arc.lock().await;
+        let bridge = &mut *guard;
+        if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
+            return Some(Err(anyhow!("refresh fuel (vtab-update.integrity): {e}")));
+        }
+        let result = bridge
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_integrity(
+                &mut bridge.store,
+                vtab_id,
+                instance_id,
+                schema,
+                table_name,
+                mode_flags,
+            )
+            .await;
+        Some(match result {
+            Ok(r) => Ok(r),
+            Err(trap) => Ok(Err(format!(
+                "dynlink bridge vtab-update.integrity trap: {trap}"
+            ))),
+        })
+    }
+
     /// Task #228: the bindings `Manifest` for a provider-backed extension
     /// loaded via `.load <ext>-provider.wasm`, or `None` if `name` is not
     /// provider-backed. The cli `.load` loader handler returns this when
@@ -8238,10 +8584,14 @@ impl Host {
 
     // ── Mutating-vtab dispatch ──────────────────────────────
     //
-    // All nine methods consult `tabular_mutating_locked` directly
-    // — the routing question is settled (mutable: true is a
-    // prerequisite for the cli to even register an xUpdate
-    // trampoline). Each calls into the `vtab-update` export proxy.
+    // Each method tries the dynlink-bridge mutating tier first via
+    // `try_bridge_vtab_*` (routes through `mutating_bridges` when the
+    // bridge component exports `sqlite:extension/vtab-update`), then
+    // falls through to the resident-provider path (`try_provider_
+    // invoke("vtab-update.*")`), then errors when neither is wired.
+    // Mirrors the read-tier dispatch order established in the
+    // `dispatch_vtab_{connect, best_index, filter, next, ...}` block
+    // above.
 
     pub async fn dispatch_vtab_update(
         &self,
@@ -8250,6 +8600,12 @@ impl Host {
         instance_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<i64, String>> {
+        if let Some(r) = self
+            .try_bridge_vtab_update(ext_name, vtab_id, instance_id, &args)
+            .await
+        {
+            return r;
+        }
         // Task #227: resident provider — xUpdate mutates the warm store's
         // in-memory table; the subsequent read cursor sees it (one store).
         if self.resident_provider_handle(ext_name).is_some() {
@@ -8274,6 +8630,9 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self.try_bridge_vtab_begin(ext_name, vtab_id, instance_id).await {
+            return r;
+        }
         if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
@@ -8293,6 +8652,9 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self.try_bridge_vtab_sync(ext_name, vtab_id, instance_id).await {
+            return r;
+        }
         if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
@@ -8313,6 +8675,12 @@ impl Host {
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
         if let Some(r) = self
+            .try_bridge_vtab_commit(ext_name, vtab_id, instance_id)
+            .await
+        {
+            return r;
+        }
+        if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
                 "vtab-update.commit",
@@ -8331,6 +8699,12 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_bridge_vtab_rollback(ext_name, vtab_id, instance_id)
+            .await
+        {
+            return r;
+        }
         if let Some(r) = self
             .try_provider_invoke(
                 ext_name,
@@ -8351,6 +8725,12 @@ impl Host {
         instance_id: u64,
         new_name: String,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_bridge_vtab_rename(ext_name, vtab_id, instance_id, &new_name)
+            .await
+        {
+            return r;
+        }
         // Task #228: resident provider — cold vtab xRename routes through
         // the warm store so the rename lands on the same instance state.
         if self.resident_provider_handle(ext_name).is_some() {
@@ -8372,6 +8752,12 @@ impl Host {
         instance_id: u64,
         savepoint: i32,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_bridge_vtab_savepoint(ext_name, vtab_id, instance_id, savepoint)
+            .await
+        {
+            return r;
+        }
         // Task #228: resident provider — cold vtab xSavepoint.
         if self.resident_provider_handle(ext_name).is_some() {
             let payload = provider_envelope::encode_vtab_savepoint(vtab_id, instance_id, savepoint);
@@ -8392,6 +8778,12 @@ impl Host {
         instance_id: u64,
         savepoint: i32,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_bridge_vtab_release(ext_name, vtab_id, instance_id, savepoint)
+            .await
+        {
+            return r;
+        }
         // Task #228: resident provider — cold vtab xRelease.
         if self.resident_provider_handle(ext_name).is_some() {
             let payload = provider_envelope::encode_vtab_savepoint(vtab_id, instance_id, savepoint);
@@ -8412,6 +8804,12 @@ impl Host {
         instance_id: u64,
         savepoint: i32,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_bridge_vtab_rollback_to(ext_name, vtab_id, instance_id, savepoint)
+            .await
+        {
+            return r;
+        }
         // Task #228: resident provider — cold vtab xRollbackTo.
         if self.resident_provider_handle(ext_name).is_some() {
             let payload = provider_envelope::encode_vtab_savepoint(vtab_id, instance_id, savepoint);
@@ -8431,6 +8829,12 @@ impl Host {
         vtab_id: u64,
         name: &str,
     ) -> Result<bool> {
+        if let Some(r) = self
+            .try_bridge_vtab_is_shadow_name(ext_name, vtab_id, name)
+            .await
+        {
+            return r;
+        }
         // Task #228: resident provider — cold vtab xShadowName.
         if self.resident_provider_handle(ext_name).is_some() {
             let payload = provider_envelope::encode_vtab_shadow_name(vtab_id, name);
@@ -8457,6 +8861,19 @@ impl Host {
         table_name: &str,
         mode_flags: u32,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_bridge_vtab_integrity(
+                ext_name,
+                vtab_id,
+                instance_id,
+                schema,
+                table_name,
+                mode_flags,
+            )
+            .await
+        {
+            return r;
+        }
         // Task #228: resident provider — cold vtab xIntegrity.
         if self.resident_provider_handle(ext_name).is_some() {
             let payload = provider_envelope::encode_vtab_integrity(

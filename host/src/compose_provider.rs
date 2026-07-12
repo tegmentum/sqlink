@@ -713,18 +713,37 @@ impl wasmtime::component::HasData for BridgeStateHostData {
 /// subset — every bridge shape that only calls scalar/metadata methods
 /// remains compatible.
 ///
-/// vtab-update (mutating) dispatch is deferred: instantiating a bridge
-/// that DOES export `sqlite:extension/vtab-update@1.0.0` under the
-/// `tabular-mutating` world would require dual bindings whose exported
-/// types (Manifest, VtabRow, IndexPlan, ...) are DISTINCT from tabular's
-/// even though structurally identical — bindgen's `with:` clause only
-/// remaps IMPORTS. Unifying the two bindings needs either a wit-bindgen
-/// enhancement or a manual delegate layer at every call site. Tracked
-/// as follow-up; postgis-sqlink-bridge is read-only so this doesn't
-/// block anything today.
+/// Read-only bridges (no `sqlite:extension/vtab-update` export) hold
+/// only this instance. Bridges that also export vtab-update are
+/// instantiated a SECOND time under the tabular-mutating world into
+/// `MutatingBridgeInstance` and tracked by `Host::mutating_bridges`;
+/// the mutating dispatch tier (`try_bridge_vtab_{update, begin, sync,
+/// commit, rollback, rename, savepoint, release, rollback_to,
+/// is_shadow_name, integrity}`) routes through the mutating map. The
+/// two Stores share the same host-side `AsyncDynLinkBridge`, so cross-
+/// call state that lives in the composed provider (accumulators,
+/// cursors, buffered writes) is shared. Only wasm bridge-local state
+/// (if any — the shim-codegen output has none today) is split.
 pub struct BridgeInstance {
     pub store: Store<BridgeState>,
     pub instance: crate::loaded_tabular::Tabular,
+}
+
+/// Warm-once resident dynlink-bridge instance bound to the
+/// `tabular-mutating` world — a strict superset of `tabular`'s exports
+/// that adds `sqlite:extension/vtab-update` (xUpdate + xBegin / xSync /
+/// xCommit / xRollback / xRename / xSavepoint / xRelease / xRollbackTo
+/// / xShadowName / xIntegrity). Populated in `Host::mutating_bridges`
+/// only when the bridge component exports vtab-update.
+///
+/// The mutating dispatch tier consults this instance directly; the
+/// read tier (best-index, filter, next, column, ...) continues to
+/// dispatch on the sibling `BridgeInstance` in `Host::dynlink_bridges`.
+/// Both point at the same underlying provider through the shared
+/// `AsyncDynLinkBridge`.
+pub struct MutatingBridgeInstance {
+    pub store: Store<BridgeState>,
+    pub instance: crate::loaded_tabular_mutating::TabularMutating,
 }
 
 /// Instantiate a compose:dynlink bridge component.
@@ -780,6 +799,55 @@ pub async fn instantiate_dynlink_bridge(
             .await
             .map_err(|e| format!("instantiate dynlink bridge: {e}"))?;
     Ok(BridgeInstance { store, instance })
+}
+
+/// Mutating variant of `instantiate_dynlink_bridge`. Same linker wiring
+/// (WASI defensively + `compose:dynlink/linker`), but instantiates the
+/// component under the `tabular-mutating` world so its `vtab-update`
+/// export is reachable. The caller must guarantee the component
+/// actually exports `sqlite:extension/vtab-update` (via
+/// `exports_sqlite_extension_vtab_update`); otherwise instantiation
+/// fails with a bindgen error naming the missing export.
+///
+/// Called ONCE per mutating bridge at load time, in addition to the
+/// read-side `instantiate_dynlink_bridge`. The result is stashed
+/// under `Host::mutating_bridges`.
+pub async fn instantiate_dynlink_bridge_mutating(
+    engine: &Engine,
+    dynlink_bridge: datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>,
+    bytes: &[u8],
+) -> Result<MutatingBridgeInstance, String> {
+    let component = Component::from_binary(engine, bytes)
+        .map_err(|e| format!("compile dynlink bridge (mutating): {e}"))?;
+    let mut linker: Linker<BridgeState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+        .map_err(|e| format!("dynlink-bridge (mutating) wasi linker: {e}"))?;
+    crate::compose::compose::dynlink::linker::add_to_linker::<_, BridgeStateHostData>(
+        &mut linker,
+        |state: &mut BridgeState| BridgeStateHostWrap {
+            bridge: &state.dynlink_bridge,
+            resources: &mut state.resources,
+        },
+    )
+    .map_err(|e| format!("dynlink-bridge (mutating) compose:dynlink linker: {e}"))?;
+    let mut wasi_builder = wasmtime_wasi::WasiCtxBuilder::new();
+    wasi_builder.inherit_stdio();
+    let state = BridgeState {
+        resources: wasmtime_wasi::ResourceTable::new(),
+        wasi: wasi_builder.build(),
+        dynlink_bridge,
+    };
+    let mut store = wasmtime::Store::new(engine, state);
+    store
+        .set_fuel(u64::MAX / 2)
+        .map_err(|e| format!("set_fuel: {e}"))?;
+    store.set_epoch_deadline(1_000_000_000_000);
+    let instance = crate::loaded_tabular_mutating::TabularMutating::instantiate_async(
+        &mut store, &component, &linker,
+    )
+    .await
+    .map_err(|e| format!("instantiate dynlink bridge (mutating): {e}"))?;
+    Ok(MutatingBridgeInstance { store, instance })
 }
 
 /// True if `component` exports `sqlite:extension/vtab-update@1.0.0` —
