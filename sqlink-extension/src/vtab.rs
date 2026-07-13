@@ -9,7 +9,7 @@
 //! mismatch the scalar trampolines work around with pApi —
 //! repeated here for vtabs.
 //!
-//! Scope (v1, task #489):
+//! Scope:
 //!   - Read-only eponymous vtabs (the common UDTF case — postgis
 //!     ST_Dump + friends, mobilitydb table-functions). xCreate is
 //!     null; SQLite treats the module name itself as the table
@@ -17,11 +17,17 @@
 //!   - Read-only `CREATE VIRTUAL TABLE`-style vtabs (xCreate non-
 //!     null but eponymous=false). Used by extensions that need
 //!     persistent backing storage opened lazily.
-//!   - Mutable / xUpdate / transactional vtabs are NOT covered in
-//!     v1. The flag goes through but the module template is the
-//!     read-only one. A subsequent task will add the mutable
-//!     template once the manifest count of mutable vtabs hits
-//!     anything non-zero in the catalog (zero today).
+//!   - Mutable / xUpdate / transactional vtabs
+//!     (`VtabSpec.mutable == true`). MODULE_MUTABLE /
+//!     MODULE_MUTABLE_EPONYMOUS wire the `x_update` +
+//!     `x_{begin, sync, commit, rollback, rename, savepoint,
+//!     release, rollback_to}` trampolines. Each blocks on the
+//!     matching `Host::dispatch_vtab_*` method, which routes
+//!     through the mutating-bridge instance (compose:dynlink
+//!     bridge path) or the resident provider
+//!     (`vtab-update.*` provider-envelope path) — both paths
+//!     share the dispatch surface, so the trampoline is
+//!     unified.
 //!
 //! Host-side dispatch reuse: every trampoline calls
 //! `Host::dispatch_vtab_*` (async) via `Runtime::block_on`. Those
@@ -657,6 +663,218 @@ unsafe extern "C" fn x_destroy_aux(p: *mut c_void) {
     }
 }
 
+// ─── Mutating trampolines ─────────────────────────────────────────
+//
+// Wired only from `MODULE_MUTABLE` / `MODULE_MUTABLE_EPONYMOUS`,
+// which `register_vtab_module` picks when `VtabSpec.mutable == true`.
+// Every trampoline blocks on the matching `Host::dispatch_vtab_*`
+// method — `Host` routes through the mutating-bridge instance
+// (bridge-side) or the resident provider (provider-side); both
+// share the same dispatch surface, so the trampoline is the same.
+
+unsafe extern "C" fn x_update(
+    p_vtab: *mut sqlite3_vtab,
+    argc: c_int,
+    argv: *mut *mut sqlite3_value,
+    p_rowid: *mut sqlite3_int64,
+) -> c_int {
+    let lv = &*(p_vtab as *const LoaderVtab);
+    let ext_name = (*lv.ext_name_owned).clone();
+    let g = globals();
+    let mut args = Vec::with_capacity(argc as usize);
+    for i in 0..argc as usize {
+        args.push(sqlite3_value_to_wit(&g.api, *argv.add(i)));
+    }
+    match g.rt.block_on(g.host.dispatch_vtab_update(
+        &ext_name,
+        lv.vtab_id,
+        lv.instance_id,
+        args,
+    )) {
+        Ok(Ok(new_rowid)) => {
+            if !p_rowid.is_null() {
+                *p_rowid = new_rowid;
+            }
+            SQLITE_OK
+        }
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.update: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.update dispatch: {e}"));
+            SQLITE_ERROR
+        }
+    }
+}
+
+unsafe extern "C" fn x_begin(p_vtab: *mut sqlite3_vtab) -> c_int {
+    let lv = &*(p_vtab as *const LoaderVtab);
+    let ext_name = (*lv.ext_name_owned).clone();
+    let g = globals();
+    match g
+        .rt
+        .block_on(g.host.dispatch_vtab_begin(&ext_name, lv.vtab_id, lv.instance_id))
+    {
+        Ok(Ok(())) => SQLITE_OK,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.begin: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.begin dispatch: {e}"));
+            SQLITE_ERROR
+        }
+    }
+}
+
+unsafe extern "C" fn x_sync(p_vtab: *mut sqlite3_vtab) -> c_int {
+    let lv = &*(p_vtab as *const LoaderVtab);
+    let ext_name = (*lv.ext_name_owned).clone();
+    let g = globals();
+    match g
+        .rt
+        .block_on(g.host.dispatch_vtab_sync(&ext_name, lv.vtab_id, lv.instance_id))
+    {
+        Ok(Ok(())) => SQLITE_OK,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.sync: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.sync dispatch: {e}"));
+            SQLITE_ERROR
+        }
+    }
+}
+
+unsafe extern "C" fn x_commit(p_vtab: *mut sqlite3_vtab) -> c_int {
+    let lv = &*(p_vtab as *const LoaderVtab);
+    let ext_name = (*lv.ext_name_owned).clone();
+    let g = globals();
+    match g.rt.block_on(g.host.dispatch_vtab_commit(
+        &ext_name,
+        lv.vtab_id,
+        lv.instance_id,
+    )) {
+        Ok(Ok(())) => SQLITE_OK,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.commit: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.commit dispatch: {e}"));
+            SQLITE_ERROR
+        }
+    }
+}
+
+unsafe extern "C" fn x_rollback(p_vtab: *mut sqlite3_vtab) -> c_int {
+    let lv = &*(p_vtab as *const LoaderVtab);
+    let ext_name = (*lv.ext_name_owned).clone();
+    let g = globals();
+    match g.rt.block_on(g.host.dispatch_vtab_rollback(
+        &ext_name,
+        lv.vtab_id,
+        lv.instance_id,
+    )) {
+        Ok(Ok(())) => SQLITE_OK,
+        // Per SQLite convention: rollback errors are logged but do
+        // not abort what is already rolling back.
+        Ok(Err(_)) => SQLITE_OK,
+        Err(_) => SQLITE_OK,
+    }
+}
+
+unsafe extern "C" fn x_rename(p_vtab: *mut sqlite3_vtab, z_new: *const c_char) -> c_int {
+    let lv = &*(p_vtab as *const LoaderVtab);
+    let ext_name = (*lv.ext_name_owned).clone();
+    let new_name = cstr_to_string(z_new);
+    let g = globals();
+    match g.rt.block_on(g.host.dispatch_vtab_rename(
+        &ext_name,
+        lv.vtab_id,
+        lv.instance_id,
+        new_name,
+    )) {
+        Ok(Ok(())) => SQLITE_OK,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.rename: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.rename dispatch: {e}"));
+            SQLITE_ERROR
+        }
+    }
+}
+
+unsafe extern "C" fn x_savepoint(p_vtab: *mut sqlite3_vtab, savepoint: c_int) -> c_int {
+    let lv = &*(p_vtab as *const LoaderVtab);
+    let ext_name = (*lv.ext_name_owned).clone();
+    let g = globals();
+    match g.rt.block_on(g.host.dispatch_vtab_savepoint(
+        &ext_name,
+        lv.vtab_id,
+        lv.instance_id,
+        savepoint,
+    )) {
+        Ok(Ok(())) => SQLITE_OK,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.savepoint: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.savepoint dispatch: {e}"));
+            SQLITE_ERROR
+        }
+    }
+}
+
+unsafe extern "C" fn x_release(p_vtab: *mut sqlite3_vtab, savepoint: c_int) -> c_int {
+    let lv = &*(p_vtab as *const LoaderVtab);
+    let ext_name = (*lv.ext_name_owned).clone();
+    let g = globals();
+    match g.rt.block_on(g.host.dispatch_vtab_release(
+        &ext_name,
+        lv.vtab_id,
+        lv.instance_id,
+        savepoint,
+    )) {
+        Ok(Ok(())) => SQLITE_OK,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.release: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.release dispatch: {e}"));
+            SQLITE_ERROR
+        }
+    }
+}
+
+unsafe extern "C" fn x_rollback_to(p_vtab: *mut sqlite3_vtab, savepoint: c_int) -> c_int {
+    let lv = &*(p_vtab as *const LoaderVtab);
+    let ext_name = (*lv.ext_name_owned).clone();
+    let g = globals();
+    match g.rt.block_on(g.host.dispatch_vtab_rollback_to(
+        &ext_name,
+        lv.vtab_id,
+        lv.instance_id,
+        savepoint,
+    )) {
+        Ok(Ok(())) => SQLITE_OK,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.rollback_to: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.rollback_to dispatch: {e}"));
+            SQLITE_ERROR
+        }
+    }
+}
+
 // Silence the unused-import warning for SQLITE_INTERNAL — it's
 // reserved for future trampoline use (instance lookup failure).
 const _: c_int = SQLITE_INTERNAL;
@@ -734,6 +952,71 @@ const MODULE_EPONYMOUS: sqlite3_module = sqlite3_module {
     x_rollback_to: None,
 };
 
+// Mutating counterparts of MODULE / MODULE_EPONYMOUS.
+// `register_vtab_module` selects one of these when
+// `VtabSpec.mutable == true`. The read-side pointers are identical
+// to the read-only templates; the mutating side wires the
+// `x_{update, begin, sync, commit, rollback, rename, savepoint,
+// release, rollback_to}` trampolines above.
+//
+// SQLite treats `x_update = Some(_)` as the load-bearing marker
+// that the module is writable. When `x_update` is `None`, sqlite3
+// synthesizes the "table X may not be modified" error at
+// authorization / parse time — the trampoline is never reached.
+// So the mutable and read-only templates must be distinct
+// `sqlite3_module` values.
+const MODULE_MUTABLE: sqlite3_module = sqlite3_module {
+    i_version: 1,
+    x_create: Some(x_create),
+    x_connect: Some(x_connect),
+    x_best_index: Some(x_best_index),
+    x_disconnect: Some(x_disconnect),
+    x_destroy: Some(x_destroy),
+    x_open: Some(x_open),
+    x_close: Some(x_close),
+    x_filter: Some(x_filter),
+    x_next: Some(x_next),
+    x_eof: Some(x_eof),
+    x_column: Some(x_column),
+    x_rowid: Some(x_rowid),
+    x_update: Some(x_update),
+    x_begin: Some(x_begin),
+    x_sync: Some(x_sync),
+    x_commit: Some(x_commit),
+    x_rollback: Some(x_rollback),
+    x_find_function: None,
+    x_rename: Some(x_rename),
+    x_savepoint: Some(x_savepoint),
+    x_release: Some(x_release),
+    x_rollback_to: Some(x_rollback_to),
+};
+
+const MODULE_MUTABLE_EPONYMOUS: sqlite3_module = sqlite3_module {
+    i_version: 1,
+    x_create: Some(x_connect),
+    x_connect: Some(x_connect),
+    x_best_index: Some(x_best_index),
+    x_disconnect: Some(x_disconnect),
+    x_destroy: Some(x_destroy),
+    x_open: Some(x_open),
+    x_close: Some(x_close),
+    x_filter: Some(x_filter),
+    x_next: Some(x_next),
+    x_eof: Some(x_eof),
+    x_column: Some(x_column),
+    x_rowid: Some(x_rowid),
+    x_update: Some(x_update),
+    x_begin: Some(x_begin),
+    x_sync: Some(x_sync),
+    x_commit: Some(x_commit),
+    x_rollback: Some(x_rollback),
+    x_find_function: None,
+    x_rename: Some(x_rename),
+    x_savepoint: Some(x_savepoint),
+    x_release: Some(x_release),
+    x_rollback_to: Some(x_rollback_to),
+};
+
 // ─── Public registration entry ────────────────────────────────────
 
 /// Register a wasm-extension vtab on `db` via pApi
@@ -764,7 +1047,7 @@ pub unsafe fn register_vtab_module(
     ext_name: &str,
     vtab_id: u64,
     eponymous: bool,
-    _mutable: bool,
+    mutable: bool,
     batched: bool,
 ) -> c_int {
     init_globals(host, rt, api);
@@ -784,10 +1067,11 @@ pub unsafe fn register_vtab_module(
             return SQLITE_ERROR;
         }
     };
-    let module_ptr: *const sqlite3_module = if eponymous {
-        &MODULE_EPONYMOUS
-    } else {
-        &MODULE
+    let module_ptr: *const sqlite3_module = match (eponymous, mutable) {
+        (true, true) => &MODULE_MUTABLE_EPONYMOUS,
+        (true, false) => &MODULE_EPONYMOUS,
+        (false, true) => &MODULE_MUTABLE,
+        (false, false) => &MODULE,
     };
     let create = match api.as_ref().create_module_v2 {
         Some(f) => f,
