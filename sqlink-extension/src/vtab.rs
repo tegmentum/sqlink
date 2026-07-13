@@ -965,8 +965,16 @@ const MODULE_EPONYMOUS: sqlite3_module = sqlite3_module {
 // authorization / parse time — the trampoline is never reached.
 // So the mutable and read-only templates must be distinct
 // `sqlite3_module` values.
+//
+// `i_version: 2` is required: sqlite3 gates `x_savepoint` /
+// `x_release` / `x_rollback_to` dispatch on `iVersion >= 2`. With
+// `i_version: 1` those three trampolines are wired but never fire —
+// `SAVEPOINT` / `RELEASE` / `ROLLBACK TO` on the vtab become
+// silent no-ops (SQLite doesn't error, but doesn't call the
+// module either). The read-only templates stay at v1 because they
+// wire none of the savepoint slots.
 const MODULE_MUTABLE: sqlite3_module = sqlite3_module {
-    i_version: 1,
+    i_version: 2,
     x_create: Some(x_create),
     x_connect: Some(x_connect),
     x_best_index: Some(x_best_index),
@@ -992,7 +1000,7 @@ const MODULE_MUTABLE: sqlite3_module = sqlite3_module {
 };
 
 const MODULE_MUTABLE_EPONYMOUS: sqlite3_module = sqlite3_module {
-    i_version: 1,
+    i_version: 2,
     x_create: Some(x_connect),
     x_connect: Some(x_connect),
     x_best_index: Some(x_best_index),
@@ -1115,9 +1123,19 @@ mod tests {
     }
 
     #[test]
-    fn module_templates_are_v1() {
+    fn read_only_templates_are_v1() {
         assert_eq!(MODULE.i_version, 1);
         assert_eq!(MODULE_EPONYMOUS.i_version, 1);
+    }
+
+    #[test]
+    fn mutable_templates_are_v2() {
+        // sqlite3 gates x_savepoint / x_release / x_rollback_to
+        // dispatch on iVersion >= 2. The mutable templates must
+        // advertise v2 or those three trampolines are wired but
+        // never fire.
+        assert_eq!(MODULE_MUTABLE.i_version, 2);
+        assert_eq!(MODULE_MUTABLE_EPONYMOUS.i_version, 2);
     }
 
     #[test]
