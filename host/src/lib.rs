@@ -7073,6 +7073,35 @@ impl Host {
         table_name: String,
         args: Vec<String>,
     ) -> Option<Result<std::result::Result<String, String>>> {
+        // Prefer the mutating instance when the ext has one, so read
+        // + write dispatch share a single wasm store (unified linear
+        // memory). Read-only bridges fall through to `dynlink_bridges`.
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.connect): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_connect(
+                    &mut m.store,
+                    vtab_id,
+                    instance_id,
+                    &db_name,
+                    &table_name,
+                    &args,
+                )
+                .await;
+            return Some(match result {
+                Ok(r) => Ok(r),
+                Err(trap) => Ok(Err(format!(
+                    "dynlink bridge (mutating) vtab.connect trap: {trap}"
+                ))),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -7103,6 +7132,25 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Option<Result<std::result::Result<(), String>>> {
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.disconnect): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_disconnect(&mut m.store, vtab_id, instance_id)
+                .await;
+            return Some(match result {
+                Ok(r) => Ok(r),
+                Err(trap) => Ok(Err(format!(
+                    "dynlink bridge (mutating) vtab.disconnect trap: {trap}"
+                ))),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -7128,6 +7176,27 @@ impl Host {
         info: bindings::sqlite::extension::vtab::IndexInfo,
     ) -> Option<Result<std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>>>
     {
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let loaded_info = convert_index_info_to_loaded_mut(&info);
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.best-index): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_best_index(&mut m.store, vtab_id, instance_id, &loaded_info)
+                .await;
+            return Some(match result {
+                Ok(Ok(plan)) => Ok(Ok(convert_index_plan_from_loaded_mut(plan))),
+                Ok(Err(e)) => Ok(Err(e)),
+                Err(trap) => Ok(Err(format!(
+                    "dynlink bridge (mutating) vtab.best-index trap: {trap}"
+                ))),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let loaded_info = convert_index_info_to_loaded_tabular(&info);
         let mut guard = bridge_arc.lock().await;
@@ -7154,6 +7223,25 @@ impl Host {
         instance_id: u64,
         cursor_id: u64,
     ) -> Option<Result<std::result::Result<(), String>>> {
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.open): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_open(&mut m.store, vtab_id, instance_id, cursor_id)
+                .await;
+            return Some(match result {
+                Ok(r) => Ok(r),
+                Err(trap) => Ok(Err(format!(
+                    "dynlink bridge (mutating) vtab.open trap: {trap}"
+                ))),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -7177,6 +7265,25 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Option<Result<std::result::Result<(), String>>> {
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.close): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_close(&mut m.store, vtab_id, cursor_id)
+                .await;
+            return Some(match result {
+                Ok(r) => Ok(r),
+                Err(trap) => Ok(Err(format!(
+                    "dynlink bridge (mutating) vtab.close trap: {trap}"
+                ))),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -7203,6 +7310,36 @@ impl Host {
         idx_str: Option<String>,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Option<Result<std::result::Result<(), String>>> {
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let loaded_args: Vec<loaded::sqlite::extension::types::SqlValue> = args
+                .into_iter()
+                .map(convert_sql_value_to_loaded)
+                .collect();
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.filter): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_filter(
+                    &mut m.store,
+                    vtab_id,
+                    cursor_id,
+                    idx_num,
+                    idx_str.as_deref(),
+                    &loaded_args,
+                )
+                .await;
+            return Some(match result {
+                Ok(r) => Ok(r),
+                Err(trap) => Ok(Err(format!(
+                    "dynlink bridge (mutating) vtab.filter trap: {trap}"
+                ))),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let loaded_args: Vec<loaded::sqlite::extension::types::SqlValue> = args
             .into_iter()
@@ -7245,6 +7382,29 @@ impl Host {
             >,
         >,
     > {
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.fetch-batch): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_fetch_batch(&mut m.store, vtab_id, cursor_id, max_rows)
+                .await;
+            return Some(match result {
+                Ok(Ok(rows)) => Ok(Ok(rows
+                    .into_iter()
+                    .map(convert_vtab_row_from_loaded_mut)
+                    .collect())),
+                Ok(Err(e)) => Ok(Err(e)),
+                Err(trap) => Ok(Err(format!(
+                    "dynlink bridge (mutating) vtab.fetch-batch trap: {trap}"
+                ))),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -7268,6 +7428,25 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Option<Result<std::result::Result<(), String>>> {
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.next): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_next(&mut m.store, vtab_id, cursor_id)
+                .await;
+            return Some(match result {
+                Ok(r) => Ok(r),
+                Err(trap) => Ok(Err(format!(
+                    "dynlink bridge (mutating) vtab.next trap: {trap}"
+                ))),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -7291,6 +7470,25 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Option<Result<bool>> {
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.eof): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_eof(&mut m.store, vtab_id, cursor_id)
+                .await;
+            return Some(match result {
+                Ok(b) => Ok(b),
+                Err(trap) => Err(anyhow!(
+                    "dynlink bridge (mutating) vtab.eof trap: {trap}"
+                )),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -7316,6 +7514,26 @@ impl Host {
         col: i32,
     ) -> Option<Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>>>
     {
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.column): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_column(&mut m.store, vtab_id, cursor_id, col)
+                .await;
+            return Some(match result {
+                Ok(Ok(v)) => Ok(Ok(convert_sql_value_from_loaded(v))),
+                Ok(Err(e)) => Ok(Err(e)),
+                Err(trap) => Ok(Err(format!(
+                    "dynlink bridge (mutating) vtab.column trap: {trap}"
+                ))),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -7340,6 +7558,25 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Option<Result<std::result::Result<i64, String>>> {
+        let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
+        if let Some(m_arc) = m_opt {
+            let mut guard = m_arc.lock().await;
+            let m = &mut *guard;
+            if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
+                return Some(Err(anyhow!("refresh fuel (vtab.rowid): {e}")));
+            }
+            let result = m
+                .instance
+                .sqlite_extension_vtab()
+                .call_rowid(&mut m.store, vtab_id, cursor_id)
+                .await;
+            return Some(match result {
+                Ok(r) => Ok(r),
+                Err(trap) => Ok(Err(format!(
+                    "dynlink bridge (mutating) vtab.rowid trap: {trap}"
+                ))),
+            });
+        }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -7364,10 +7601,15 @@ impl Host {
     // `sqlite:extension/vtab-update` interface reuses the shared
     // `sql-value` type from the `types` module (remapped via bindgen
     // `with:`) and otherwise takes only primitives, so the Rust
-    // signatures below cross no per-world divergent types — the
-    // reason a separate mutating instance suffices where the read
-    // path's IndexInfo / IndexPlan / VtabRow would have required
-    // per-world converters.
+    // signatures below cross no per-world divergent types.
+    //
+    // Note: the read-path methods above (`try_bridge_vtab_{connect,
+    // best_index, filter, next, ...}`) now check `mutating_bridges`
+    // BEFORE `dynlink_bridges` when both exist — that keeps reads and
+    // writes on a single wasm store so bridges with in-guest state
+    // observe writes on subsequent reads. The 11 methods here still
+    // only route through `mutating_bridges` because `vtab-update` is
+    // only defined on the mutating world.
     //
     // All 11 methods share the same shape as the read-path
     // `try_bridge_vtab_*` above: `read().get().cloned()?` short-
@@ -9891,13 +10133,15 @@ fn index_plan_from_parts(
 }
 
 // Mirror of the `_to_loaded` / `_from_loaded` vtab-type converters
-// against the `tabular-mutating` bindgen. The `with:` directive
-// shares types from imported interfaces (e.g. `sqlite:extension/
-// types::SqlValue`) but the vtab interface is on the export side
-// — each bindgen produces its own copy of `IndexInfo` / `IndexPlan`
-// / `ConstraintOp`. Rather than try to remap exports across worlds,
-// we duplicate the converter. The arms in `dispatch_vtab_best_index`
-// pick the right pair.
+// against the `tabular-mutating` bindgen lives at the end of this
+// file (`convert_*_loaded_mut`). The `with:` directive shares types
+// from imported interfaces (e.g. `sqlite:extension/types::SqlValue`)
+// but the vtab interface is on the export side — each bindgen
+// produces its own copy of `IndexInfo` / `IndexPlan` / `ConstraintOp`
+// / `VtabRow`. The mutating instance's read-path dispatch (see the
+// `mutating_bridges.read().get(...)` short-circuits in
+// `try_bridge_vtab_{best_index, fetch_batch}` above) uses those
+// converters to fold the per-world types into the wire-side types.
 
 /// PLAN-cli-shared-conn.md Stage 3: spi Host impl for the cli.
 /// Mirrors the the bespoke loader impl but operates directly on
@@ -13042,5 +13286,101 @@ fn convert_index_plan_from_loaded_tabular(
         estimated_cost: plan.estimated_cost,
         estimated_rows: plan.estimated_rows,
         orderby_consumed: plan.orderby_consumed,
+    }
+}
+
+// ── Mirror converters against the `tabular-mutating` world ─────
+//
+// The `with:` bindgen directive shares imported interfaces (e.g.
+// `sqlite:extension/types::SqlValue`) but not exported ones — so
+// the `vtab` interface exports produce a per-world duplicate of
+// `IndexInfo` / `IndexPlan` / `ConstraintOp` / `VtabRow` etc. When
+// the read path routes through the mutating bridge instance (to
+// keep reads and writes on a single wasm store), these fold the
+// dispatch-side wire types into the mutating-world variants and
+// back.
+
+fn convert_constraint_op_to_loaded_mut(
+    op: bindings::sqlite::extension::vtab::ConstraintOp,
+) -> loaded_tabular_mutating::exports::sqlite::extension::vtab::ConstraintOp {
+    use bindings::sqlite::extension::vtab::ConstraintOp as From;
+    use loaded_tabular_mutating::exports::sqlite::extension::vtab::ConstraintOp as To;
+    match op {
+        From::Eq => To::Eq,
+        From::Gt => To::Gt,
+        From::Le => To::Le,
+        From::Lt => To::Lt,
+        From::Ge => To::Ge,
+        From::Ne => To::Ne,
+        From::Match => To::Match,
+        From::Like => To::Like,
+        From::Regexp => To::Regexp,
+        From::Glob => To::Glob,
+        From::IsNull => To::IsNull,
+        From::IsNotNull => To::IsNotNull,
+        From::Limit => To::Limit,
+        From::Offset => To::Offset,
+        From::Function => To::Function,
+    }
+}
+
+fn convert_index_info_to_loaded_mut(
+    info: &bindings::sqlite::extension::vtab::IndexInfo,
+) -> loaded_tabular_mutating::exports::sqlite::extension::vtab::IndexInfo {
+    loaded_tabular_mutating::exports::sqlite::extension::vtab::IndexInfo {
+        constraints: info
+            .constraints
+            .iter()
+            .map(|c| {
+                loaded_tabular_mutating::exports::sqlite::extension::vtab::Constraint {
+                    column: c.column,
+                    op: convert_constraint_op_to_loaded_mut(c.op),
+                    usable: c.usable,
+                }
+            })
+            .collect(),
+        orderbys: info
+            .orderbys
+            .iter()
+            .map(|o| {
+                loaded_tabular_mutating::exports::sqlite::extension::vtab::Orderby {
+                    column: o.column,
+                    desc: o.desc,
+                }
+            })
+            .collect(),
+        col_used: info.col_used,
+    }
+}
+
+fn convert_index_plan_from_loaded_mut(
+    plan: loaded_tabular_mutating::exports::sqlite::extension::vtab::IndexPlan,
+) -> bindings::sqlite::extension::vtab::IndexPlan {
+    bindings::sqlite::extension::vtab::IndexPlan {
+        constraint_usage: plan
+            .constraint_usage
+            .into_iter()
+            .map(|u| bindings::sqlite::extension::vtab::ConstraintUsage {
+                argv_index: u.argv_index,
+                omit: u.omit,
+            })
+            .collect(),
+        idx_num: plan.idx_num,
+        idx_str: plan.idx_str,
+        estimated_cost: plan.estimated_cost,
+        estimated_rows: plan.estimated_rows,
+        orderby_consumed: plan.orderby_consumed,
+    }
+}
+
+/// Fold a mutating-world VtabRow into the `loaded_tabular` VtabRow
+/// so `dispatch_vtab_fetch_batch` keeps its signature identical
+/// whether the batch came from the read-only or mutating instance.
+fn convert_vtab_row_from_loaded_mut(
+    row: loaded_tabular_mutating::exports::sqlite::extension::vtab::VtabRow,
+) -> loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
+    loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
+        rowid: row.rowid,
+        columns: row.columns,
     }
 }
