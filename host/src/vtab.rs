@@ -586,6 +586,21 @@ unsafe fn set_err(p_err: *mut *mut c_char, msg: &str) {
     *p_err = buf;
 }
 
+/// Write `msg` into `(*p_vtab).zErrMsg` so SQLite surfaces it to
+/// callers instead of the generic "SQL logic error" placeholder.
+/// Any previously-set zErrMsg is released with `sqlite3_free` first,
+/// per SQLite's ownership contract for the field.
+unsafe fn set_vtab_err(p_vtab: *mut ffi::sqlite3_vtab, msg: &str) {
+    if p_vtab.is_null() {
+        return;
+    }
+    if !(*p_vtab).zErrMsg.is_null() {
+        ffi::sqlite3_free((*p_vtab).zErrMsg as *mut c_void);
+        (*p_vtab).zErrMsg = ptr::null_mut();
+    }
+    set_err(&mut (*p_vtab).zErrMsg, msg);
+}
+
 fn map_constraint_op(op: u8) -> wv::ConstraintOp {
     match op as i32 {
         ffi::SQLITE_INDEX_CONSTRAINT_EQ => wv::ConstraintOp::Eq,
@@ -1190,7 +1205,10 @@ unsafe extern "C" fn x_update(
             }
             ffi::SQLITE_OK
         }
-        Err(_) => ffi::SQLITE_ERROR,
+        Err(e) => {
+            set_vtab_err(p_vtab, &e);
+            ffi::SQLITE_ERROR
+        }
     }
 }
 
@@ -1201,7 +1219,10 @@ unsafe extern "C" fn x_begin(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     };
     match sync_dispatch_vtab_begin(&meta.ext_name, meta.vtab_id, wv.instance_id) {
         Ok(()) => ffi::SQLITE_OK,
-        Err(_) => ffi::SQLITE_ERROR,
+        Err(e) => {
+            set_vtab_err(p_vtab, &e);
+            ffi::SQLITE_ERROR
+        }
     }
 }
 
@@ -1212,7 +1233,10 @@ unsafe extern "C" fn x_sync(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     };
     match sync_dispatch_vtab_sync(&meta.ext_name, meta.vtab_id, wv.instance_id) {
         Ok(()) => ffi::SQLITE_OK,
-        Err(_) => ffi::SQLITE_ERROR,
+        Err(e) => {
+            set_vtab_err(p_vtab, &e);
+            ffi::SQLITE_ERROR
+        }
     }
 }
 
@@ -1223,7 +1247,10 @@ unsafe extern "C" fn x_commit(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     };
     match sync_dispatch_vtab_commit(&meta.ext_name, meta.vtab_id, wv.instance_id) {
         Ok(()) => ffi::SQLITE_OK,
-        Err(_) => ffi::SQLITE_ERROR,
+        Err(e) => {
+            set_vtab_err(p_vtab, &e);
+            ffi::SQLITE_ERROR
+        }
     }
 }
 
@@ -1234,7 +1261,10 @@ unsafe extern "C" fn x_rollback(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     };
     match sync_dispatch_vtab_rollback(&meta.ext_name, meta.vtab_id, wv.instance_id) {
         Ok(()) => ffi::SQLITE_OK,
-        Err(_) => ffi::SQLITE_ERROR,
+        Err(e) => {
+            set_vtab_err(p_vtab, &e);
+            ffi::SQLITE_ERROR
+        }
     }
 }
 
@@ -1248,12 +1278,18 @@ unsafe extern "C" fn x_rename(p_vtab: *mut ffi::sqlite3_vtab, z_new: *const c_ch
     } else {
         match CStr::from_ptr(z_new).to_str() {
             Ok(s) => s.to_string(),
-            Err(_) => return ffi::SQLITE_ERROR,
+            Err(_) => {
+                set_vtab_err(p_vtab, "xRename: new name is not valid UTF-8");
+                return ffi::SQLITE_ERROR;
+            }
         }
     };
     match sync_dispatch_vtab_rename(&meta.ext_name, meta.vtab_id, wv.instance_id, &new_name) {
         Ok(()) => ffi::SQLITE_OK,
-        Err(_) => ffi::SQLITE_ERROR,
+        Err(e) => {
+            set_vtab_err(p_vtab, &e);
+            ffi::SQLITE_ERROR
+        }
     }
 }
 
