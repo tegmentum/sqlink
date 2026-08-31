@@ -51,7 +51,8 @@
 use std::sync::Arc;
 
 use wasmos_runtime_api::{
-    host_iface, HostCall, HostCallContext, HostImports, RuntimeResult, WitRecord, WitVariant,
+    host_iface, HostCall, HostCallContext, HostImports, RuntimeError, RuntimeResult, Value,
+    WitRecord, WitVariant,
 };
 
 use crate::policy::{DnsPolicy, HttpPolicy};
@@ -1083,19 +1084,171 @@ pub fn install_s3_base_imports(imports: HostImports, s3_granted: bool) -> HostIm
     )
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Phase 6.2.e-f — extension_loader stub (6/6, arc COMPLETE).
+//
+// The wit-bindgen `impl bindings::sqlink::wasm::extension_loader::
+// Host for RunLoaderStub` at `crate::lib` line 9692 is a test-
+// scaffolding stub: every method returns loader_stub_err(...) or
+// an empty/zero default. None of the 12 methods ever construct
+// the rich types the WIT surface uses (Manifest, LoadOptions,
+// DotCommandResult, DescribedResult, ComponentCacheStatsSnapshot,
+// plus their transitive deps like FunctionFlags, ScalarFunctionSpec,
+// AggregateFunctionSpec, CollationSpec, Capability, HttpPolicy,
+// DnsPolicy, FsPolicy — 12+ WitRecord/WitVariant/WitFlags mirrors
+// in total).
+//
+// Rather than sink an afternoon into 200+ lines of mirror-type
+// derives for values that never actually marshal at runtime, the
+// wasmos-native stub takes a `Vec<Value>` passthrough approach —
+// a hand-crafted `impl SyncHostCall` that matches on method name
+// and returns Value-encoded errors directly. The recon's "manual
+// fallback via Vec<Value> passthrough" pattern applies naturally
+// to stub interfaces where no Ok arm ever ships.
+//
+// If a future production consumer needs a real Manifest / LoadOptions
+// (i.e. RunLoaderStub becomes RunLoaderReal), swap this passthrough
+// for full `#[host_iface]`-derived mirrors following the s3_base
+// pattern from slice 5.
+// ────────────────────────────────────────────────────────────────────
+
+/// Wasmos-native mirror of the WIT `sqlink:wasm/extension-loader.
+/// loader-error` record — the ONE type actually returned by every
+/// stub method. 2 fields (code + message); trivial to derive.
+#[derive(Debug, Clone, WitRecord)]
+pub struct LoaderError {
+    pub code: i32,
+    pub message: String,
+}
+
+impl LoaderError {
+    /// Build the "not available in statically-composed runnables"
+    /// error shape that `crate::loader_stub_err` produces. Inline
+    /// construction (rather than delegating to the private helper)
+    /// keeps this module free of a cross-module private-fn
+    /// dependency.
+    fn stub_err(method: &str) -> Self {
+        LoaderError {
+            code: 1,
+            message: format!(
+                "{method}: not available in statically-composed runnables \
+                 (use Host::load_extension on the host side instead)"
+            ),
+        }
+    }
+
+    /// Encode as `Value::Result(Err(Some(<record>)))` — the wire
+    /// shape wasmos emits for a `result<T, loader-error>` return
+    /// with the Err arm populated.
+    fn to_err_value(&self) -> Value {
+        Value::Result(Err(Some(Box::new(Value::Record(vec![
+            ("code".into(), Value::S32(self.code)),
+            ("message".into(), Value::String(self.message.clone())),
+        ])))))
+    }
+}
+
+/// Host struct for the `sqlink:wasm/extension-loader` interface.
+///
+/// Stateless — the wit-bindgen counterpart at `crate::lib` line
+/// 9692 is `impl ... for RunLoaderStub` where `RunLoaderStub`
+/// carries no fields. The 12 methods all return stubs.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ExtensionLoaderStub;
+
+impl ExtensionLoaderStub {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+// Hand-crafted SyncHostCall impl — Value passthrough. Matches on
+// method name and returns the Value-encoded default matching the
+// wit-bindgen counterpart's stub behavior.
+impl wasmos_runtime_api::SyncHostCall for ExtensionLoaderStub {
+    fn call(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        method: &str,
+        _args: Vec<Value>,
+    ) -> RuntimeResult<Vec<Value>> {
+        Ok(vec![match method {
+            // Methods returning `result<T, loader-error>` — always
+            // Err with the standard stub message.
+            "load-extension"
+            | "unload-extension"
+            | "dispatch-dot-command"
+            | "dispatch-parse"
+            | "load-extension-from-bytes"
+            | "describe-extension"
+            | "describe-extension-from-uri" => LoaderError::stub_err(method).to_err_value(),
+
+            // Methods returning primitive defaults.
+            "extension-digest" => Value::String(String::new()),
+            "component-cache-purge" => Value::U64(0),
+            "is-extension-loaded" => Value::Bool(false),
+
+            // list-extensions → `list<manifest>` — empty list.
+            "list-extensions" => Value::List(Vec::new()),
+
+            // component-cache-stats → a fresh record with all 10
+            // numeric fields zeroed. Matches the wit-bindgen
+            // counterpart's ComponentCacheStatsSnapshot { c1_hits: 0,
+            // ..., max_bytes: 0 } literal at `crate::lib` line 9754.
+            "component-cache-stats" => Value::Record(vec![
+                ("c1-hits".into(), Value::U64(0)),
+                ("c2-hits".into(), Value::U64(0)),
+                ("cold-parses".into(), Value::U64(0)),
+                ("parse-ms".into(), Value::U64(0)),
+                ("serialize-ms".into(), Value::U64(0)),
+                ("deserialize-ms".into(), Value::U64(0)),
+                ("bypassed".into(), Value::U64(0)),
+                ("row-count".into(), Value::U64(0)),
+                ("total-bytes".into(), Value::U64(0)),
+                ("max-bytes".into(), Value::U64(0)),
+            ]),
+
+            other => {
+                return Err(RuntimeError::msg(format!(
+                    "ExtensionLoaderStub: no handler for method {other:?}"
+                )));
+            }
+        }])
+    }
+}
+
+/// The wit-bindgen counterpart runs async even though every body
+/// is sync — the trait uses `async fn`. The wasmos-native version
+/// keeps a sync body (SyncHostCall) since there's genuinely no
+/// awaiting; the async surface would be pure ceremony. When a
+/// real (non-stub) loader replaces this, the async surface can be
+/// picked up via `#[host_iface]` and delegating to real async
+/// backends.
+///
+/// Register the `sqlink:wasm/extension-loader` handler.
+pub fn install_extension_loader_imports(imports: HostImports) -> HostImports {
+    imports.register(
+        "sqlink:wasm/extension-loader",
+        Arc::new(wasmos_runtime_api::SyncHostCallAdapter::new(
+            ExtensionLoaderStub::new(),
+        )) as Arc<dyn HostCall>,
+    )
+}
+
+
 /// Composite installer for every wasmos-native interface this
-/// module currently covers. New interfaces added in future
-/// sessions will extend this fn — consumer code depending on
-/// it picks up new registrations transparently.
+/// module currently covers. Phase 6.2.e is **COMPLETE** — all 6
+/// sqlink-host interfaces registered:
+/// - `sqlite:extension/compression`
+/// - `sqlite:extension/dns`
+/// - `sqlite:extension/wal_frames`
+/// - `sqlite:extension/http`
+/// - `sqlite:extension/s3_base`
+/// - `sqlink:wasm/extension-loader` (Value-passthrough stub)
 ///
-/// Currently registers: `sqlite:extension/compression` +
-/// `sqlite:extension/dns` + `sqlite:extension/wal_frames` +
-/// `sqlite:extension/http` + `sqlite:extension/s3_base`.
-///
-/// **Not yet registered**: `extension-loader` (test stub on
-/// RunLoaderStub; low value, likely defer). A guest importing
-/// that interface would fail instantiation with an "unresolved
-/// import" error under the wasmos-native install path.
+/// Extending this fn's arg list is the pattern for adding
+/// stateful captures; the current call signature covers every
+/// state-capture the six interfaces need.
 pub fn install_sqlink_imports(
     imports: HostImports,
     dns_policy: Option<DnsPolicy>,
@@ -1106,7 +1259,8 @@ pub fn install_sqlink_imports(
     let imports = install_dns_imports(imports, dns_policy);
     let imports = install_wal_frames_imports(imports);
     let imports = install_http_imports(imports, http_policy);
-    install_s3_base_imports(imports, s3_granted)
+    let imports = install_s3_base_imports(imports, s3_granted);
+    install_extension_loader_imports(imports)
 }
 
 // Behavior tests for CompressionHost need a tokio runtime + the
