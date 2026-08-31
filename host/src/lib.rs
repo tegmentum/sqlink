@@ -41,6 +41,13 @@ pub mod s3;
 #[cfg(not(feature = "native-s3"))]
 mod s3_resident;
 mod compression_resident;
+
+// ADR-0029 Phase 6.2.e — wasmos-native mirror of the
+// sqlite:extension/compression Host trait impl (and eventually
+// http, dns, wal-frames, s3-base, extension-loader). Additive
+// module; the existing wit-bindgen paths stay. See the module
+// docstring for the coexistence design.
+pub mod wasmos_imports;
 /// Resident `http-endpoint` compose:dynlink/endpoint provider routing — the
 /// default HTTP path. #106.
 #[cfg(not(feature = "native-http"))]
