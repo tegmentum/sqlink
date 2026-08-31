@@ -51,7 +51,7 @@
 use std::sync::Arc;
 
 use wasmos_runtime_api::{
-    host_iface, HostCall, HostCallContext, HostImports, RuntimeResult, WitVariant,
+    host_iface, HostCall, HostCallContext, HostImports, RuntimeResult, WitRecord, WitVariant,
 };
 
 use crate::policy::DnsPolicy;
@@ -262,28 +262,116 @@ pub fn install_dns_imports(imports: HostImports, dns_policy: Option<DnsPolicy>) 
     )
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Phase 6.2.e-c — wal_frames interface (3/6).
+// ────────────────────────────────────────────────────────────────────
+
+/// Wasmos-native mirror of the WIT `sqlite:extension/types.
+/// sqlite-error` record. Wire-identical to the wit-bindgen
+/// counterpart at `crate::loaded::sqlite::extension::types::
+/// SqliteError`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct SqliteError {
+    pub code: i32,
+    pub extended_code: i32,
+    pub message: String,
+}
+
+impl SqliteError {
+    /// Build the "capability not granted" error shape that
+    /// `crate::wal_perm_err` produces. Constructed inline (rather
+    /// than delegating to the private helper) to keep this
+    /// coexistence module free of cross-module private-fn
+    /// dependencies.
+    fn wal_perm_denied(method: &str) -> Self {
+        SqliteError {
+            // libsqlite3_sys::SQLITE_PERM is 3; hardcoded so this
+            // module doesn't take a libsqlite3_sys dep. Matches
+            // `crate::wal_perm_err`'s constant.
+            code: 3,
+            extended_code: 3,
+            message: format!(
+                "wal-frames.{method}: capability not granted at load time \
+                 (add `wal-frames` to the load --grant list)"
+            ),
+        }
+    }
+}
+
+/// Host struct for the `sqlite:extension/wal_frames` interface.
+///
+/// Stateless today — both methods return deny-by-default per
+/// the wit-bindgen counterpart at `crate::lib` line 2346.
+/// Threading manifest-granted capability into the wal_frames
+/// path is a documented follow-up in the wit-bindgen source
+/// (same posture as http/dns policies); when that lands, this
+/// host will need to capture whatever shared state carries the
+/// granted flag + the wal-provider handle.
+#[derive(Debug, Default, Clone)]
+pub struct WalFramesHost;
+
+impl WalFramesHost {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[host_iface]
+impl WalFramesHost {
+    /// Handler for `sqlite:extension/wal_frames.get-wal-header`.
+    /// Deny-by-default. Byte-identical to `crate::lib` line 2347.
+    async fn get_wal_header(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        _db_name: String,
+    ) -> RuntimeResult<Result<Option<Vec<u8>>, SqliteError>> {
+        Ok(Err(SqliteError::wal_perm_denied("get-wal-header")))
+    }
+
+    /// Handler for `sqlite:extension/wal_frames.read-frames`.
+    /// Deny-by-default. Byte-identical to `crate::lib` line 2353.
+    async fn read_frames(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        _db_name: String,
+        _start_frame: u32,
+        _n_frames: u32,
+    ) -> RuntimeResult<Result<Vec<u8>, SqliteError>> {
+        Ok(Err(SqliteError::wal_perm_denied("read-frames")))
+    }
+}
+
+/// Register the `sqlite:extension/wal_frames` handler.
+pub fn install_wal_frames_imports(imports: HostImports) -> HostImports {
+    imports.register(
+        "sqlite:extension/wal_frames",
+        Arc::new(WalFramesHost::new()) as Arc<dyn HostCall>,
+    )
+}
+
 /// Composite installer for every wasmos-native interface this
 /// module currently covers. New interfaces added in future
 /// sessions will extend this fn — consumer code depending on
 /// it picks up new registrations transparently.
 ///
 /// Currently registers: `sqlite:extension/compression` +
-/// `sqlite:extension/dns`.
+/// `sqlite:extension/dns` + `sqlite:extension/wal_frames`.
 ///
-/// **Not yet registered**: `http`, `wal-frames`, `s3-base`,
-/// `extension-loader`. Each needs its own migration pass
-/// (record/variant mirror types, `ProviderState` access pattern
-/// via a shared handle, and one `install_*_imports` fn). A guest
-/// importing any unmigrated interface fails instantiation with
-/// an "unresolved import" error under the wasmos-native install
-/// path — the signal to fall back to the wit-bindgen `crate::lib`
-/// path or wait for the remaining interfaces to migrate.
+/// **Not yet registered**: `http`, `s3-base`, `extension-loader`.
+/// Each needs its own migration pass (record/variant mirror
+/// types, per-field shared-state handle, and one
+/// `install_*_imports` fn). A guest importing any unmigrated
+/// interface fails instantiation with an "unresolved import"
+/// error under the wasmos-native install path — the signal to
+/// fall back to the wit-bindgen `crate::lib` path or wait for
+/// the remaining interfaces to migrate.
 pub fn install_sqlink_imports(
     imports: HostImports,
     dns_policy: Option<DnsPolicy>,
 ) -> HostImports {
     let imports = install_compression_imports(imports);
-    install_dns_imports(imports, dns_policy)
+    let imports = install_dns_imports(imports, dns_policy);
+    install_wal_frames_imports(imports)
 }
 
 // Behavior tests for CompressionHost need a tokio runtime + the
