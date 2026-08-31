@@ -44,6 +44,20 @@ datalink-dynlink = { git = "https://github.com/tegmentum/datalink.git", rev = "9
 # __sqlink_prefix* SQLite tables (see prefix_registry.rs). datalink is PUBLIC.
 datalink-prefix = { git = "https://github.com/tegmentum/datalink.git", rev = "d1e5984b51dba1d6f40d6173c7ab26af4a905cf2" }
 
+# ADR-0029 Phase 6.2.e — the wasmos runtime-abstraction API surface.
+# Consumed by `src/wasmos_imports.rs` to expose the sqlite:extension
+# Host trait impls to a wasmos-runtime-abstracted instantiation path.
+# Additive; the existing wit-bindgen path at src/lib.rs stays.
+# Pinned to wasmos main tip (ea572b3); pin bumps coordinate with the
+# datalink revs above through the same rev-alignment discipline the
+# state-of-the-abstraction §"three coordination breaks" documents.
+# NOTE: not pulling wasmos-runtime-wasmtime-v48 — the migration only
+# needs the abstraction crate itself. Actual instantiation still goes
+# through sqlink-host's own wasmtime 46.0.1 pipeline. Consumers who
+# want to instantiate via wasmos in the future pull the adapter
+# separately.
+wasmos-runtime-api = { git = "https://github.com/tegmentum/wasmos.git", rev = "ea572b369ab09ff809f40c43bad7bb0a921ce8ac" }
+
 anyhow = "1.0"
 wasmtime = { version = "46.0.1", features = [
     "component-model",
