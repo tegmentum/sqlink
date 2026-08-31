@@ -50,7 +50,11 @@
 
 use std::sync::Arc;
 
-use wasmos_runtime_api::{host_iface, HostCall, HostCallContext, HostImports, RuntimeResult};
+use wasmos_runtime_api::{
+    host_iface, HostCall, HostCallContext, HostImports, RuntimeResult, WitVariant,
+};
+
+use crate::policy::DnsPolicy;
 
 /// Host struct for the `sqlite:extension/compression` interface.
 ///
@@ -136,24 +140,150 @@ pub fn install_compression_imports(imports: HostImports) -> HostImports {
     )
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Phase 6.2.e-b — dns interface (2/6).
+// ────────────────────────────────────────────────────────────────────
+
+/// Wasmos-native mirror of the WIT `sqlite:extension/dns.record-type`
+/// variant. Mixed unit + string-payload arms; the classifier +
+/// WitVariant derive handles the shape natively (Phase 6.12).
+#[derive(Debug, Clone, WitVariant)]
+pub enum RecordType {
+    A,
+    Aaaa,
+    Cname,
+    Mx,
+    Ns,
+    Txt,
+    Ptr,
+    Soa,
+    Srv,
+    Other(String),
+}
+
+impl RecordType {
+    /// Convert to the wit-bindgen `RecordType` that
+    /// `crate::net_dns_resolve` accepts. Same variant order + names
+    /// as the WIT source, so the two representations are wire-
+    /// identical; this is a Rust-level type-adapter, not a wire
+    /// conversion.
+    fn to_bindgen(self) -> crate::loaded_minimal_dns::sqlite::extension::dns::RecordType {
+        use crate::loaded_minimal_dns::sqlite::extension::dns::RecordType as B;
+        match self {
+            RecordType::A => B::A,
+            RecordType::Aaaa => B::Aaaa,
+            RecordType::Cname => B::Cname,
+            RecordType::Mx => B::Mx,
+            RecordType::Ns => B::Ns,
+            RecordType::Txt => B::Txt,
+            RecordType::Ptr => B::Ptr,
+            RecordType::Soa => B::Soa,
+            RecordType::Srv => B::Srv,
+            RecordType::Other(name) => B::Other(name),
+        }
+    }
+}
+
+/// Wasmos-native mirror of the WIT `sqlite:extension/dns.dns-error`
+/// variant. Mixed unit + string-payload arms.
+#[derive(Debug, Clone, WitVariant)]
+pub enum DnsError {
+    Refused(String),
+    TimedOut,
+    Nxdomain,
+    Other(String),
+}
+
+impl DnsError {
+    /// Convert from the wit-bindgen `DnsError` that
+    /// `crate::net_dns_resolve` returns.
+    fn from_bindgen(err: crate::loaded_minimal_dns::sqlite::extension::dns::DnsError) -> Self {
+        use crate::loaded_minimal_dns::sqlite::extension::dns::DnsError as B;
+        match err {
+            B::Refused(msg) => DnsError::Refused(msg),
+            B::TimedOut => DnsError::TimedOut,
+            B::Nxdomain => DnsError::Nxdomain,
+            B::Other(msg) => DnsError::Other(msg),
+        }
+    }
+}
+
+/// Host struct for the `sqlite:extension/dns` interface.
+///
+/// Captures `Arc<Option<DnsPolicy>>` — the DNS allowlist +
+/// timeout config. Read-only after construction (the wit-bindgen
+/// path never mutates it either), so plain `Arc` suffices;
+/// no Mutex needed. This is cleaner than the SharedExtensionState
+/// pattern from Phase 6.2.d.2 — enabled by DnsPolicy's Clone
+/// derive + the fact that ProviderState never rewrites
+/// `dns_policy` after construction.
+#[derive(Clone)]
+pub struct DnsHost {
+    dns_policy: Arc<Option<DnsPolicy>>,
+}
+
+impl DnsHost {
+    /// Construct a new `DnsHost` with the given policy. `None`
+    /// disables DNS entirely (the wit-bindgen counterpart's
+    /// deny-by-default fail-closed shape).
+    pub fn new(dns_policy: Option<DnsPolicy>) -> Self {
+        Self {
+            dns_policy: Arc::new(dns_policy),
+        }
+    }
+}
+
+#[host_iface]
+impl DnsHost {
+    /// Handler for `sqlite:extension/dns.resolve`. Byte-identical
+    /// semantics to the wit-bindgen counterpart at `crate::lib`
+    /// line 2327: delegates to `crate::net_dns_resolve` with the
+    /// captured policy, converts wit-bindgen types to/from the
+    /// wasmos-native mirrors.
+    async fn resolve(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        name: String,
+        record_type: RecordType,
+    ) -> RuntimeResult<Result<Vec<String>, DnsError>> {
+        let policy_ref = self.dns_policy.as_ref().as_ref();
+        let bindgen_rtype = record_type.to_bindgen();
+        Ok(crate::net_dns_resolve(policy_ref, name, bindgen_rtype)
+            .await
+            .map_err(DnsError::from_bindgen))
+    }
+}
+
+/// Register the `sqlite:extension/dns` handler.
+pub fn install_dns_imports(imports: HostImports, dns_policy: Option<DnsPolicy>) -> HostImports {
+    imports.register(
+        "sqlite:extension/dns",
+        Arc::new(DnsHost::new(dns_policy)) as Arc<dyn HostCall>,
+    )
+}
+
 /// Composite installer for every wasmos-native interface this
 /// module currently covers. New interfaces added in future
 /// sessions will extend this fn — consumer code depending on
 /// it picks up new registrations transparently.
 ///
-/// Currently registers: `sqlite:extension/compression`.
+/// Currently registers: `sqlite:extension/compression` +
+/// `sqlite:extension/dns`.
 ///
-/// **Not yet registered**: `http`, `dns`, `wal-frames`,
-/// `s3-base`, `extension-loader`. Each needs its own migration
-/// pass (record/variant mirror types, `ProviderState` access
-/// pattern via `SharedProviderState` handle, and one
-/// `install_*_imports` fn). A guest importing any unmigrated
-/// interface fails instantiation with an "unresolved import"
-/// error under the wasmos-native install path — the signal to
-/// fall back to the wit-bindgen `crate::lib` path or wait for
-/// the remaining interfaces to migrate.
-pub fn install_sqlink_imports(imports: HostImports) -> HostImports {
-    install_compression_imports(imports)
+/// **Not yet registered**: `http`, `wal-frames`, `s3-base`,
+/// `extension-loader`. Each needs its own migration pass
+/// (record/variant mirror types, `ProviderState` access pattern
+/// via a shared handle, and one `install_*_imports` fn). A guest
+/// importing any unmigrated interface fails instantiation with
+/// an "unresolved import" error under the wasmos-native install
+/// path — the signal to fall back to the wit-bindgen `crate::lib`
+/// path or wait for the remaining interfaces to migrate.
+pub fn install_sqlink_imports(
+    imports: HostImports,
+    dns_policy: Option<DnsPolicy>,
+) -> HostImports {
+    let imports = install_compression_imports(imports);
+    install_dns_imports(imports, dns_policy)
 }
 
 // Behavior tests for CompressionHost need a tokio runtime + the
