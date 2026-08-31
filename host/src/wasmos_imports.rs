@@ -548,6 +548,541 @@ pub fn install_http_imports(imports: HostImports, http_policy: Option<HttpPolicy
     )
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Phase 6.2.e-e — s3_base interface (5/6).
+//
+// Biggest slice by mirror-type count (12 types). Mirrors the
+// wit-bindgen `impl loaded::sqlite::extension::s3_base::Host for
+// ProviderState` at `crate::lib` line 2376.
+//
+// Each of the 6 methods (get/put/delete/head/list/copy) checks
+// the captured `s3_granted` flag (deny-by-default fail-closed
+// shape), then feature-gates between `crate::s3_resident::op_*`
+// (default) and `crate::s3::op_*` (native-s3 feature) — matches
+// the wit-bindgen counterpart's dispatch verbatim.
+// ────────────────────────────────────────────────────────────────────
+
+/// Wasmos-native mirror of the WIT `sqlite:extension/s3-base.
+/// s3-error` variant. 5 unit + 4 string-payload arms.
+#[derive(Debug, Clone, WitVariant)]
+pub enum S3Error {
+    AccessDenied,
+    NoSuchBucket,
+    NoSuchKey,
+    InvalidBucketName,
+    InvalidRequest(String),
+    NetworkError(String),
+    ParseError(String),
+    Internal(String),
+    CapabilityNotGranted,
+}
+
+impl S3Error {
+    fn from_bindgen(err: crate::loaded::sqlite::extension::s3_base::S3Error) -> Self {
+        use crate::loaded::sqlite::extension::s3_base::S3Error as B;
+        match err {
+            B::AccessDenied => S3Error::AccessDenied,
+            B::NoSuchBucket => S3Error::NoSuchBucket,
+            B::NoSuchKey => S3Error::NoSuchKey,
+            B::InvalidBucketName => S3Error::InvalidBucketName,
+            B::InvalidRequest(s) => S3Error::InvalidRequest(s),
+            B::NetworkError(s) => S3Error::NetworkError(s),
+            B::ParseError(s) => S3Error::ParseError(s),
+            B::Internal(s) => S3Error::Internal(s),
+            B::CapabilityNotGranted => S3Error::CapabilityNotGranted,
+        }
+    }
+}
+
+/// Wasmos-native mirror of `s3-credentials`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3Credentials {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: Option<String>,
+}
+
+impl S3Credentials {
+    fn to_bindgen(self) -> crate::loaded::sqlite::extension::s3_base::S3Credentials {
+        crate::loaded::sqlite::extension::s3_base::S3Credentials {
+            access_key_id: self.access_key_id,
+            secret_access_key: self.secret_access_key,
+            session_token: self.session_token,
+        }
+    }
+}
+
+/// Wasmos-native mirror of `s3-endpoint-config`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3EndpointConfig {
+    pub url: String,
+    pub region: String,
+    pub path_style: bool,
+}
+
+impl S3EndpointConfig {
+    fn to_bindgen(self) -> crate::loaded::sqlite::extension::s3_base::S3EndpointConfig {
+        crate::loaded::sqlite::extension::s3_base::S3EndpointConfig {
+            url: self.url,
+            region: self.region,
+            path_style: self.path_style,
+        }
+    }
+}
+
+/// Wasmos-native mirror of `s3-object-metadata`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3ObjectMetadata {
+    pub content_type: Option<String>,
+    pub content_length: Option<u64>,
+    pub etag: Option<String>,
+    pub last_modified: Option<u64>,
+    pub custom: Vec<(String, String)>,
+}
+
+impl S3ObjectMetadata {
+    fn from_bindgen(m: crate::loaded::sqlite::extension::s3_base::S3ObjectMetadata) -> Self {
+        S3ObjectMetadata {
+            content_type: m.content_type,
+            content_length: m.content_length,
+            etag: m.etag,
+            last_modified: m.last_modified,
+            custom: m.custom,
+        }
+    }
+}
+
+/// Wasmos-native mirror of `s3-object-info`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3ObjectInfo {
+    pub key: String,
+    pub size: u64,
+    pub etag: Option<String>,
+    pub last_modified: Option<u64>,
+    pub storage_class: Option<String>,
+}
+
+impl S3ObjectInfo {
+    fn from_bindgen(i: crate::loaded::sqlite::extension::s3_base::S3ObjectInfo) -> Self {
+        S3ObjectInfo {
+            key: i.key,
+            size: i.size,
+            etag: i.etag,
+            last_modified: i.last_modified,
+            storage_class: i.storage_class,
+        }
+    }
+}
+
+/// Wasmos-native mirror of `s3-get-object-options`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3GetObjectOptions {
+    pub range: Option<(u64, u64)>,
+    pub if_match: Option<String>,
+    pub if_none_match: Option<String>,
+}
+
+impl S3GetObjectOptions {
+    fn to_bindgen(self) -> crate::loaded::sqlite::extension::s3_base::S3GetObjectOptions {
+        crate::loaded::sqlite::extension::s3_base::S3GetObjectOptions {
+            range: self.range,
+            if_match: self.if_match,
+            if_none_match: self.if_none_match,
+        }
+    }
+}
+
+/// Wasmos-native mirror of `s3-put-object-options`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3PutObjectOptions {
+    pub content_type: Option<String>,
+    pub metadata: Vec<(String, String)>,
+    pub cache_control: Option<String>,
+}
+
+impl S3PutObjectOptions {
+    fn to_bindgen(self) -> crate::loaded::sqlite::extension::s3_base::S3PutObjectOptions {
+        crate::loaded::sqlite::extension::s3_base::S3PutObjectOptions {
+            content_type: self.content_type,
+            metadata: self.metadata,
+            cache_control: self.cache_control,
+        }
+    }
+}
+
+/// Wasmos-native mirror of `s3-list-objects-options`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3ListObjectsOptions {
+    pub prefix: Option<String>,
+    pub delimiter: Option<String>,
+    pub max_keys: Option<u32>,
+    pub continuation_token: Option<String>,
+}
+
+impl S3ListObjectsOptions {
+    fn to_bindgen(self) -> crate::loaded::sqlite::extension::s3_base::S3ListObjectsOptions {
+        crate::loaded::sqlite::extension::s3_base::S3ListObjectsOptions {
+            prefix: self.prefix,
+            delimiter: self.delimiter,
+            max_keys: self.max_keys,
+            continuation_token: self.continuation_token,
+        }
+    }
+}
+
+/// Wasmos-native mirror of `s3-get-object-output`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3GetObjectOutput {
+    pub body: Vec<u8>,
+    pub metadata: S3ObjectMetadata,
+}
+
+impl S3GetObjectOutput {
+    fn from_bindgen(o: crate::loaded::sqlite::extension::s3_base::S3GetObjectOutput) -> Self {
+        S3GetObjectOutput {
+            body: o.body,
+            metadata: S3ObjectMetadata::from_bindgen(o.metadata),
+        }
+    }
+}
+
+/// Wasmos-native mirror of `s3-put-object-output`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3PutObjectOutput {
+    pub etag: String,
+}
+
+impl S3PutObjectOutput {
+    fn from_bindgen(o: crate::loaded::sqlite::extension::s3_base::S3PutObjectOutput) -> Self {
+        S3PutObjectOutput { etag: o.etag }
+    }
+}
+
+/// Wasmos-native mirror of `s3-head-object-output`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3HeadObjectOutput {
+    pub metadata: S3ObjectMetadata,
+}
+
+impl S3HeadObjectOutput {
+    fn from_bindgen(o: crate::loaded::sqlite::extension::s3_base::S3HeadObjectOutput) -> Self {
+        S3HeadObjectOutput {
+            metadata: S3ObjectMetadata::from_bindgen(o.metadata),
+        }
+    }
+}
+
+/// Wasmos-native mirror of `s3-list-objects-output`.
+#[derive(Debug, Clone, WitRecord)]
+pub struct S3ListObjectsOutput {
+    pub objects: Vec<S3ObjectInfo>,
+    pub common_prefixes: Vec<String>,
+    pub next_continuation_token: Option<String>,
+    pub is_truncated: bool,
+}
+
+impl S3ListObjectsOutput {
+    fn from_bindgen(o: crate::loaded::sqlite::extension::s3_base::S3ListObjectsOutput) -> Self {
+        S3ListObjectsOutput {
+            objects: o.objects.into_iter().map(S3ObjectInfo::from_bindgen).collect(),
+            common_prefixes: o.common_prefixes,
+            next_continuation_token: o.next_continuation_token,
+            is_truncated: o.is_truncated,
+        }
+    }
+}
+
+/// Host struct for the `sqlite:extension/s3_base` interface.
+///
+/// Captures just `s3_granted: bool` (Copy) — the deny-gate
+/// flag from `ProviderState`. All 6 methods short-circuit to
+/// `CapabilityNotGranted` when the flag is false; when true,
+/// they feature-gate between `s3_resident` and `s3` (the
+/// native fallback) matching the wit-bindgen counterpart.
+///
+/// No shared handle needed — `s3_granted` is Copy so the host
+/// carries an owned copy at construction, no Mutex/Arc.
+#[derive(Debug, Clone, Copy)]
+pub struct S3BaseHost {
+    s3_granted: bool,
+}
+
+impl S3BaseHost {
+    /// Construct a new `S3BaseHost` with the granted flag.
+    /// `false` (the default) disables every method (deny-by-
+    /// default fail-closed shape).
+    pub fn new(s3_granted: bool) -> Self {
+        Self { s3_granted }
+    }
+}
+
+// Helper: forward to the appropriate resident/native op for
+// `get_object` — matches the feature-gate + delegation pattern
+// used inside the wit-bindgen impl at `crate::lib` line 2391.
+async fn dispatch_get_object(
+    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
+    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    bucket: String,
+    key: String,
+    options: Option<crate::loaded::sqlite::extension::s3_base::S3GetObjectOptions>,
+) -> std::result::Result<
+    crate::loaded::sqlite::extension::s3_base::S3GetObjectOutput,
+    crate::loaded::sqlite::extension::s3_base::S3Error,
+> {
+    #[cfg(not(feature = "native-s3"))]
+    return crate::s3_resident::get_object(endpoint, credentials, bucket, key, options).await;
+    #[cfg(feature = "native-s3")]
+    return crate::s3::op_get_object(endpoint, credentials, bucket, key, options);
+}
+
+async fn dispatch_put_object(
+    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
+    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    bucket: String,
+    key: String,
+    body: Vec<u8>,
+    options: Option<crate::loaded::sqlite::extension::s3_base::S3PutObjectOptions>,
+) -> std::result::Result<
+    crate::loaded::sqlite::extension::s3_base::S3PutObjectOutput,
+    crate::loaded::sqlite::extension::s3_base::S3Error,
+> {
+    #[cfg(not(feature = "native-s3"))]
+    return crate::s3_resident::put_object(endpoint, credentials, bucket, key, body, options).await;
+    #[cfg(feature = "native-s3")]
+    return crate::s3::op_put_object(endpoint, credentials, bucket, key, body, options);
+}
+
+async fn dispatch_delete_object(
+    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
+    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    bucket: String,
+    key: String,
+) -> std::result::Result<(), crate::loaded::sqlite::extension::s3_base::S3Error> {
+    #[cfg(not(feature = "native-s3"))]
+    return crate::s3_resident::delete_object(endpoint, credentials, bucket, key).await;
+    #[cfg(feature = "native-s3")]
+    return crate::s3::op_delete_object(endpoint, credentials, bucket, key);
+}
+
+async fn dispatch_head_object(
+    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
+    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    bucket: String,
+    key: String,
+) -> std::result::Result<
+    crate::loaded::sqlite::extension::s3_base::S3HeadObjectOutput,
+    crate::loaded::sqlite::extension::s3_base::S3Error,
+> {
+    #[cfg(not(feature = "native-s3"))]
+    return crate::s3_resident::head_object(endpoint, credentials, bucket, key).await;
+    #[cfg(feature = "native-s3")]
+    return crate::s3::op_head_object(endpoint, credentials, bucket, key);
+}
+
+async fn dispatch_list_objects(
+    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
+    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    bucket: String,
+    options: Option<crate::loaded::sqlite::extension::s3_base::S3ListObjectsOptions>,
+) -> std::result::Result<
+    crate::loaded::sqlite::extension::s3_base::S3ListObjectsOutput,
+    crate::loaded::sqlite::extension::s3_base::S3Error,
+> {
+    #[cfg(not(feature = "native-s3"))]
+    return crate::s3_resident::list_objects(endpoint, credentials, bucket, options).await;
+    #[cfg(feature = "native-s3")]
+    return crate::s3::op_list_objects(endpoint, credentials, bucket, options);
+}
+
+async fn dispatch_copy_object(
+    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
+    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    source_bucket: String,
+    source_key: String,
+    dest_bucket: String,
+    dest_key: String,
+) -> std::result::Result<
+    crate::loaded::sqlite::extension::s3_base::S3PutObjectOutput,
+    crate::loaded::sqlite::extension::s3_base::S3Error,
+> {
+    #[cfg(not(feature = "native-s3"))]
+    return crate::s3_resident::copy_object(
+        endpoint,
+        credentials,
+        source_bucket,
+        source_key,
+        dest_bucket,
+        dest_key,
+    )
+    .await;
+    #[cfg(feature = "native-s3")]
+    return crate::s3::op_copy_object(
+        endpoint,
+        credentials,
+        source_bucket,
+        source_key,
+        dest_bucket,
+        dest_key,
+    );
+}
+
+#[host_iface]
+impl S3BaseHost {
+    async fn get_object(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        endpoint: S3EndpointConfig,
+        credentials: S3Credentials,
+        bucket: String,
+        key: String,
+        options: Option<S3GetObjectOptions>,
+    ) -> RuntimeResult<Result<S3GetObjectOutput, S3Error>> {
+        if !self.s3_granted {
+            return Ok(Err(S3Error::CapabilityNotGranted));
+        }
+        let out = dispatch_get_object(
+            endpoint.to_bindgen(),
+            credentials.to_bindgen(),
+            bucket,
+            key,
+            options.map(S3GetObjectOptions::to_bindgen),
+        )
+        .await;
+        Ok(out
+            .map(S3GetObjectOutput::from_bindgen)
+            .map_err(S3Error::from_bindgen))
+    }
+
+    async fn put_object(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        endpoint: S3EndpointConfig,
+        credentials: S3Credentials,
+        bucket: String,
+        key: String,
+        body: Vec<u8>,
+        options: Option<S3PutObjectOptions>,
+    ) -> RuntimeResult<Result<S3PutObjectOutput, S3Error>> {
+        if !self.s3_granted {
+            return Ok(Err(S3Error::CapabilityNotGranted));
+        }
+        let out = dispatch_put_object(
+            endpoint.to_bindgen(),
+            credentials.to_bindgen(),
+            bucket,
+            key,
+            body,
+            options.map(S3PutObjectOptions::to_bindgen),
+        )
+        .await;
+        Ok(out
+            .map(S3PutObjectOutput::from_bindgen)
+            .map_err(S3Error::from_bindgen))
+    }
+
+    async fn delete_object(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        endpoint: S3EndpointConfig,
+        credentials: S3Credentials,
+        bucket: String,
+        key: String,
+    ) -> RuntimeResult<Result<(), S3Error>> {
+        if !self.s3_granted {
+            return Ok(Err(S3Error::CapabilityNotGranted));
+        }
+        let out = dispatch_delete_object(
+            endpoint.to_bindgen(),
+            credentials.to_bindgen(),
+            bucket,
+            key,
+        )
+        .await;
+        Ok(out.map_err(S3Error::from_bindgen))
+    }
+
+    async fn head_object(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        endpoint: S3EndpointConfig,
+        credentials: S3Credentials,
+        bucket: String,
+        key: String,
+    ) -> RuntimeResult<Result<S3HeadObjectOutput, S3Error>> {
+        if !self.s3_granted {
+            return Ok(Err(S3Error::CapabilityNotGranted));
+        }
+        let out = dispatch_head_object(
+            endpoint.to_bindgen(),
+            credentials.to_bindgen(),
+            bucket,
+            key,
+        )
+        .await;
+        Ok(out
+            .map(S3HeadObjectOutput::from_bindgen)
+            .map_err(S3Error::from_bindgen))
+    }
+
+    async fn list_objects(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        endpoint: S3EndpointConfig,
+        credentials: S3Credentials,
+        bucket: String,
+        options: Option<S3ListObjectsOptions>,
+    ) -> RuntimeResult<Result<S3ListObjectsOutput, S3Error>> {
+        if !self.s3_granted {
+            return Ok(Err(S3Error::CapabilityNotGranted));
+        }
+        let out = dispatch_list_objects(
+            endpoint.to_bindgen(),
+            credentials.to_bindgen(),
+            bucket,
+            options.map(S3ListObjectsOptions::to_bindgen),
+        )
+        .await;
+        Ok(out
+            .map(S3ListObjectsOutput::from_bindgen)
+            .map_err(S3Error::from_bindgen))
+    }
+
+    async fn copy_object(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        endpoint: S3EndpointConfig,
+        credentials: S3Credentials,
+        source_bucket: String,
+        source_key: String,
+        dest_bucket: String,
+        dest_key: String,
+    ) -> RuntimeResult<Result<S3PutObjectOutput, S3Error>> {
+        if !self.s3_granted {
+            return Ok(Err(S3Error::CapabilityNotGranted));
+        }
+        let out = dispatch_copy_object(
+            endpoint.to_bindgen(),
+            credentials.to_bindgen(),
+            source_bucket,
+            source_key,
+            dest_bucket,
+            dest_key,
+        )
+        .await;
+        Ok(out
+            .map(S3PutObjectOutput::from_bindgen)
+            .map_err(S3Error::from_bindgen))
+    }
+}
+
+/// Register the `sqlite:extension/s3_base` handler.
+pub fn install_s3_base_imports(imports: HostImports, s3_granted: bool) -> HostImports {
+    imports.register(
+        "sqlite:extension/s3_base",
+        Arc::new(S3BaseHost::new(s3_granted)) as Arc<dyn HostCall>,
+    )
+}
+
 /// Composite installer for every wasmos-native interface this
 /// module currently covers. New interfaces added in future
 /// sessions will extend this fn — consumer code depending on
@@ -555,25 +1090,23 @@ pub fn install_http_imports(imports: HostImports, http_policy: Option<HttpPolicy
 ///
 /// Currently registers: `sqlite:extension/compression` +
 /// `sqlite:extension/dns` + `sqlite:extension/wal_frames` +
-/// `sqlite:extension/http`.
+/// `sqlite:extension/http` + `sqlite:extension/s3_base`.
 ///
-/// **Not yet registered**: `s3-base`, `extension-loader`.
-/// Each needs its own migration pass (record/variant mirror
-/// types, per-field shared-state handle, and one
-/// `install_*_imports` fn). A guest importing any unmigrated
-/// interface fails instantiation with an "unresolved import"
-/// error under the wasmos-native install path — the signal to
-/// fall back to the wit-bindgen `crate::lib` path or wait for
-/// the remaining interfaces to migrate.
+/// **Not yet registered**: `extension-loader` (test stub on
+/// RunLoaderStub; low value, likely defer). A guest importing
+/// that interface would fail instantiation with an "unresolved
+/// import" error under the wasmos-native install path.
 pub fn install_sqlink_imports(
     imports: HostImports,
     dns_policy: Option<DnsPolicy>,
     http_policy: Option<HttpPolicy>,
+    s3_granted: bool,
 ) -> HostImports {
     let imports = install_compression_imports(imports);
     let imports = install_dns_imports(imports, dns_policy);
     let imports = install_wal_frames_imports(imports);
-    install_http_imports(imports, http_policy)
+    let imports = install_http_imports(imports, http_policy);
+    install_s3_base_imports(imports, s3_granted)
 }
 
 // Behavior tests for CompressionHost need a tokio runtime + the
