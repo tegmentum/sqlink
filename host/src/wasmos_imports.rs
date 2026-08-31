@@ -54,7 +54,7 @@ use wasmos_runtime_api::{
     host_iface, HostCall, HostCallContext, HostImports, RuntimeResult, WitRecord, WitVariant,
 };
 
-use crate::policy::DnsPolicy;
+use crate::policy::{DnsPolicy, HttpPolicy};
 
 /// Host struct for the `sqlite:extension/compression` interface.
 ///
@@ -349,15 +349,215 @@ pub fn install_wal_frames_imports(imports: HostImports) -> HostImports {
     )
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Phase 6.2.e-d — http interface (4/6).
+//
+// Mirrors the wit-bindgen `impl loaded::sqlite::extension::http::
+// Host for ProviderState` at `crate::lib` line 2202. Delegates to
+// `crate::net_http_handle` — the same free fn the wit-bindgen path
+// uses — with type-adapter converters bridging the wit-bindgen and
+// wasmos-native representations.
+// ────────────────────────────────────────────────────────────────────
+
+/// Wasmos-native mirror of the WIT `sqlite:extension/http.method`
+/// variant. Mixed unit + tuple arms; 9 unit + 1 `Other(String)`.
+#[derive(Debug, Clone, WitVariant)]
+pub enum Method {
+    Get,
+    Head,
+    Post,
+    Put,
+    Delete,
+    Connect,
+    Options,
+    Trace,
+    Patch,
+    Other(String),
+}
+
+impl Method {
+    fn to_bindgen(self) -> crate::loaded::sqlite::extension::http::Method {
+        use crate::loaded::sqlite::extension::http::Method as B;
+        match self {
+            Method::Get => B::Get,
+            Method::Head => B::Head,
+            Method::Post => B::Post,
+            Method::Put => B::Put,
+            Method::Delete => B::Delete,
+            Method::Connect => B::Connect,
+            Method::Options => B::Options,
+            Method::Trace => B::Trace,
+            Method::Patch => B::Patch,
+            Method::Other(s) => B::Other(s),
+        }
+    }
+}
+
+/// Wasmos-native mirror of the WIT `sqlite:extension/http.scheme`
+/// variant. 2 unit + 1 `Other(String)`.
+#[derive(Debug, Clone, WitVariant)]
+pub enum Scheme {
+    Http,
+    Https,
+    Other(String),
+}
+
+impl Scheme {
+    fn to_bindgen(self) -> crate::loaded::sqlite::extension::http::Scheme {
+        use crate::loaded::sqlite::extension::http::Scheme as B;
+        match self {
+            Scheme::Http => B::Http,
+            Scheme::Https => B::Https,
+            Scheme::Other(s) => B::Other(s),
+        }
+    }
+}
+
+/// Wasmos-native mirror of the WIT `sqlite:extension/http.field`
+/// tuple type alias. WIT `type field = tuple<string, list<u8>>`
+/// maps to the Rust tuple `(String, Vec<u8>)` — no distinct
+/// mirror struct needed; WitBridgeCtx has a tuple-2 impl (Phase
+/// 6.12 Session 3b).
+pub type Field = (String, Vec<u8>);
+
+/// Wasmos-native mirror of the WIT `sqlite:extension/http.request`
+/// record. Wire-identical to the wit-bindgen counterpart.
+#[derive(Debug, Clone, WitRecord)]
+pub struct Request {
+    pub method: Method,
+    pub scheme: Option<Scheme>,
+    pub authority: Option<String>,
+    pub path_with_query: Option<String>,
+    pub headers: Vec<Field>,
+    pub body: Option<Vec<u8>>,
+    pub timeout_ms: Option<u32>,
+}
+
+impl Request {
+    /// Convert to the wit-bindgen `Request` that
+    /// `crate::net_http_handle` accepts.
+    fn to_bindgen(self) -> crate::loaded::sqlite::extension::http::Request {
+        crate::loaded::sqlite::extension::http::Request {
+            method: self.method.to_bindgen(),
+            scheme: self.scheme.map(Scheme::to_bindgen),
+            authority: self.authority,
+            path_with_query: self.path_with_query,
+            headers: self.headers,
+            body: self.body,
+            timeout_ms: self.timeout_ms,
+        }
+    }
+}
+
+/// Wasmos-native mirror of the WIT `sqlite:extension/http.response`
+/// record.
+#[derive(Debug, Clone, WitRecord)]
+pub struct Response {
+    pub status: u16,
+    pub headers: Vec<Field>,
+    pub body: Vec<u8>,
+}
+
+impl Response {
+    /// Convert from the wit-bindgen `Response` that
+    /// `crate::net_http_handle` returns on success.
+    fn from_bindgen(r: crate::loaded::sqlite::extension::http::Response) -> Self {
+        Response {
+            status: r.status,
+            headers: r.headers,
+            body: r.body,
+        }
+    }
+}
+
+/// Wasmos-native mirror of the WIT `sqlite:extension/http.http-error`
+/// variant. Mixed unit + string-payload arms.
+#[derive(Debug, Clone, WitVariant)]
+pub enum HttpError {
+    InvalidUrl(String),
+    TimedOut,
+    ConnectionError(String),
+    ProtocolError(String),
+    Other(String),
+}
+
+impl HttpError {
+    /// Convert from the wit-bindgen `HttpError` returned by
+    /// `crate::net_http_handle`.
+    fn from_bindgen(err: crate::loaded::sqlite::extension::http::HttpError) -> Self {
+        use crate::loaded::sqlite::extension::http::HttpError as B;
+        match err {
+            B::InvalidUrl(s) => HttpError::InvalidUrl(s),
+            B::TimedOut => HttpError::TimedOut,
+            B::ConnectionError(s) => HttpError::ConnectionError(s),
+            B::ProtocolError(s) => HttpError::ProtocolError(s),
+            B::Other(s) => HttpError::Other(s),
+        }
+    }
+}
+
+/// Host struct for the `sqlite:extension/http` interface.
+///
+/// Captures `Arc<Option<HttpPolicy>>` — mirrors the DnsHost
+/// pattern from Phase 6.2.e slice 2. HttpPolicy is `Clone +
+/// Debug + Default` and ProviderState never mutates
+/// `http_policy` after construction, so read-only shared access
+/// via plain `Arc` suffices; no Mutex, no ProviderState wrap.
+#[derive(Clone)]
+pub struct HttpHost {
+    http_policy: Arc<Option<HttpPolicy>>,
+}
+
+impl HttpHost {
+    /// Construct a new `HttpHost` with the given policy. `None`
+    /// disables HTTP entirely (deny-by-default fail-closed shape,
+    /// matches the wit-bindgen counterpart).
+    pub fn new(http_policy: Option<HttpPolicy>) -> Self {
+        Self {
+            http_policy: Arc::new(http_policy),
+        }
+    }
+}
+
+#[host_iface]
+impl HttpHost {
+    /// Handler for `sqlite:extension/http.handle`. Byte-identical
+    /// semantics to `crate::lib` line 2203: delegates to
+    /// `crate::net_http_handle` with the captured policy,
+    /// converts wit-bindgen types to/from the wasmos-native
+    /// mirrors on both sides of the call.
+    async fn handle(
+        &self,
+        _ctx: &mut HostCallContext<'_>,
+        req: Request,
+    ) -> RuntimeResult<Result<Response, HttpError>> {
+        let policy_ref = self.http_policy.as_ref().as_ref();
+        let bindgen_req = req.to_bindgen();
+        Ok(crate::net_http_handle(policy_ref, bindgen_req)
+            .await
+            .map(Response::from_bindgen)
+            .map_err(HttpError::from_bindgen))
+    }
+}
+
+/// Register the `sqlite:extension/http` handler.
+pub fn install_http_imports(imports: HostImports, http_policy: Option<HttpPolicy>) -> HostImports {
+    imports.register(
+        "sqlite:extension/http",
+        Arc::new(HttpHost::new(http_policy)) as Arc<dyn HostCall>,
+    )
+}
+
 /// Composite installer for every wasmos-native interface this
 /// module currently covers. New interfaces added in future
 /// sessions will extend this fn — consumer code depending on
 /// it picks up new registrations transparently.
 ///
 /// Currently registers: `sqlite:extension/compression` +
-/// `sqlite:extension/dns` + `sqlite:extension/wal_frames`.
+/// `sqlite:extension/dns` + `sqlite:extension/wal_frames` +
+/// `sqlite:extension/http`.
 ///
-/// **Not yet registered**: `http`, `s3-base`, `extension-loader`.
+/// **Not yet registered**: `s3-base`, `extension-loader`.
 /// Each needs its own migration pass (record/variant mirror
 /// types, per-field shared-state handle, and one
 /// `install_*_imports` fn). A guest importing any unmigrated
@@ -368,10 +568,12 @@ pub fn install_wal_frames_imports(imports: HostImports) -> HostImports {
 pub fn install_sqlink_imports(
     imports: HostImports,
     dns_policy: Option<DnsPolicy>,
+    http_policy: Option<HttpPolicy>,
 ) -> HostImports {
     let imports = install_compression_imports(imports);
     let imports = install_dns_imports(imports, dns_policy);
-    install_wal_frames_imports(imports)
+    let imports = install_wal_frames_imports(imports);
+    install_http_imports(imports, http_policy)
 }
 
 // Behavior tests for CompressionHost need a tokio runtime + the
