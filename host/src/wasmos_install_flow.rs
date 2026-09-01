@@ -86,4 +86,37 @@ mod tests {
     ) -> RuntimeResult<()> {
         install_wasmos_sqlink_imports(engine, linker, component, None, None, false)
     }
+
+    /// ADR-0029 Phase 6.2.n Arc 1 Session 6 — runtime unit test
+    /// that specifically exercises the install-flow fn against a
+    /// synthetic component. Complements the integration tests in
+    /// `tests/reentrant_net_provider.rs` (which exercise the
+    /// install path implicitly via full provider instantiation) —
+    /// this one isolates the wiring layer so a regression in the
+    /// wiring itself (rather than in the handlers or the guest-side
+    /// import matching) fails HERE with a specific message.
+    ///
+    /// Uses a minimal WAT component that imports NONE of the 5
+    /// sqlink interfaces. `install_wasmos_sqlink_imports` must
+    /// succeed as a no-op: every handler registration checks
+    /// `component`'s imports first and is a no-op for absent
+    /// interfaces (see `async_bridge::install_stateless_host_call`
+    /// early-return).
+    #[test]
+    fn install_flow_noop_on_component_without_sqlink_imports() {
+        // Trivial component that imports nothing from
+        // sqlite:extension/*. If the install flow accidentally tries
+        // to register a handler for a non-imported interface, wasmtime
+        // errors at register-time — this test catches that regression.
+        let wat = r#"(component)"#;
+        let bytes = wat::parse_str(wat).expect("wat compiles");
+        let engine = Engine::new(
+            wasmtime::Config::new().async_support(true),
+        ).expect("engine");
+        let component = Component::new(&engine, &bytes).expect("component");
+        let mut linker: Linker<ProviderState> = Linker::new(&engine);
+
+        install_wasmos_sqlink_imports(&engine, &mut linker, &component, None, None, false)
+            .expect("install-flow must be a no-op for a component with no sqlink imports");
+    }
 }
