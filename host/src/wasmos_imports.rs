@@ -136,7 +136,7 @@ impl CompressionHost {
 /// interface-name matching against the guest's imports.
 pub fn install_compression_imports(imports: HostImports) -> HostImports {
     imports.register(
-        "sqlite:extension/compression",
+        "sqlite:extension/compression@1.0.0",
         Arc::new(CompressionHost::new()) as Arc<dyn HostCall>,
     )
 }
@@ -258,7 +258,7 @@ impl DnsHost {
 /// Register the `sqlite:extension/dns` handler.
 pub fn install_dns_imports(imports: HostImports, dns_policy: Option<DnsPolicy>) -> HostImports {
     imports.register(
-        "sqlite:extension/dns",
+        "sqlite:extension/dns@1.0.0",
         Arc::new(DnsHost::new(dns_policy)) as Arc<dyn HostCall>,
     )
 }
@@ -345,7 +345,7 @@ impl WalFramesHost {
 /// Register the `sqlite:extension/wal_frames` handler.
 pub fn install_wal_frames_imports(imports: HostImports) -> HostImports {
     imports.register(
-        "sqlite:extension/wal_frames",
+        "sqlite:extension/wal-frames@1.0.0",
         Arc::new(WalFramesHost::new()) as Arc<dyn HostCall>,
     )
 }
@@ -544,7 +544,7 @@ impl HttpHost {
 /// Register the `sqlite:extension/http` handler.
 pub fn install_http_imports(imports: HostImports, http_policy: Option<HttpPolicy>) -> HostImports {
     imports.register(
-        "sqlite:extension/http",
+        "sqlite:extension/http@1.0.0",
         Arc::new(HttpHost::new(http_policy)) as Arc<dyn HostCall>,
     )
 }
@@ -1079,7 +1079,7 @@ impl S3BaseHost {
 /// Register the `sqlite:extension/s3_base` handler.
 pub fn install_s3_base_imports(imports: HostImports, s3_granted: bool) -> HostImports {
     imports.register(
-        "sqlite:extension/s3_base",
+        "sqlite:extension/s3-base@1.0.0",
         Arc::new(S3BaseHost::new(s3_granted)) as Arc<dyn HostCall>,
     )
 }
