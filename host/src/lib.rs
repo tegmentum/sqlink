@@ -48,6 +48,13 @@ mod compression_resident;
 // module; the existing wit-bindgen paths stay. See the module
 // docstring for the coexistence design.
 pub mod wasmos_imports;
+/// ADR-0029 Phase 6.2.n Arc 1 Session 3 — wiring layer that takes
+/// `wasmos_imports::install_sqlink_imports`'s output and installs it
+/// into a `wasmtime::component::Linker<S>` via the wasmos v46 async
+/// bridge. Additive to the existing wit-bindgen `add_to_linker`
+/// calls in `compose_provider.rs`; a later session (Arc 1 Session 4)
+/// swaps the paths behind a feature flag or coordinated cutover.
+pub mod wasmos_install_flow;
 /// Resident `http-endpoint` compose:dynlink/endpoint provider routing — the
 /// default HTTP path. #106.
 #[cfg(not(feature = "native-http"))]

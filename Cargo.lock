@@ -659,6 +659,9 @@ name = "bytes"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bytes-utils"
@@ -5842,6 +5845,8 @@ dependencies = [
  "vec-extension",
  "vec0-extension",
  "vin-extension",
+ "wasmos-runtime-api",
+ "wasmos-runtime-wasmtime-v46",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
@@ -7585,6 +7590,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmos-runtime-api"
+version = "0.1.0"
+source = "git+https://github.com/tegmentum/wasmos.git?rev=66d58e86dd9d5e21d020eed6b8ab70e2b7ed713f#66d58e86dd9d5e21d020eed6b8ab70e2b7ed713f"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "serde",
+ "thiserror 2.0.18",
+ "wasmos-runtime-api-macros",
+]
+
+[[package]]
+name = "wasmos-runtime-api-macros"
+version = "0.1.0"
+source = "git+https://github.com/tegmentum/wasmos.git?rev=66d58e86dd9d5e21d020eed6b8ab70e2b7ed713f#66d58e86dd9d5e21d020eed6b8ab70e2b7ed713f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "wasmos-runtime-wasmtime-v46"
+version = "0.1.0"
+source = "git+https://github.com/tegmentum/wasmos.git?rev=66d58e86dd9d5e21d020eed6b8ab70e2b7ed713f#66d58e86dd9d5e21d020eed6b8ab70e2b7ed713f"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "tokio",
+ "wasmos-runtime-api",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-http",
+]
+
+[[package]]
 name = "wasmparser"
 version = "0.236.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7678,6 +7720,7 @@ dependencies = [
  "async-trait",
  "bitflags",
  "bumpalo",
+ "bytes",
  "cc",
  "cfg-if",
  "encoding_rs",

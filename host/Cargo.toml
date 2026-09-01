@@ -47,16 +47,23 @@ datalink-prefix = { git = "https://github.com/tegmentum/datalink.git", rev = "d1
 # ADR-0029 Phase 6.2.e — the wasmos runtime-abstraction API surface.
 # Consumed by `src/wasmos_imports.rs` to expose the sqlite:extension
 # Host trait impls to a wasmos-runtime-abstracted instantiation path.
-# Additive; the existing wit-bindgen path at src/lib.rs stays.
-# Pinned to wasmos main tip (ea572b3); pin bumps coordinate with the
-# datalink revs above through the same rev-alignment discipline the
-# state-of-the-abstraction §"three coordination breaks" documents.
-# NOTE: not pulling wasmos-runtime-wasmtime-v48 — the migration only
-# needs the abstraction crate itself. Actual instantiation still goes
-# through sqlink-host's own wasmtime 46.0.1 pipeline. Consumers who
-# want to instantiate via wasmos in the future pull the adapter
-# separately.
-wasmos-runtime-api = { git = "https://github.com/tegmentum/wasmos.git", rev = "ea572b369ab09ff809f40c43bad7bb0a921ce8ac" }
+# ADR-0029 Phase 6.2.n Arc 1 Session 3 — bump pin to include the
+# wasmos-runtime-wasmtime-v46 adapter (Session 1) + async_bridge
+# module (Session 2). Both are needed to wire sqlink's wasmos-native
+# handlers (declared in src/wasmos_imports.rs via #[host_iface] async
+# default) into sqlink's actual wasmtime 46.0.1 async pipeline.
+#
+# Additive; the existing wit-bindgen path at src/lib.rs stays. The
+# wasmos install path is added ALONGSIDE (per-instantiate decision
+# in compose_provider.rs on which path to use for a given component).
+wasmos-runtime-api = { git = "https://github.com/tegmentum/wasmos.git", rev = "66d58e86dd9d5e21d020eed6b8ab70e2b7ed713f" }
+# ADR-0029 §25 crate-name immutability adapter: wasmtime 46.x
+# version-pinned adapter, shipped alongside v48 + edge to serve
+# sqlink's component-model-async pin. Bridge-only surface today
+# (sync_bridge, sync_bridge_resource, sync_export_bridge,
+# async_bridge); the full WasmtimeV46Runtime impl deferred until
+# needed.
+wasmos-runtime-wasmtime-v46 = { git = "https://github.com/tegmentum/wasmos.git", rev = "66d58e86dd9d5e21d020eed6b8ab70e2b7ed713f" }
 
 anyhow = "1.0"
 wasmtime = { version = "46.0.1", features = [
