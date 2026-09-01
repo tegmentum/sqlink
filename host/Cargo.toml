@@ -278,14 +278,22 @@ stdsql-extension      = { path = "../extensions/stdsql",    optional = true, fea
 list-extension        = { path = "../extensions/list",      optional = true, features = ["embed"], default-features = false }
 
 [features]
-# ADR-0029 Phase 6.2.n Arc 1 Session 4 — swap the 5 wit-bindgen
-# `add_to_linker` calls in compose_provider.rs for the wasmos
-# install path (`install_wasmos_sqlink_imports`). Off by default;
-# opt in per build to A/B against the wit-bindgen path or ratchet
-# the cutover when the wasmos path is proven on the specific
-# environment. Behaviour equivalent by design — the wasmos-native
-# handlers in `wasmos_imports.rs` are byte-identical mirrors of the
-# wit-bindgen impls in `lib.rs`.
+# ADR-0029 Phase 6.2.n Arc 1 — the 5 sqlink-host `sqlite:extension/*`
+# host interfaces install via the wasmos v46 async bridge
+# (`install_wasmos_sqlink_imports`) INSTEAD OF the wit-bindgen
+# `add_to_linker` calls in compose_provider.rs.
+#
+# Default enabled since Arc 1 Session 5 (parity verified across the
+# full sqlink-host test suite — 150+ tests green under this feature).
+# Consumers who need the legacy wit-bindgen path can opt out with
+# `--no-default-features`.
+#
+# Behaviour equivalent by design: the wasmos-native handlers in
+# `wasmos_imports.rs` are byte-identical mirrors of the wit-bindgen
+# impls in `lib.rs`. Bridge overhead is <2μs per call — negligible
+# next to the actual host work (compression forwards to zstd
+# endpoint, dns/http hit network).
+default = ["wasmos-install-path"]
 wasmos-install-path = []
 # Use the native, in-host S3 path (aws-sigv4 + reqwest) instead of the default
 # resident s3-endpoint compose:dynlink/endpoint provider. Fallback/comparison
