@@ -30,6 +30,18 @@
 //! When tvm-wasm and sqlink align on a common wasmtime version
 //! (or when wasmos exposes an adapter-independent bindings crate),
 //! this module retires in favor of the upstream one.
+//!
+//! # Session 15a → post-Phase-6.7 shape (2026-09-01)
+//!
+//! The original 15a version had to use a fn-pointer extractor
+//! field on each host struct because wasmos's `#[host_iface]`
+//! MVP rejected generic impl blocks. Phase 6.7 (wasmos
+//! `0b55b5fd`) lifted that restriction; this module now uses
+//! the natural `impl<T: AsMut<TvmHost> + Send + 'static>
+//! TvmManagerHost<T>` shape — the fn-pointer + `TvmHostExtractor`
+//! type alias are gone. `extract_tvm_host::<T>(ctx)` is the
+//! shared helper that all three host struct method bodies use
+//! to pull the projected `&mut TvmHost`.
 
 use tvm_wasmtime::bindings::tvm::memory::bytes::Host as BgBytesHost;
 use tvm_wasmtime::bindings::tvm::memory::diagnostics::Host as BgDiagnosticsHost;
@@ -271,22 +283,15 @@ impl From<TvmError> for bg::TvmError {
 
 // ── Host-state extractor ────────────────────────────────────────────
 //
-// The wasmos `#[host_iface]` MVP doesn't support generic impl blocks
-// (Phase 6.7 follow-up), so the host structs below hold a fn-pointer
-// extractor instead of a `PhantomData<T>` generic parameter. Each
-// constructor monomorphises the extractor against a concrete
-// consumer state type `T: AsMut<TvmHost>` — same runtime shape as
-// tvm-wasm's `HostAsMutExtractor<T>` but expressed as a plain fn
-// pointer that the host_iface classifier accepts on the struct.
+// Phase 6.7 (wasmos `0b55b5fd`) lifted the "no generic impl blocks"
+// restriction on `#[host_iface]`. The 15a fn-pointer-extractor
+// workaround is gone; the host structs below use the natural
+// `impl<T: AsMut<TvmHost> + Send + 'static> TvmManagerHost<T>`
+// shape and pull `&mut TvmHost` via `ctx.consumer_state::<T>()`
+// inline at every method body.
 
-/// Function-pointer type for the per-call state extractor. HRTB on
-/// the lifetimes so the same fn ptr type accepts every possible
-/// borrow shape a `HostCallContext<'_>` might present at call time.
-pub type TvmHostExtractor =
-    for<'a, 'b> fn(&'a mut HostCallContext<'b>) -> RuntimeResult<&'a mut TvmHost>;
-
-fn extract_tvm_host_impl<'a, 'b, T: AsMut<TvmHost> + 'static>(
-    ctx: &'a mut HostCallContext<'b>,
+fn extract_tvm_host<'a, T: AsMut<TvmHost> + 'static>(
+    ctx: &'a mut HostCallContext<'_>,
 ) -> RuntimeResult<&'a mut TvmHost> {
     let state = ctx.consumer_state::<T>().ok_or_else(|| {
         RuntimeError::msg(format!(
@@ -301,30 +306,34 @@ fn extract_tvm_host_impl<'a, 'b, T: AsMut<TvmHost> + 'static>(
 // ── Manager interface ────────────────────────────────────────────────
 
 /// Wasmos-native implementation of `tvm:memory/manager@0.1.0`.
-/// Holds a fn-pointer extractor monomorphised at
-/// construction-time against a concrete consumer state
-/// `T: AsMut<TvmHost>` (see [`TvmManagerHost::new::<T>()`]).
-pub struct TvmManagerHost {
-    extract: TvmHostExtractor,
+/// Generic over the consumer state type `T: AsMut<TvmHost>` (sqlink's
+/// `RunState`, `CliRunState`, or `State` — all three impl it).
+/// Handlers pull `&mut TvmHost` via `ctx.consumer_state::<T>()`
+/// inline; PhantomData carries the T-monomorphisation without
+/// storing a T value at runtime.
+pub struct TvmManagerHost<T> {
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
-impl TvmManagerHost {
-    /// Monomorphise the extractor against `T`. Every install site
-    /// picks a concrete `T` — sqlink's `RunState` or `CliRunState`
-    /// for the current callers.
-    pub fn new<T: AsMut<TvmHost> + 'static>() -> Self {
-        Self { extract: extract_tvm_host_impl::<T> }
+impl<T> TvmManagerHost<T> {
+    pub const fn new() -> Self {
+        Self { _marker: std::marker::PhantomData }
+    }
+}
+impl<T> Default for TvmManagerHost<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 #[host_iface(sync)]
-impl TvmManagerHost {
+impl<T: AsMut<TvmHost> + Send + 'static> TvmManagerHost<T> {
     fn create_region(
         &self,
         ctx: &mut HostCallContext<'_>,
         kind: RegionKind,
         capacity: u32,
     ) -> RuntimeResult<Result<u16, TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::create_region(host, kind.into(), capacity).map_err(Into::into))
     }
 
@@ -333,7 +342,7 @@ impl TvmManagerHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::destroy_region(host, region_id).map_err(Into::into))
     }
 
@@ -343,7 +352,7 @@ impl TvmManagerHost {
         region_id: u16,
         size: u32,
     ) -> RuntimeResult<Result<Handle, TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::alloc(host, region_id, size)
             .map(Into::into)
             .map_err(Into::into))
@@ -354,7 +363,7 @@ impl TvmManagerHost {
         ctx: &mut HostCallContext<'_>,
         ptr: Handle,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::dealloc(host, ptr.into()).map_err(Into::into))
     }
 
@@ -363,7 +372,7 @@ impl TvmManagerHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<Result<RegionInfo, TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::describe_region(host, region_id)
             .map(Into::into)
             .map_err(Into::into))
@@ -374,7 +383,7 @@ impl TvmManagerHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::promote_region(host, region_id).map_err(Into::into))
     }
 
@@ -383,7 +392,7 @@ impl TvmManagerHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::demote_region(host, region_id).map_err(Into::into))
     }
 
@@ -392,7 +401,7 @@ impl TvmManagerHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::spill_region(host, region_id).map_err(Into::into))
     }
 
@@ -401,7 +410,7 @@ impl TvmManagerHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::load_region(host, region_id).map_err(Into::into))
     }
 
@@ -410,7 +419,7 @@ impl TvmManagerHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::pin(host, region_id).map_err(Into::into))
     }
 
@@ -419,7 +428,7 @@ impl TvmManagerHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::unpin(host, region_id).map_err(Into::into))
     }
 
@@ -428,7 +437,7 @@ impl TvmManagerHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<Result<CompactResult, TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgManagerHost::compact_region(host, region_id)
             .map(Into::into)
             .map_err(Into::into))
@@ -438,24 +447,29 @@ impl TvmManagerHost {
 // ── Bytes interface ─────────────────────────────────────────────────
 
 /// Wasmos-native implementation of `tvm:memory/bytes@0.1.0`.
-pub struct TvmBytesHost {
-    extract: TvmHostExtractor,
+pub struct TvmBytesHost<T> {
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
-impl TvmBytesHost {
-    pub fn new<T: AsMut<TvmHost> + 'static>() -> Self {
-        Self { extract: extract_tvm_host_impl::<T> }
+impl<T> TvmBytesHost<T> {
+    pub const fn new() -> Self {
+        Self { _marker: std::marker::PhantomData }
+    }
+}
+impl<T> Default for TvmBytesHost<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 #[host_iface(sync)]
-impl TvmBytesHost {
+impl<T: AsMut<TvmHost> + Send + 'static> TvmBytesHost<T> {
     fn read(
         &self,
         ctx: &mut HostCallContext<'_>,
         ptr: Handle,
         len: u32,
     ) -> RuntimeResult<Result<Vec<u8>, TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgBytesHost::read(host, ptr.into(), len).map_err(Into::into))
     }
 
@@ -465,7 +479,7 @@ impl TvmBytesHost {
         ptr: Handle,
         data: Vec<u8>,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgBytesHost::write(host, ptr.into(), data).map_err(Into::into))
     }
 
@@ -476,7 +490,7 @@ impl TvmBytesHost {
         dst: Handle,
         len: u32,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgBytesHost::copy(host, src.into(), dst.into(), len).map_err(Into::into))
     }
 
@@ -488,7 +502,7 @@ impl TvmBytesHost {
         dst_offset: u32,
         len: u32,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgBytesHost::read_into(host, src.into(), dst_region, dst_offset, len)
             .map_err(Into::into))
     }
@@ -501,7 +515,7 @@ impl TvmBytesHost {
         dst: Handle,
         len: u32,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgBytesHost::write_from(host, src_region, src_offset, dst.into(), len)
             .map_err(Into::into))
     }
@@ -515,7 +529,7 @@ impl TvmBytesHost {
         dst_offset: u32,
         len: u32,
     ) -> RuntimeResult<Result<(), TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgBytesHost::copy_region(host, src_region, src_offset, dst_region, dst_offset, len)
             .map_err(Into::into))
     }
@@ -524,22 +538,27 @@ impl TvmBytesHost {
 // ── Diagnostics interface ───────────────────────────────────────────
 
 /// Wasmos-native implementation of `tvm:memory/diagnostics@0.1.0`.
-pub struct TvmDiagnosticsHost {
-    extract: TvmHostExtractor,
+pub struct TvmDiagnosticsHost<T> {
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
-impl TvmDiagnosticsHost {
-    pub fn new<T: AsMut<TvmHost> + 'static>() -> Self {
-        Self { extract: extract_tvm_host_impl::<T> }
+impl<T> TvmDiagnosticsHost<T> {
+    pub const fn new() -> Self {
+        Self { _marker: std::marker::PhantomData }
+    }
+}
+impl<T> Default for TvmDiagnosticsHost<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 #[host_iface(sync)]
-impl TvmDiagnosticsHost {
+impl<T: AsMut<TvmHost> + Send + 'static> TvmDiagnosticsHost<T> {
     fn list_regions(
         &self,
         ctx: &mut HostCallContext<'_>,
     ) -> RuntimeResult<Vec<RegionInfo>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgDiagnosticsHost::list_regions(host)
             .into_iter()
             .map(Into::into)
@@ -551,7 +570,7 @@ impl TvmDiagnosticsHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<u64> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgDiagnosticsHost::fault_count(host, region_id))
     }
 
@@ -560,7 +579,7 @@ impl TvmDiagnosticsHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<u64> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgDiagnosticsHost::allocation_count(host, region_id))
     }
 
@@ -569,7 +588,7 @@ impl TvmDiagnosticsHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<u64> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgDiagnosticsHost::bytes_read_count(host, region_id))
     }
 
@@ -578,7 +597,7 @@ impl TvmDiagnosticsHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<u64> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgDiagnosticsHost::bytes_written_count(host, region_id))
     }
 
@@ -587,7 +606,7 @@ impl TvmDiagnosticsHost {
         ctx: &mut HostCallContext<'_>,
         region_id: u16,
     ) -> RuntimeResult<Result<RegionMetrics, TvmError>> {
-        let host = (self.extract)(ctx)?;
+        let host = extract_tvm_host::<T>(ctx)?;
         Ok(BgDiagnosticsHost::metrics_snapshot(host, region_id)
             .map(Into::into)
             .map_err(Into::into))
@@ -621,11 +640,11 @@ where
     use anyhow::anyhow;
 
     let imports = HostImports::new()
-        .register_sync("tvm:memory/manager@0.1.0", TvmManagerHost::new::<T>())
-        .register_sync("tvm:memory/bytes@0.1.0", TvmBytesHost::new::<T>())
+        .register_sync("tvm:memory/manager@0.1.0", TvmManagerHost::<T>::new())
+        .register_sync("tvm:memory/bytes@0.1.0", TvmBytesHost::<T>::new())
         .register_sync(
             "tvm:memory/diagnostics@0.1.0",
-            TvmDiagnosticsHost::new::<T>(),
+            TvmDiagnosticsHost::<T>::new(),
         );
 
     async_bridge::install_host_imports(engine, linker, component, &imports)
