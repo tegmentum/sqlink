@@ -27,7 +27,7 @@ sqlink-parsers = { path = "../sqlink-parsers" }
 # ducklink host). Introspects a loaded component's imported sqlite:extension
 # @MAJOR and rejects a contract-major mismatch (or unversioned/legacy)
 # before instantiation -- silent-corruption protection. datalink is PUBLIC.
-datalink-contract = { git = "https://github.com/tegmentum/datalink.git", rev = "d1e5984b51dba1d6f40d6173c7ab26af4a905cf2" }
+datalink-contract = { git = "https://github.com/tegmentum/datalink.git", rev = "9a150a4b467474b0fc965786c5fe92361c413d58" }
 
 # Shared compose:dynlink linker host (also consumed by the ducklink host).
 # We use its ADDITIVE async flavor: AsyncProviderBackend + AsyncDynLinkBridge
@@ -42,7 +42,7 @@ datalink-dynlink = { git = "https://github.com/tegmentum/datalink.git", rev = "9
 # ducklink host). The prefix__name resolution algorithm + the collision/pin
 # model behind a PrefixStore trait; this host backs that trait with its
 # __sqlink_prefix* SQLite tables (see prefix_registry.rs). datalink is PUBLIC.
-datalink-prefix = { git = "https://github.com/tegmentum/datalink.git", rev = "d1e5984b51dba1d6f40d6173c7ab26af4a905cf2" }
+datalink-prefix = { git = "https://github.com/tegmentum/datalink.git", rev = "9a150a4b467474b0fc965786c5fe92361c413d58" }
 
 # ADR-0029 Phase 6.2.e — the wasmos runtime-abstraction API surface.
 # Consumed by `src/wasmos_imports.rs` to expose the sqlite:extension

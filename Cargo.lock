@@ -1637,7 +1637,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 [[package]]
 name = "datalink-contract"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git?rev=d1e5984b51dba1d6f40d6173c7ab26af4a905cf2#d1e5984b51dba1d6f40d6173c7ab26af4a905cf2"
+source = "git+https://github.com/tegmentum/datalink.git?rev=9a150a4b467474b0fc965786c5fe92361c413d58#9a150a4b467474b0fc965786c5fe92361c413d58"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -1665,12 +1665,12 @@ dependencies = [
 [[package]]
 name = "datalink-policy"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git#8211a7542eea5c5d661e69ab621b74c71ccf016f"
+source = "git+https://github.com/tegmentum/datalink.git?tag=v0.1.0#5206e0dfc31e17ef62fb83384093e6863cabdc7b"
 
 [[package]]
 name = "datalink-prefix"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git?rev=d1e5984b51dba1d6f40d6173c7ab26af4a905cf2#d1e5984b51dba1d6f40d6173c7ab26af4a905cf2"
+source = "git+https://github.com/tegmentum/datalink.git?rev=9a150a4b467474b0fc965786c5fe92361c413d58#9a150a4b467474b0fc965786c5fe92361c413d58"
 
 [[package]]
 name = "datalink-valuemodel"
