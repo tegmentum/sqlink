@@ -52,7 +52,7 @@ use wasmos_runtime_api::{
     host_iface, HostCallContext, HostImports, RuntimeError, RuntimeResult, WitEnum,
     WitRecord, WitVariant,
 };
-use wasmos_runtime_wasmtime_v46::async_bridge;
+use wasmos_runtime_wasmtime_v48::async_bridge;
 use wasmtime::component::{Component, Linker};
 use wasmtime::Engine;
 

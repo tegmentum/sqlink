@@ -22,10 +22,10 @@
 //!
 //! The compile-time test [`compile_check_install_signature`] below
 //! proves that the whole call chain type-checks against sqlink's
-//! wasmtime 46 pipeline.
+//! wasmtime 48 pipeline.
 
 use wasmos_runtime_api::{HostImports, RuntimeResult};
-use wasmos_runtime_wasmtime_v46::async_bridge;
+use wasmos_runtime_wasmtime_v48::async_bridge;
 use wasmtime::component::{Component, Linker};
 use wasmtime::Engine;
 

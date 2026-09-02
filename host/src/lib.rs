@@ -28,6 +28,7 @@
 pub mod cache;
 pub mod component_blob_cache;
 pub mod compose_provider;
+mod contract_guard_bridge;
 pub mod policy;
 pub mod prefix_registry;
 /// Native, in-host S3 path (aws-sigv4 + reqwest). Superseded by the resident
@@ -6355,7 +6356,7 @@ impl Host {
         // deletion; runs before the endpoint check so an incompatible-version
         // component is rejected with the actionable contract message.
         let imported_major =
-            datalink_contract::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
+            crate::contract_guard_bridge::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
         datalink_contract::check_component_contract(
             imported_major,
             CONTRACT_MAJOR,
@@ -6461,7 +6462,7 @@ impl Host {
         // Contract-version guard (#220): reject an ABI-skewed component before
         // instantiating (mirrors instantiate_provider_from_bytes).
         let imported_major =
-            datalink_contract::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
+            crate::contract_guard_bridge::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
         datalink_contract::check_component_contract(
             imported_major,
             CONTRACT_MAJOR,
@@ -12941,7 +12942,7 @@ mod contract_guard_tests {
         let component = Component::from_binary(&engine, &bytes).expect("parse component");
 
         let major =
-            datalink_contract::component_contract_major(&engine, &component, CONTRACT_PACKAGE);
+            crate::contract_guard_bridge::component_contract_major(&engine, &component, CONTRACT_PACKAGE);
         assert_eq!(major, Some(0), "legacy component should target major 0");
 
         // Host CONTRACT_MAJOR is now 1; the guard must REJECT a legacy
@@ -13201,8 +13202,7 @@ pub async fn run_cli_capture(
             .preopened_dir(
                 parent,
                 &parent_str,
-                wasmtime_wasi::DirPerms::all(),
-                wasmtime_wasi::FilePerms::all(),
+                wasmtime_wasi::FsPerms::ReadWrite,
             )
             .map_err(|e| anyhow!("preopen {}: {e}", parent.display()))?;
     }

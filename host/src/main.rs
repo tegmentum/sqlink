@@ -1021,8 +1021,7 @@ async fn main() -> Result<()> {
         if let Err(e) = wasi_builder.preopened_dir(
             parent,
             &parent_str,
-            wasmtime_wasi::DirPerms::all(),
-            wasmtime_wasi::FilePerms::all(),
+            wasmtime_wasi::FsPerms::ReadWrite,
         ) {
             return Err(anyhow!("preopen {}: {e}", parent.display()));
         }
