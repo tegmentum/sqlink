@@ -41,7 +41,8 @@
 
 use std::path::PathBuf;
 
-use tvm_wasmtime::{add_to_linker, TvmHost};
+use sqlink_host::wasmos_tvm::install_tvm_memory_imports;
+use tvm_wasmtime::TvmHost;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::WasiCtxBuilder;
@@ -95,7 +96,7 @@ fn combined_pcache_and_vfs_share_tvm() {
 
     let mut linker: Linker<ProbeState> = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker).expect("WASI to linker");
-    add_to_linker(&mut linker).expect("tvm:memory to linker");
+    install_tvm_memory_imports::<ProbeState>(&engine, &mut linker, &component).expect("tvm:memory wasmos install");
 
     let state = ProbeState {
         tvm: TvmHost::new(),

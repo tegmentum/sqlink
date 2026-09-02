@@ -55,6 +55,11 @@ pub mod wasmos_imports;
 /// calls in `compose_provider.rs`; a later session (Arc 1 Session 4)
 /// swaps the paths behind a feature flag or coordinated cutover.
 pub mod wasmos_install_flow;
+// ADR-0029 Phase 6.9 D2 Session 15a — sqlink-local wasmos install
+// path for tvm:memory@0.1.0 (mirror of tvm-wasm's wasmos_bindings,
+// wasmtime-46 compatible). Retires the deprecated
+// tvm_wasmtime::add_to_linker calls at lib.rs:4544, 13166.
+pub mod wasmos_tvm;
 /// Resident `http-endpoint` compose:dynlink/endpoint provider routing — the
 /// default HTTP path. #106.
 #[cfg(not(feature = "native-http"))]
@@ -4507,7 +4512,10 @@ impl wasmtime::component::HasData for RunHostData {
     type Data<'a> = RunHostWrap<'a>;
 }
 
-fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
+fn make_run_linker(
+    engine: &Engine,
+    component: &wasmtime::component::Component,
+) -> Result<Linker<RunState>> {
     let mut linker: Linker<RunState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| anyhow!("fiji WASI: {e}"))?;
     // The shared async linker bindings, driven by a per-call `RunHostWrap` view
@@ -4541,7 +4549,15 @@ fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
     // always import tvm:memory/{types,manager,bytes,diagnostics}
     // because sqlite-pcache-tvm + sqlite-vfs-tvm use the
     // wit-bindgen-backed cold tiers on wasm32 unconditionally.
-    tvm_wasmtime::add_to_linker(&mut linker).map_err(|e| anyhow!("run linker tvm:memory: {e}"))?;
+    // ADR-0029 Phase 6.9 D2 Session 15a — wasmos install path.
+    // Replaces the deprecated `tvm_wasmtime::add_to_linker(&mut linker)?`
+    // with the sqlink-local `wasmos_tvm::install_tvm_memory_imports`
+    // helper that wires all three tvm:memory@0.1.0 interfaces via
+    // the wasmos v46 async_bridge. Same host-side semantics
+    // (handler reaches RunState.tvm via
+    // ctx.consumer_state::<RunState>().as_mut()); portable across
+    // every wasmos-backed adapter that gains a v46-flavored bridge.
+    crate::wasmos_tvm::install_tvm_memory_imports::<RunState>(engine, &mut linker, component)?;
     Ok(linker)
 }
 
@@ -9323,7 +9339,7 @@ impl Host {
         // deadline.
         let component = Component::from_binary(&self.engine_run, &bytes)
             .map_err(|e| anyhow!("compile {}: {e}", path.display()))?;
-        let linker = make_run_linker(&self.engine_run)?;
+        let linker = make_run_linker(&self.engine_run, &component)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
         let state = RunState {
@@ -9552,7 +9568,7 @@ impl Host {
                 anyhow!("no runtime registered for ext={ext:?} variant={variant:?}")
             })?
         };
-        let linker = make_run_linker(&self.engine)?;
+        let linker = make_run_linker(&self.engine, &runtime.component)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
         // Operator-supplied env vars  the caller picks which keys
@@ -9623,7 +9639,7 @@ impl Host {
             .to_string();
         // Build a fresh Store mirroring run_wasm_as. Each call gets
         // its own Store so per-call fuel/epoch caps are re-supplied.
-        let linker = make_run_linker(&self.engine)?;
+        let linker = make_run_linker(&self.engine, &runtime.component)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
         let state = RunState {
@@ -13163,7 +13179,9 @@ pub async fn run_cli_capture(
         HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
     })
     .map_err(|e| anyhow!("wire spi-loader: {e}"))?;
-    tvm_wasmtime::add_to_linker(&mut linker).map_err(|e| anyhow!("wire tvm:memory: {e}"))?;
+    // ADR-0029 Phase 6.9 D2 Session 15a — wasmos install path (see
+    // make_run_linker for rationale).
+    crate::wasmos_tvm::install_tvm_memory_imports::<CliRunState>(&engine, &mut linker, &component)?;
 
     let stdin = wasmtime_wasi::p2::pipe::MemoryInputPipe::new(stdin_script.as_bytes().to_vec());
     let stdout = wasmtime_wasi::p2::pipe::MemoryOutputPipe::new(usize::MAX);

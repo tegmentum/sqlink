@@ -56,14 +56,14 @@ datalink-prefix = { git = "https://github.com/tegmentum/datalink.git", rev = "d1
 # Additive; the existing wit-bindgen path at src/lib.rs stays. The
 # wasmos install path is added ALONGSIDE (per-instantiate decision
 # in compose_provider.rs on which path to use for a given component).
-wasmos-runtime-api = { git = "https://github.com/tegmentum/wasmos.git", rev = "66d58e86dd9d5e21d020eed6b8ab70e2b7ed713f" }
+wasmos-runtime-api = { git = "https://github.com/tegmentum/wasmos.git", rev = "d01a5d68" }
 # ADR-0029 §25 crate-name immutability adapter: wasmtime 46.x
 # version-pinned adapter, shipped alongside v48 + edge to serve
 # sqlink's component-model-async pin. Bridge-only surface today
 # (sync_bridge, sync_bridge_resource, sync_export_bridge,
 # async_bridge); the full WasmtimeV46Runtime impl deferred until
 # needed.
-wasmos-runtime-wasmtime-v46 = { git = "https://github.com/tegmentum/wasmos.git", rev = "66d58e86dd9d5e21d020eed6b8ab70e2b7ed713f" }
+wasmos-runtime-wasmtime-v46 = { git = "https://github.com/tegmentum/wasmos.git", rev = "d01a5d68" }
 
 anyhow = "1.0"
 wasmtime = { version = "46.0.1", features = [

@@ -994,7 +994,14 @@ async fn main() -> Result<()> {
     // composed `cli + sqlite-lib` runnable does. sqlite-pcache-tvm
     // and sqlite-vfs-tvm use wit-bindgen-backed cold tiers on
     // wasm32 unconditionally.
-    tvm_wasmtime::add_to_linker(&mut linker).map_err(|e| anyhow!("wire tvm:memory: {e}"))?;
+    // ADR-0029 Phase 6.9 D2 Session 15a — wasmos install path
+    // (mirror of the lib.rs migration). Replaces the deprecated
+    // `tvm_wasmtime::add_to_linker(&mut linker)?` with the
+    // sqlink-local `wasmos_tvm::install_tvm_memory_imports`
+    // helper. Same host-side semantics; handler reaches
+    // State.tvm via ctx.consumer_state::<State>().as_mut().
+    sqlink_host::wasmos_tvm::install_tvm_memory_imports::<State>(&engine, &mut linker, &component)
+        .map_err(|e| anyhow!("wire tvm:memory (wasmos): {e}"))?;
 
     let mut wasi_builder = WasiCtxBuilder::new();
     wasi_builder.inherit_stdio();
