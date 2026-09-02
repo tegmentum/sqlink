@@ -7592,7 +7592,7 @@ dependencies = [
 [[package]]
 name = "wasmos-runtime-api"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/wasmos.git?rev=0b55b5fd#0b55b5fd71ea07fa9468c688a915c4a9666d75d8"
+source = "git+https://github.com/tegmentum/wasmos.git?tag=v0.1.0#1bf670c63b1b5ac0610a1e102e1971b75aa7daf6"
 dependencies = [
  "async-trait",
  "bytes",
@@ -7604,7 +7604,7 @@ dependencies = [
 [[package]]
 name = "wasmos-runtime-api-macros"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/wasmos.git?rev=0b55b5fd#0b55b5fd71ea07fa9468c688a915c4a9666d75d8"
+source = "git+https://github.com/tegmentum/wasmos.git?tag=v0.1.0#1bf670c63b1b5ac0610a1e102e1971b75aa7daf6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7614,7 +7614,7 @@ dependencies = [
 [[package]]
 name = "wasmos-runtime-wasmtime-v46"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/wasmos.git?rev=0b55b5fd#0b55b5fd71ea07fa9468c688a915c4a9666d75d8"
+source = "git+https://github.com/tegmentum/wasmos.git?tag=v0.1.0#1bf670c63b1b5ac0610a1e102e1971b75aa7daf6"
 dependencies = [
  "anyhow",
  "async-trait",
