@@ -1035,7 +1035,7 @@ dependencies = [
 [[package]]
 name = "compose-core"
 version = "0.0.1"
-source = "git+https://github.com/tegmentum/webassembly-component-orchestration.git?rev=416226921cc166e98016f534a73bd6c9b7dcb33c#416226921cc166e98016f534a73bd6c9b7dcb33c"
+source = "git+https://github.com/tegmentum/webassembly-component-orchestration.git?tag=v0.1.0#416226921cc166e98016f534a73bd6c9b7dcb33c"
 dependencies = [
  "anyhow",
  "chrono",
