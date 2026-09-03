@@ -1009,7 +1009,7 @@ dependencies = [
 [[package]]
 name = "compose-core"
 version = "0.0.1"
-source = "git+https://github.com/tegmentum/webassembly-component-orchestration.git?tag=v0.1.0#416226921cc166e98016f534a73bd6c9b7dcb33c"
+source = "git+https://github.com/tegmentum/webassembly-component-orchestration.git?tag=v0.2.0#9df1f4478644b848f9bec04addef336557bab63f"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1028,7 +1028,7 @@ dependencies = [
  "wac-types",
  "walkdir",
  "wasm-compose 0.240.0",
- "wasmparser 0.240.0 (git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api)",
+ "wasmparser 0.240.0",
 ]
 
 [[package]]
@@ -5223,8 +5223,8 @@ dependencies = [
 
 [[package]]
 name = "secure-log"
-version = "0.1.0"
-source = "git+https://github.com/tegmentum/secure-log.git?rev=8ffec9c354280409b6a532df27b4e721701eb608#8ffec9c354280409b6a532df27b4e721701eb608"
+version = "0.1.1"
+source = "git+https://github.com/tegmentum/secure-log.git?tag=v0.1.1#36327c069eb863dae4f229e90219f13d2aedcaeb"
 dependencies = [
  "anyhow",
  "chacha20poly1305",
@@ -5699,7 +5699,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "wat 1.240.0 (git+https://github.com/tegmentum/wasm-tools.git?tag=v0.1.0)",
+ "wat 1.240.0",
 ]
 
 [[package]]
@@ -5830,7 +5830,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
- "wat 1.240.0 (git+https://github.com/tegmentum/wasm-tools.git?tag=v0.1.0)",
+ "wat 1.240.0",
  "zorder-extension",
 ]
 
@@ -7435,7 +7435,7 @@ dependencies = [
 [[package]]
 name = "wasm-compose"
 version = "0.240.0"
-source = "git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api#1c6c1e06e0151f14cc26831578e522079aa624c9"
+source = "git+https://github.com/tegmentum/wasm-tools.git?tag=v0.1.0#1c6c1e06e0151f14cc26831578e522079aa624c9"
 dependencies = [
  "anyhow",
  "heck",
@@ -7447,9 +7447,9 @@ dependencies = [
  "serde_derive",
  "serde_yaml",
  "smallvec",
- "wasm-encoder 0.240.0 (git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api)",
- "wasmparser 0.240.0 (git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api)",
- "wat 1.240.0 (git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api)",
+ "wasm-encoder 0.240.0",
+ "wasmparser 0.240.0",
+ "wat 1.240.0",
 ]
 
 [[package]]
@@ -7485,16 +7485,7 @@ version = "0.240.0"
 source = "git+https://github.com/tegmentum/wasm-tools.git?tag=v0.1.0#1c6c1e06e0151f14cc26831578e522079aa624c9"
 dependencies = [
  "leb128fmt",
- "wasmparser 0.240.0 (git+https://github.com/tegmentum/wasm-tools.git?tag=v0.1.0)",
-]
-
-[[package]]
-name = "wasm-encoder"
-version = "0.240.0"
-source = "git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api#1c6c1e06e0151f14cc26831578e522079aa624c9"
-dependencies = [
- "leb128fmt",
- "wasmparser 0.240.0 (git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api)",
+ "wasmparser 0.240.0",
 ]
 
 [[package]]
@@ -7645,16 +7636,6 @@ dependencies = [
 name = "wasmparser"
 version = "0.240.0"
 source = "git+https://github.com/tegmentum/wasm-tools.git?tag=v0.1.0#1c6c1e06e0151f14cc26831578e522079aa624c9"
-dependencies = [
- "bitflags",
- "indexmap",
- "semver",
-]
-
-[[package]]
-name = "wasmparser"
-version = "0.240.0"
-source = "git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api#1c6c1e06e0151f14cc26831578e522079aa624c9"
 dependencies = [
  "bitflags",
  "hashbrown 0.15.5",
@@ -8039,19 +8020,7 @@ dependencies = [
  "leb128fmt",
  "memchr",
  "unicode-width",
- "wasm-encoder 0.240.0 (git+https://github.com/tegmentum/wasm-tools.git?tag=v0.1.0)",
-]
-
-[[package]]
-name = "wast"
-version = "240.0.0"
-source = "git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api#1c6c1e06e0151f14cc26831578e522079aa624c9"
-dependencies = [
- "bumpalo",
- "leb128fmt",
- "memchr",
- "unicode-width",
- "wasm-encoder 0.240.0 (git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api)",
+ "wasm-encoder 0.240.0",
 ]
 
 [[package]]
@@ -8072,15 +8041,7 @@ name = "wat"
 version = "1.240.0"
 source = "git+https://github.com/tegmentum/wasm-tools.git?tag=v0.1.0#1c6c1e06e0151f14cc26831578e522079aa624c9"
 dependencies = [
- "wast 240.0.0 (git+https://github.com/tegmentum/wasm-tools.git?tag=v0.1.0)",
-]
-
-[[package]]
-name = "wat"
-version = "1.240.0"
-source = "git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api#1c6c1e06e0151f14cc26831578e522079aa624c9"
-dependencies = [
- "wast 240.0.0 (git+https://github.com/tegmentum/wasm-tools.git?branch=bytes-api)",
+ "wast 240.0.0",
 ]
 
 [[package]]
