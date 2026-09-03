@@ -27,7 +27,7 @@ sqlink-parsers = { path = "../sqlink-parsers" }
 # ducklink host). Introspects a loaded component's imported sqlite:extension
 # @MAJOR and rejects a contract-major mismatch (or unversioned/legacy)
 # before instantiation -- silent-corruption protection. datalink is PUBLIC.
-datalink-contract = { git = "https://github.com/tegmentum/datalink.git", tag = "v0.1.0" }
+datalink-contract = { git = "https://github.com/tegmentum/datalink.git", tag = "v0.2.0" }
 
 # Shared compose:dynlink linker host (also consumed by the ducklink host).
 # We use its ADDITIVE async flavor: AsyncProviderBackend + AsyncDynLinkBridge
@@ -36,13 +36,13 @@ datalink-contract = { git = "https://github.com/tegmentum/datalink.git", tag = "
 # resolution, multi-tenancy, the fresh-store WasmComponent path, and the
 # built-in SqliteRuntime shim live in our AsyncProviderBackend impls; the
 # bridge routes resolve/invoke/drop to them. datalink is PUBLIC.
-datalink-dynlink = { git = "https://github.com/tegmentum/datalink.git", tag = "v0.1.0" }
+datalink-dynlink = { git = "https://github.com/tegmentum/datalink.git", tag = "v0.2.0" }
 
 # Shared, db-agnostic function-prefix namespacing (also consumed by the
 # ducklink host). The prefix__name resolution algorithm + the collision/pin
 # model behind a PrefixStore trait; this host backs that trait with its
 # __sqlink_prefix* SQLite tables (see prefix_registry.rs). datalink is PUBLIC.
-datalink-prefix = { git = "https://github.com/tegmentum/datalink.git", tag = "v0.1.0" }
+datalink-prefix = { git = "https://github.com/tegmentum/datalink.git", tag = "v0.2.0" }
 
 # ADR-0029 Phase 6.2.e — the wasmos runtime-abstraction API surface.
 # Consumed by `src/wasmos_imports.rs` to expose the sqlite:extension
@@ -56,14 +56,14 @@ datalink-prefix = { git = "https://github.com/tegmentum/datalink.git", tag = "v0
 # Additive; the existing wit-bindgen path at src/lib.rs stays. The
 # wasmos install path is added ALONGSIDE (per-instantiate decision
 # in compose_provider.rs on which path to use for a given component).
-wasmos-runtime-api = { git = "https://github.com/tegmentum/wasmos.git", tag = "v0.1.0" }
+wasmos-runtime-api = { git = "https://github.com/tegmentum/wasmos.git", tag = "v0.3.2" }
 # ADR-0029 §25 crate-name immutability adapter: wasmtime 48.x LTS
 # version-pinned adapter (bumped from v46 alongside the org-wide
 # wasmtime 46→48 migration). Bridge-only surface today
 # (sync_bridge, sync_bridge_resource, sync_export_bridge,
 # async_bridge); the full WasmtimeV48Runtime impl deferred until
 # needed.
-wasmos-runtime-wasmtime-v48 = { git = "https://github.com/tegmentum/wasmos.git", tag = "v0.1.0" }
+wasmos-runtime-wasmtime-v48 = { git = "https://github.com/tegmentum/wasmos.git", tag = "v0.3.2" }
 
 anyhow = "1.0"
 wasmtime = { version = "48.0.1", features = [
