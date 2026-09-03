@@ -7018,7 +7018,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "tvm-core"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/tvm-wasm.git?rev=c2fdd4e7bd9c1a5457d7fbfa0c49de700755f2e7#c2fdd4e7bd9c1a5457d7fbfa0c49de700755f2e7"
+source = "git+https://github.com/tegmentum/tvm-wasm.git?tag=v0.2.0#f4820508695fbf5c4ba95fad290f87d737c78c8d"
 dependencies = [
  "hashbrown 0.15.5",
  "thiserror 2.0.18",
@@ -7027,7 +7027,7 @@ dependencies = [
 [[package]]
 name = "tvm-wasmtime"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/tvm-wasm.git?rev=c2fdd4e7bd9c1a5457d7fbfa0c49de700755f2e7#c2fdd4e7bd9c1a5457d7fbfa0c49de700755f2e7"
+source = "git+https://github.com/tegmentum/tvm-wasm.git?tag=v0.2.0#f4820508695fbf5c4ba95fad290f87d737c78c8d"
 dependencies = [
  "anyhow",
  "async-trait",

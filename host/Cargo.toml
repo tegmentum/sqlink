@@ -182,7 +182,7 @@ ciborium = "0.2"
 # Bumped from tag v0.1.0 (which pinned wasmtime 46) to main HEAD (wasmtime 48),
 # in lockstep with the sqlink wasmtime 46 → 48 migration. tvm-wasm's next tag
 # (v0.2.0) will land shortly after and this pin will migrate back to that tag.
-tvm-wasmtime = { git = "https://github.com/tegmentum/tvm-wasm.git", rev = "c2fdd4e7bd9c1a5457d7fbfa0c49de700755f2e7" }
+tvm-wasmtime = { git = "https://github.com/tegmentum/tvm-wasm.git", tag = "v0.2.0" }
 
 # PLAN-cli-stages-5-6.md Stage 5c: embedded SQL function extensions
 # moved from cli/Cargo.toml. Each is an optional dep + a feature
