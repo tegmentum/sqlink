@@ -501,7 +501,7 @@ rand = "0.8"
 # @2.0.0) without needing pre-built .wasm artifacts on disk. Pinned
 # to the same wasm-tools branch wasmtime/wasm-tools elsewhere in
 # the workspace consume.
-wat = { git = "https://github.com/tegmentum/wasm-tools.git", branch = "bytes-api" }
+wat = { git = "https://github.com/tegmentum/wasm-tools.git", tag = "v0.1.0" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 # #823 dedup smoke test: encodes/decodes the compose:dynlink/endpoint
 # CBOR envelope end-to-end against a real postgis-composed-provider

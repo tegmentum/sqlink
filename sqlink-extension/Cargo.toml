@@ -59,4 +59,4 @@ tempfile = "3"
 # host's pre-check can be exercised without needing pre-built .wasm
 # artifacts on disk. Pin against the same wasm-tools branch
 # wasmtime/wasm-tools elsewhere in the workspace consume.
-wat = { git = "https://github.com/tegmentum/wasm-tools.git", branch = "bytes-api" }
+wat = { git = "https://github.com/tegmentum/wasm-tools.git", tag = "v0.1.0" }
