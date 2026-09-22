@@ -5232,21 +5232,6 @@ pub struct RecordedFunction {
     pub want_bare: bool,
 }
 
-/// True when `err` carries a wasmtime trap in its downcast chain.
-///
-/// A wasmtime `Store` cannot be reused after any trap (the runtime
-/// intentionally locks subsequent component-instance entry so future
-/// calls fail with `cannot enter component instance`). Dispatch sites
-/// use this to detect a poisoning trap and drop the cached
-/// `Store` + `Instance` so the next call lazily re-instantiates a
-/// fresh one — turning a single bad call from a load-killing event
-/// into a per-call error that leaves the extension usable. (#693)
-#[inline]
-pub fn is_wasmtime_trap(err: &wasmtime::Error) -> bool {
-    err.downcast_ref::<wasmtime::Trap>().is_some()
-}
-
-
 impl Host {
     /// Build a Host with sensible default Engine config (fuel, epoch,
     /// component-model, pooling). Spawns the epoch-bumper thread.
