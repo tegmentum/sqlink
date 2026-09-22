@@ -82,7 +82,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use parking_lot::{Mutex, ReentrantMutex, RwLock};
 use std::cell::RefCell;
-use wasmtime::component::{Component, HasData, Linker};
+use wasmtime::component::{Component, HasData, Linker, Resource};
 use wasmtime::{Engine, Store};
 
 // S1 — wasmos runtime facade. Host::new builds a
@@ -1486,7 +1486,8 @@ async fn verify_against_anchors(
 // shared `datalink_dynlink::AsyncDynLinkBridge`; sqlink's trust/CAS/tenancy +
 // the SqliteRuntime/WasmComponent providers live in its `AsyncProviderBackend`
 // impls (`compose_provider::{HostWrapBackend, RunBackend}`).
-use wasmtime::component::Resource;
+// S1-8 — `Resource` is now imported at the top of the file alongside
+// the other wasmtime::component types.
 
 use compose::sys::compose::types::Error as ComposeError;
 
