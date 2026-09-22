@@ -13098,25 +13098,6 @@ mod contract_guard_tests {
         wat::parse_str(&wat).expect("parse synth component WAT")
     }
 
-    fn default_policy() -> sqlite_extension_policy::Policy {
-        // Match the loader's default-grant set so the contract guard
-        // (which fires BEFORE policy.check_manifest) is the only thing
-        // gating these tests.
-        use sqlite_extension_policy::{Capability, Policy};
-        Policy::deny_all().with_grants(vec![
-            Capability::Random,
-            Capability::Hashing,
-            Capability::Encoding,
-            Capability::Text,
-            Capability::Cache,
-            Capability::State,
-            Capability::Spi,
-            Capability::Prepared,
-            Capability::Schema,
-            Capability::Transaction,
-        ])
-    }
-
     #[test]
     fn host_rejects_v0_1_synthetic_via_instantiate_provider_from_bytes() {
         // #220: the version guard moved from the retired bespoke
