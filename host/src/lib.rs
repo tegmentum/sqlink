@@ -13053,7 +13053,6 @@ mod contract_guard_tests {
     //! `register_component` just before `instantiate_async`.
 
     use super::{CONTRACT_MAJOR, CONTRACT_PACKAGE};
-    use std::path::PathBuf;
     use wasmtime::component::Component;
     use wasmtime::{Config, Engine};
 
