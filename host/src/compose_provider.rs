@@ -813,7 +813,7 @@ pub async fn instantiate_dynlink_bridge(
         wasi: wasi_builder.build(),
         dynlink_bridge,
     };
-    let mut store = wasmtime::Store::new(engine, state);
+    let mut store = Store::new(engine, state);
     store
         .set_fuel(u64::MAX / 2)
         .map_err(|e| format!("set_fuel: {e}"))?;
@@ -877,7 +877,7 @@ pub async fn instantiate_dynlink_bridge_mutating(
         wasi: wasi_builder.build(),
         dynlink_bridge,
     };
-    let mut store = wasmtime::Store::new(engine, state);
+    let mut store = Store::new(engine, state);
     store
         .set_fuel(u64::MAX / 2)
         .map_err(|e| format!("set_fuel: {e}"))?;
@@ -1656,7 +1656,7 @@ async fn wasm_component_invoke(
         // loader-bridge is a resident-only surface (#220); none here.
         loader_host: None,
     };
-    let mut store = wasmtime::Store::new(engine, state);
+    let mut store = Store::new(engine, state);
     store
         .set_fuel(u64::MAX / 2)
         .map_err(|e| format!("set_fuel: {e}"))?;
@@ -1924,7 +1924,7 @@ async fn resident_wasm_component_invoke(
             // (sqlink-meta-cli); None off the real .load path.
             loader_host: loader_host.cloned(),
         };
-        let mut store = wasmtime::Store::new(engine, state);
+        let mut store = Store::new(engine, state);
         store
             .set_fuel(u64::MAX / 2)
             .map_err(|e| format!("set_fuel: {e}"))?;
@@ -2416,7 +2416,7 @@ async fn wasm_component_invoke_cli(
         loader_host,
         spawn_build_granted,
     };
-    let mut store = wasmtime::Store::new(engine, st);
+    let mut store = Store::new(engine, st);
     store
         .set_fuel(u64::MAX / 2)
         .map_err(|e| format!("set_fuel: {e}"))?;
