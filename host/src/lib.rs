@@ -4711,19 +4711,15 @@ type LanguageRuntimes = Arc<RwLock<HashMap<(String, String), Arc<LanguageRuntime
 ///     decode, value comparison)  5-10% in tight loops.
 #[derive(Clone)]
 pub struct Host {
-    engine: Engine,
-    engine_run: Engine,
-    /// S1a — wasmos runtime facade wrapping `engine`. Present
-    /// alongside the raw `engine` field during the S1 migration so
-    /// downstream consumers migrate off `self.engine` onto
-    /// `self.runtime.compile_component(...)` /
-    /// `self.runtime.instantiate(...)` incrementally. The pair
-    /// shares the same underlying wasmtime engine via
-    /// [`WasmtimeV48Runtime::from_engine`]. Retired (along with
-    /// `engine`) once every downstream site has migrated.
+    /// S1 — wasmos runtime facade. Every internal `self.engine`
+    /// use in this file has migrated to `self.runtime.engine()`;
+    /// the raw `engine: Engine` field is gone as of the S1
+    /// engine-field retirement slice. `Host::engine()` still
+    /// returns `&wasmtime::Engine` (for external consumers on the
+    /// wasmtime path) but derives it via `self.runtime.engine()`.
     runtime: Arc<WasmtimeV48Runtime>,
-    /// S1a — wasmos runtime facade wrapping `engine_run`. Trusted-
-    /// tier counterpart of `runtime`; built with `consume_fuel(false)`
+    /// S1 — trusted-tier wasmos runtime facade. Trusted-tier
+    /// counterpart of `runtime`; built with `consume_fuel(false)`
     /// so per-instance fuel budgets no-op via the ADR §12
     /// CapabilityError path documented on
     /// [`wasmos_runtime_api::RuntimeConfig::consume_fuel`].
@@ -5419,8 +5415,6 @@ impl Host {
                 cache: cache.clone(),
             });
         Ok(Self {
-            engine,
-            engine_run,
             runtime,
             runtime_run,
             db_path: Arc::new(RwLock::new(String::new())),
@@ -6123,7 +6117,7 @@ impl Host {
     }
 
     pub fn engine(&self) -> &Engine {
-        &self.engine
+        self.runtime.engine()
     }
 
     /// The fuel-disabled engine used to compile + run the cli
@@ -6131,7 +6125,7 @@ impl Host {
     /// run_wasm both route through here so their compiled outputs
     /// match the engine config at load time.
     pub fn engine_run(&self) -> &Engine {
-        &self.engine_run
+        self.runtime_run.engine()
     }
 
     /// S1a — wasmos runtime facade. Preferred over
@@ -6286,7 +6280,7 @@ impl Host {
             .ok();
         let is_provider = resolved_component
             .as_ref()
-            .map(|c| compose_provider::exports_endpoint(c, &self.engine))
+            .map(|c| compose_provider::exports_endpoint(c, self.runtime.engine()))
             .unwrap_or(false);
         if is_provider {
             let provider = compose_provider::ProviderHandle::new_resident_wasm_component(
@@ -6342,11 +6336,11 @@ impl Host {
         // `sqlite:extension/scalar-function::call` back through it.
         if resolved_component
             .as_ref()
-            .map(|c| compose_provider::is_dynlink_bridge(c, &self.engine))
+            .map(|c| compose_provider::is_dynlink_bridge(c, self.runtime.engine()))
             .unwrap_or(false)
         {
             let bridge = compose_provider::instantiate_dynlink_bridge(
-                &self.engine,
+                self.runtime.engine(),
                 self.dynlink_bridge.clone(),
                 &bytes,
             )
@@ -6361,13 +6355,13 @@ impl Host {
             let mutating = if resolved_component
                 .as_ref()
                 .map(|c| {
-                    compose_provider::exports_sqlite_extension_vtab_update(c, &self.engine)
+                    compose_provider::exports_sqlite_extension_vtab_update(c, self.runtime.engine())
                 })
                 .unwrap_or(false)
             {
                 Some(
                     compose_provider::instantiate_dynlink_bridge_mutating(
-                        &self.engine,
+                        self.runtime.engine(),
                         self.dynlink_bridge.clone(),
                         &bytes,
                     )
@@ -6426,7 +6420,7 @@ impl Host {
         // loader-bridge sub-load / introspection callers.
         spawn_build_granted: bool,
     ) -> Result<String> {
-        let component = Component::from_binary(&self.engine, bytes)
+        let component = Component::from_binary(self.runtime.engine(), bytes)
             .map_err(|e| anyhow!("compile provider {name_hint}: {e}"))?;
         // Contract-version guard (#220): reject a component whose imported
         // `sqlite:extension` major differs from this host's BEFORE instantiating
@@ -6436,14 +6430,14 @@ impl Host {
         // deletion; runs before the endpoint check so an incompatible-version
         // component is rejected with the actionable contract message.
         let imported_major =
-            crate::contract_guard_bridge::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
+            crate::contract_guard_bridge::component_contract_major(self.runtime.engine(), &component, CONTRACT_PACKAGE);
         datalink_contract::check_component_contract(
             imported_major,
             CONTRACT_MAJOR,
             CONTRACT_PACKAGE,
             name_hint,
         )?;
-        if !compose_provider::exports_endpoint(&component, &self.engine) {
+        if !compose_provider::exports_endpoint(&component, self.runtime.engine()) {
             return Err(anyhow!(
                 "extension '{name_hint}': not a compose:dynlink provider (no \
                  endpoint export); the bespoke loader has been retired (#220) \
@@ -6542,7 +6536,7 @@ impl Host {
         // Contract-version guard (#220): reject an ABI-skewed component before
         // instantiating (mirrors instantiate_provider_from_bytes).
         let imported_major =
-            crate::contract_guard_bridge::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
+            crate::contract_guard_bridge::component_contract_major(self.runtime.engine(), &component, CONTRACT_PACKAGE);
         datalink_contract::check_component_contract(
             imported_major,
             CONTRACT_MAJOR,
@@ -6553,7 +6547,7 @@ impl Host {
         // Stateful-store describe was retired with the bespoke loader; the provider
         // endpoint's `describe` returns the same manifest (name + declared
         // capabilities as strings) via `provider_envelope::Manifest`.
-        if !compose_provider::exports_endpoint(&component, &self.engine) {
+        if !compose_provider::exports_endpoint(&component, self.runtime.engine()) {
             return Err(anyhow!(
                 "extension '{name_hint}': not a compose:dynlink provider (no \
                  endpoint export); the bespoke loader has been retired (#220) \
@@ -6609,7 +6603,7 @@ impl Host {
                 .bypassed
                 .fetch_add(1, Ordering::Relaxed);
             let t0 = std::time::Instant::now();
-            let c = Component::from_binary(&self.engine, bytes)
+            let c = Component::from_binary(self.runtime.engine(), bytes)
                 .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
             self.component_cache_stats
                 .parse_ms
@@ -6642,7 +6636,7 @@ impl Host {
         }
         // Cold path: parse + populate both caches.
         let t0 = std::time::Instant::now();
-        let component = Component::from_binary(&self.engine, bytes)
+        let component = Component::from_binary(self.runtime.engine(), bytes)
             .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
         self.component_cache_stats
             .parse_ms
@@ -6677,7 +6671,7 @@ impl Host {
         // caller-trust contract `Component::deserialize` requires
         // is satisfied.
         let t0 = std::time::Instant::now();
-        let result = unsafe { Component::deserialize(&self.engine, &blob) }
+        let result = unsafe { Component::deserialize(self.runtime.engine(), &blob) }
             .map_err(|e| {
                 tracing::warn!(
                     digest = %&digest[..16],
@@ -9418,9 +9412,9 @@ impl Host {
         // extension engine has to emit. set_fuel is a no-op (and
         // would actually error) on this engine; just set the epoch
         // deadline.
-        let component = Component::from_binary(&self.engine_run, &bytes)
+        let component = Component::from_binary(self.runtime_run.engine(), &bytes)
             .map_err(|e| anyhow!("compile {}: {e}", path.display()))?;
-        let linker = make_run_linker(&self.engine_run, &component)?;
+        let linker = make_run_linker(self.runtime_run.engine(), &component)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
         let state = RunState {
@@ -9429,7 +9423,7 @@ impl Host {
             dynlink_bridge: self.run_dynlink_bridge(tenant),
             tvm: tvm_wasmtime::TvmHost::new(),
         };
-        let mut store = wasmtime::Store::new(&self.engine_run, state);
+        let mut store = wasmtime::Store::new(self.runtime_run.engine(), state);
         store.set_epoch_deadline(1_000_000_000_000);
         let instance = run::Runnable::instantiate_async(&mut store, &component, &linker)
             .await
@@ -9581,7 +9575,7 @@ impl Host {
     ) -> Result<()> {
         let bytes = std::fs::read(&path)
             .map_err(|e| anyhow!("register-runtime: read {}: {e}", path.display()))?;
-        let component = Component::from_binary(&self.engine, &bytes)
+        let component = Component::from_binary(self.runtime.engine(), &bytes)
             .map_err(|e| anyhow!("register-runtime: compile {}: {e}", path.display()))?;
         self.runtimes.write().insert(
             (ext.to_string(), flavor.to_string()),
@@ -9649,7 +9643,7 @@ impl Host {
                 anyhow!("no runtime registered for ext={ext:?} variant={variant:?}")
             })?
         };
-        let linker = make_run_linker(&self.engine, &runtime.component)?;
+        let linker = make_run_linker(self.runtime.engine(), &runtime.component)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
         // Operator-supplied env vars  the caller picks which keys
@@ -9666,7 +9660,7 @@ impl Host {
             dynlink_bridge: self.run_dynlink_bridge(DEFAULT_TENANT),
             tvm: tvm_wasmtime::TvmHost::new(),
         };
-        let mut store = wasmtime::Store::new(&self.engine, state);
+        let mut store = wasmtime::Store::new(self.runtime.engine(), state);
         store
             .set_fuel(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2))
             .map_err(|e| anyhow!("set_fuel: {e}"))?;
@@ -9720,7 +9714,7 @@ impl Host {
             .to_string();
         // Build a fresh Store mirroring run_wasm_as. Each call gets
         // its own Store so per-call fuel/epoch caps are re-supplied.
-        let linker = make_run_linker(&self.engine, &runtime.component)?;
+        let linker = make_run_linker(self.runtime.engine(), &runtime.component)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
         let state = RunState {
@@ -9729,7 +9723,7 @@ impl Host {
             dynlink_bridge: self.run_dynlink_bridge(DEFAULT_TENANT),
             tvm: tvm_wasmtime::TvmHost::new(),
         };
-        let mut store = wasmtime::Store::new(&self.engine, state);
+        let mut store = wasmtime::Store::new(self.runtime.engine(), state);
         store
             .set_fuel(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2))
             .map_err(|e| anyhow!("set_fuel: {e}"))?;
