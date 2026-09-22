@@ -639,14 +639,28 @@ where
 {
     use anyhow::anyhow;
 
-    let imports = HostImports::new()
+    let imports = build_tvm_memory_imports::<T>();
+
+    async_bridge::install_host_imports(engine, linker, component, &imports)
+        .map_err(|e| anyhow!("wasmos_tvm install_host_imports: {e}"))
+}
+
+/// S1-4 — pure builder for the tvm:memory HostImports bundle,
+/// wasmtime-free. Callers that route through an
+/// [`wasmos_runtime_api::ExecutionContext`] (rather than a wasmtime
+/// linker) attach the returned bundle via
+/// `ExecutionContext::with_host_imports`. Callers still on the
+/// wasmtime-linker path use [`install_tvm_memory_imports`] which
+/// wraps this + the v48 async bridge together.
+pub fn build_tvm_memory_imports<T>() -> HostImports
+where
+    T: AsMut<TvmHost> + Send + 'static,
+{
+    HostImports::new()
         .register_sync("tvm:memory/manager@0.1.0", TvmManagerHost::<T>::new())
         .register_sync("tvm:memory/bytes@0.1.0", TvmBytesHost::<T>::new())
         .register_sync(
             "tvm:memory/diagnostics@0.1.0",
             TvmDiagnosticsHost::<T>::new(),
-        );
-
-    async_bridge::install_host_imports(engine, linker, component, &imports)
-        .map_err(|e| anyhow!("wasmos_tvm install_host_imports: {e}"))
+        )
 }
