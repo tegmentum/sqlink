@@ -13026,13 +13026,18 @@ mod contract_guard_tests {
 
     use super::{CONTRACT_MAJOR, CONTRACT_PACKAGE};
     use wasmtime::component::Component;
-    use wasmtime::{Config, Engine};
+    use wasmtime::Engine;
 
     fn engine() -> Engine {
-        let mut cfg = Config::new();
-        cfg.wasm_component_model(true);
-        cfg.wasm_exceptions(true);
-        Engine::new(&cfg).expect("engine")
+        // Test-side engine flows through the wasmos runtime facade,
+        // mirroring the runtime constructions elsewhere in
+        // sqlink-host: `RuntimeConfig::default().with_wasm_exceptions(true)`
+        // (the async + component-model bits are on by default).
+        let rt = wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime::new(
+            wasmos_runtime_api::RuntimeConfig::default().with_wasm_exceptions(true),
+        )
+        .expect("runtime");
+        rt.engine().clone()
     }
 
     #[test]
