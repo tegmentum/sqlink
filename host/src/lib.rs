@@ -6070,6 +6070,17 @@ impl Host {
         &self.runtime_run
     }
 
+    /// Public counterpart of [`Self::compile_via_runtime_run`]
+    /// that external callers (main.rs's CLI runner, the sqlink
+    /// binary's precompile subcommand) can use to route their
+    /// compilation through the wasmos runtime facade instead of a
+    /// direct `wasmtime::component::Component::from_binary` call.
+    /// Wraps `ComponentSource::Bytes { bytes, name }` +
+    /// `WasmtimeCompiledComponent` downcast.
+    pub async fn compile_component_run(&self, bytes: &[u8], name: &str) -> Result<Component> {
+        self.compile_via_runtime_run(bytes, name).await
+    }
+
     /// Compile a component via the wasmos runtime and extract the
     /// underlying wasmtime `Component` for still-typed downstream
     /// (bindgen'd instantiate, Store::new + linker.instantiate_async).

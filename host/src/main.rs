@@ -919,13 +919,23 @@ async fn main() -> Result<()> {
     // unsafe is the API contract  caller asserts the file is a
     // trusted artifact from this exact wasmtime + host CPU.
     let component = if component_path.extension().and_then(|s| s.to_str()) == Some("cwasm") {
+        // Precompiled .cwasm — wasmos has a ComponentSource::Precompiled
+        // path but this specific unsafe deserialize_file call is
+        // still the fastest route; retires with a future
+        // Host::deserialize_component_run helper.
         unsafe { Component::deserialize_file(&engine, &component_path) }
             .map_err(|e| anyhow!("deserialize precompiled: {e}"))?
     } else {
         let component_bytes = std::fs::read(&component_path)
             .map_err(|e| anyhow!("read {}: {e}", component_path.display()))?;
-        Component::from_binary(&engine, &component_bytes)
-            .map_err(|e| anyhow!("compile component: {e}"))?
+        // S1-3 slice — non-cwasm compile now routes through wasmos
+        // `Host::compile_component_run`, which flows through
+        // `runtime_run.compile_component` and downcast to a
+        // wasmtime Component for still-typed downstream. The engine
+        // shared with the rest of main.rs is the same one wasmos
+        // built.
+        host.compile_component_run(&component_bytes, "cli-component")
+            .await?
     };
 
     let mut linker: Linker<State> = Linker::new(&engine);
