@@ -62,15 +62,18 @@ impl HttpResidentProvider {
                 path.display()
             )));
         }
-        let mut config = wasmtime::Config::new();
-        config.wasm_component_model(true);
-        // The http-endpoint provider is network-granted, so datalink gives it
-        // the async WASI linker (awaited socket futures) — which requires async
-        // support on the engine.
-        config.async_support(true);
-        let engine = wasmtime::Engine::new(&config)
-            .map_err(|e| HttpError::Other(format!("http resident engine: {e}")))?;
-        let registry = AsyncProviderRegistry::new(engine);
+        // S1-5 pilot — the resident's tiny compilation engine goes
+        // through the wasmos runtime facade instead of raw
+        // `wasmtime::Config` + `Engine::new`. AsyncProviderRegistry
+        // still consumes a `wasmtime::Engine` (datalink-dynlink
+        // type) so we extract the engine from the runtime via its
+        // adapter-native accessor.
+        let runtime = wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime::new(
+            wasmos_runtime_api::RuntimeConfig::default()
+                .with_async_support(true),
+        )
+        .map_err(|e| HttpError::Other(format!("http resident engine: {e:?}")))?;
+        let registry = AsyncProviderRegistry::new(runtime.engine().clone());
         registry
             .register_provider_with_network("http", &path)
             .map_err(|e| HttpError::Other(format!("register http-endpoint provider: {e}")))?;

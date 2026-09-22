@@ -224,14 +224,18 @@ impl CompressionResidentProvider {
         let path = tokio::task::spawn_blocking(resolve_or_fetch)
             .await
             .map_err(|e| format!("compression resident resolve task: {e}"))??;
-        let mut config = wasmtime::Config::new();
-        config.wasm_component_model(true);
-        // The resident backend materializes the provider store on an async
-        // executor; keep async support on for parity with the s3 resident.
-        config.async_support(true);
-        let engine = wasmtime::Engine::new(&config)
-            .map_err(|e| format!("compression resident engine: {e}"))?;
-        let registry = AsyncProviderRegistry::new(engine);
+        // S1-5 pilot — the resident's tiny compilation engine goes
+        // through the wasmos runtime facade instead of raw
+        // `wasmtime::Config` + `Engine::new`. AsyncProviderRegistry
+        // still takes a `wasmtime::Engine` (datalink-dynlink type)
+        // so we extract the underlying engine from the runtime via
+        // its adapter-native accessor.
+        let runtime = wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime::new(
+            wasmos_runtime_api::RuntimeConfig::default()
+                .with_async_support(true),
+        )
+        .map_err(|e| format!("compression resident engine: {e:?}"))?;
+        let registry = AsyncProviderRegistry::new(runtime.engine().clone());
         // Plain registration — no network grant (compression is pure).
         registry
             .register_provider("compression", &path)

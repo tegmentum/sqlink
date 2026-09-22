@@ -77,15 +77,16 @@ impl S3ResidentProvider {
                 path.display()
             )));
         }
-        let mut config = wasmtime::Config::new();
-        config.wasm_component_model(true);
-        // The s3-endpoint provider is network-granted, so datalink gives it the
-        // async WASI linker (awaited socket futures) — which requires async
-        // support on the engine.
-        config.async_support(true);
-        let engine = wasmtime::Engine::new(&config)
-            .map_err(|e| S3Error::Internal(format!("s3 resident engine: {e}")))?;
-        let registry = AsyncProviderRegistry::new(engine);
+        // S1-5 pilot — the resident's tiny compilation engine goes
+        // through the wasmos runtime facade. AsyncProviderRegistry
+        // (datalink-dynlink type) still consumes a `wasmtime::Engine`
+        // so we extract via the runtime's adapter-native accessor.
+        let runtime = wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime::new(
+            wasmos_runtime_api::RuntimeConfig::default()
+                .with_async_support(true),
+        )
+        .map_err(|e| S3Error::Internal(format!("s3 resident engine: {e:?}")))?;
+        let registry = AsyncProviderRegistry::new(runtime.engine().clone());
         // Network-granted registration: the host supplies outbound egress to the
         // provider's OWN store (it signs+sends S3 over wasi:sockets+rustls).
         registry
