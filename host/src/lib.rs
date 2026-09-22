@@ -6129,6 +6129,39 @@ impl Host {
             .map(|c| c.inner.clone())
     }
 
+    /// Load a precompiled `.cwasm` artefact through the trusted-tier
+    /// wasmos runtime facade. Sibling of
+    /// [`Self::compile_component_run`] for the deserialise path.
+    ///
+    /// The unsafety of `Component::deserialize` lives INSIDE the
+    /// adapter's `ComponentSource::Precompiled` arm — this helper
+    /// binds the artefact to `runtime_run`'s
+    /// (`implementation`, `implementation_version`) metadata so the
+    /// adapter refuses cross-runtime bytes with a typed error rather
+    /// than the caller performing the unsafe deserialise themselves.
+    pub async fn deserialize_component_run(
+        &self,
+        bytes: Vec<u8>,
+        name: &str,
+    ) -> Result<Component> {
+        let meta = self.runtime_run.metadata();
+        let source = ComponentSource::Precompiled {
+            bytes: bytes.into(),
+            runtime: meta.implementation.clone().into_owned(),
+            runtime_version: meta.implementation_version.clone().into_owned(),
+            name: Some(name.to_string()),
+        };
+        let compiled = self
+            .runtime_run
+            .compile_component(source, CompileOptions::default())
+            .await
+            .map_err(|e| anyhow!("deserialize {name}: {e:?}"))?;
+        compiled
+            .as_any()
+            .downcast_ref::<WasmtimeCompiledComponent>()
+            .ok_or_else(|| anyhow!("deserialize {name}: adapter mismatch"))
+            .map(|c| c.inner.clone())
+    }
 
     /// Load an extension component from a host path, apply the policy,
     /// verify the manifest, and store the loaded component. Returns

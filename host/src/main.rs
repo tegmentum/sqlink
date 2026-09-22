@@ -10,7 +10,7 @@ use std::env;
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::Linker;
 use wasmtime::Store;
 use wasmtime_wasi::{ResourceTable, WasiCtxBuilder};
 
@@ -914,17 +914,16 @@ async fn main() -> Result<()> {
     // to load against any other.
     let engine = host.engine_run().clone();
 
-    // .cwasm = precompiled by `sqlink precompile`. Loading
-    // it via Component::deserialize_file skips parse+validate+compile.
-    // unsafe is the API contract  caller asserts the file is a
-    // trusted artifact from this exact wasmtime + host CPU.
+    // .cwasm = precompiled by `sqlink precompile`. Loading it
+    // routes through wasmos's `ComponentSource::Precompiled` arm on
+    // `runtime_run`, which binds the artefact to the trusted-tier
+    // runtime's `(implementation, implementation_version)` metadata
+    // and performs the unsafe deserialise inside the adapter.
     let component = if component_path.extension().and_then(|s| s.to_str()) == Some("cwasm") {
-        // Precompiled .cwasm — wasmos has a ComponentSource::Precompiled
-        // path but this specific unsafe deserialize_file call is
-        // still the fastest route; retires with a future
-        // Host::deserialize_component_run helper.
-        unsafe { Component::deserialize_file(&engine, &component_path) }
-            .map_err(|e| anyhow!("deserialize precompiled: {e}"))?
+        let bytes = std::fs::read(&component_path)
+            .map_err(|e| anyhow!("read {}: {e}", component_path.display()))?;
+        host.deserialize_component_run(bytes, "cli-component-precompiled")
+            .await?
     } else {
         let component_bytes = std::fs::read(&component_path)
             .map_err(|e| anyhow!("read {}: {e}", component_path.display()))?;
