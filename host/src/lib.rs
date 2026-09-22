@@ -4740,9 +4740,7 @@ pub struct Host {
     /// S1 — wasmos runtime facade. Every internal `self.engine`
     /// use in this file has migrated to `self.runtime.engine()`;
     /// the raw `engine: Engine` field is gone as of the S1
-    /// engine-field retirement slice. `Host::engine()` still
-    /// returns `&wasmtime::Engine` (for external consumers on the
-    /// wasmtime path) but derives it via `self.runtime.engine()`.
+    /// engine-field retirement slice.
     runtime: Arc<WasmtimeV48Runtime>,
     /// S1 — trusted-tier wasmos runtime facade. Trusted-tier
     /// counterpart of `runtime`; built with `consume_fuel(false)`
@@ -6044,14 +6042,16 @@ impl Host {
         Ok(op(conn))
     }
 
-    pub fn engine(&self) -> &Engine {
-        self.runtime.engine()
-    }
-
     /// The fuel-disabled engine used to compile + run the cli
     /// component and other trusted-tier runnables. precompile and
     /// run_wasm both route through here so their compiled outputs
     /// match the engine config at load time.
+    ///
+    /// Extension-tier callers no longer reach through a
+    /// `Host::engine()` accessor; they either use the wasmos runtime
+    /// facade via [`Self::runtime`] or one of the typed compile
+    /// helpers ([`Self::compile_component_run`],
+    /// [`Self::deserialize_component_run`]).
     pub fn engine_run(&self) -> &Engine {
         self.runtime_run.engine()
     }
