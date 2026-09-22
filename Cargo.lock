@@ -1614,7 +1614,7 @@ version = "0.1.0"
 source = "git+https://github.com/tegmentum/datalink.git?tag=v0.2.0#4edf501aa84b24fa24d5a1b5a89b4523cff7553f"
 dependencies = [
  "anyhow",
- "wasmos-runtime-api 0.1.0 (git+https://github.com/tegmentum/wasmos.git?tag=v0.3.2)",
+ "wasmos-runtime-api",
 ]
 
 [[package]]
@@ -4397,7 +4397,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -5825,7 +5825,8 @@ dependencies = [
  "vec-extension",
  "vec0-extension",
  "vin-extension",
- "wasmos-runtime-api 0.1.0 (git+https://github.com/tegmentum/wasmos.git?tag=v0.3.2)",
+ "wasmos-compose-dynlink",
+ "wasmos-runtime-api",
  "wasmos-runtime-wasmtime-v48",
  "wasmtime",
  "wasmtime-wasi",
@@ -7018,7 +7019,6 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "tvm-core"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/tvm-wasm.git?tag=v0.2.0#f4820508695fbf5c4ba95fad290f87d737c78c8d"
 dependencies = [
  "hashbrown 0.15.5",
  "thiserror 2.0.18",
@@ -7027,12 +7027,11 @@ dependencies = [
 [[package]]
 name = "tvm-wasmtime"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/tvm-wasm.git?tag=v0.2.0#f4820508695fbf5c4ba95fad290f87d737c78c8d"
 dependencies = [
  "anyhow",
  "async-trait",
  "tvm-core",
- "wasmos-runtime-api 0.1.0 (git+https://github.com/tegmentum/wasmos.git?tag=v0.1.0)",
+ "wasmos-runtime-api",
  "wasmtime",
 ]
 
@@ -7584,43 +7583,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmos-compose-dynlink"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "tokio",
+ "tracing",
+ "wasmos-runtime-api",
+]
+
+[[package]]
 name = "wasmos-runtime-api"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/wasmos.git?tag=v0.1.0#1bf670c63b1b5ac0610a1e102e1971b75aa7daf6"
 dependencies = [
  "async-trait",
  "bytes",
  "serde",
  "thiserror 2.0.18",
- "wasmos-runtime-api-macros 0.1.0 (git+https://github.com/tegmentum/wasmos.git?tag=v0.1.0)",
-]
-
-[[package]]
-name = "wasmos-runtime-api"
-version = "0.1.0"
-source = "git+https://github.com/tegmentum/wasmos.git?tag=v0.3.2#082d80f01ba3eae6d6e98bde0ca239bc44581121"
-dependencies = [
- "async-trait",
- "bytes",
- "serde",
- "thiserror 2.0.18",
- "wasmos-runtime-api-macros 0.1.0 (git+https://github.com/tegmentum/wasmos.git?tag=v0.3.2)",
+ "tokio",
+ "wasmos-runtime-api-macros",
 ]
 
 [[package]]
 name = "wasmos-runtime-api-macros"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/wasmos.git?tag=v0.1.0#1bf670c63b1b5ac0610a1e102e1971b75aa7daf6"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "wasmos-runtime-api-macros"
-version = "0.1.0"
-source = "git+https://github.com/tegmentum/wasmos.git?tag=v0.3.2#082d80f01ba3eae6d6e98bde0ca239bc44581121"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7630,13 +7616,19 @@ dependencies = [
 [[package]]
 name = "wasmos-runtime-wasmtime-v48"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/wasmos.git?tag=v0.3.2#082d80f01ba3eae6d6e98bde0ca239bc44581121"
 dependencies = [
  "anyhow",
  "async-trait",
+ "blake3",
  "bytes",
+ "http 1.4.2",
+ "http-body 1.0.1",
+ "http-body-util",
+ "serde",
+ "serde_json",
  "tokio",
- "wasmos-runtime-api 0.1.0 (git+https://github.com/tegmentum/wasmos.git?tag=v0.3.2)",
+ "wasmos-runtime-api",
+ "wasmparser 0.253.0",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
@@ -7683,6 +7675,19 @@ name = "wasmparser"
 version = "0.247.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e6fb4c2bee46c5ea4d40f8cdb5c131725cd976718ec56f1c8e82fbde5fa2a80"
+dependencies = [
+ "bitflags",
+ "hashbrown 0.17.1",
+ "indexmap",
+ "semver",
+ "serde",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.253.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19db11f87d2486580e1e8b6f494c54df7e0566b87d0b599db843c24019667339"
 dependencies = [
  "bitflags",
  "hashbrown 0.17.1",

@@ -56,14 +56,24 @@ datalink-prefix = { git = "https://github.com/tegmentum/datalink.git", tag = "v0
 # Additive; the existing wit-bindgen path at src/lib.rs stays. The
 # wasmos install path is added ALONGSIDE (per-instantiate decision
 # in compose_provider.rs on which path to use for a given component).
-wasmos-runtime-api = { git = "https://github.com/tegmentum/wasmos.git", tag = "v0.3.2" }
+#
+# S1 migration (in progress): local path-pin against the wasmos
+# working tree that carries the W1-W4 additions (compile cache,
+# Runtime::identity, WASM proposal knobs + WasmtimeV48Tuning, and
+# the async_bridge_resource module powering wasmos-compose-dynlink).
+# Reverts to a `tag = "v0.4.0"`-shaped pin once wasmos cuts that
+# release.
+wasmos-runtime-api = { path = "../../wasmos/runtime/api" }
 # ADR-0029 §25 crate-name immutability adapter: wasmtime 48.x LTS
 # version-pinned adapter (bumped from v46 alongside the org-wide
-# wasmtime 46→48 migration). Bridge-only surface today
-# (sync_bridge, sync_bridge_resource, sync_export_bridge,
-# async_bridge); the full WasmtimeV48Runtime impl deferred until
-# needed.
-wasmos-runtime-wasmtime-v48 = { git = "https://github.com/tegmentum/wasmos.git", tag = "v0.3.2" }
+# wasmtime 46→48 migration). Also exposes WasmtimeV48Tuning +
+# async_bridge_resource + new_with_tuning as of the W3/W4 slices.
+wasmos-runtime-wasmtime-v48 = { path = "../../wasmos/runtime/wasmtime/v48" }
+# W3b — portable compose:dynlink host-call bundle. Replaces the
+# datalink-dynlink wasmtime-bindgen path for host-side provider
+# registration. Local-path during S1; retargets to a workspace
+# git pin once wasmos cuts its next release.
+wasmos-compose-dynlink = { path = "../../wasmos/crates/wasmos-compose-dynlink" }
 
 anyhow = "1.0"
 wasmtime = { version = "48.0.1", features = [

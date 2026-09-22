@@ -74,3 +74,29 @@ codegen-units = 1
 opt-level = 3
 debug = false
 strip = true
+
+# S1 migration: redirect every consumer of wasmos-runtime-api (and
+# the v48 adapter) to the local wasmos checkout that carries the
+# W1-W4 additions. This includes transitive consumers via
+# datalink-contract / datalink-dynlink / datalink-prefix / tvm-wasm
+# — they were previously pinned against wasmos v0.3.2, and without
+# this patch the workspace resolves two distinct wasmos-runtime-api
+# instances (one at the git tag, one at the local path), which
+# yields cross-crate type mismatches on CompiledComponent etc.
+#
+# Reverts to normal cargo resolution once wasmos cuts the v0.4.0
+# tag carrying these additions and every peer repo bumps its pin
+# to match.
+[patch."https://github.com/tegmentum/wasmos.git"]
+wasmos-runtime-api = { path = "../wasmos/runtime/api" }
+wasmos-runtime-wasmtime-v48 = { path = "../wasmos/runtime/wasmtime/v48" }
+
+# tvm-wasm needs to see the same wasmos-runtime-api that sqlink
+# sees, otherwise its engine_config.rs's struct-literal
+# RuntimeConfig sites fail to compile against the W1-W4-widened
+# type. The local tvm-wasm checkout already uses forward-compat
+# `..Default::default()` / builder patterns, so patching to local
+# path resolves both problems (single wasmos instance + widened
+# RuntimeConfig).
+[patch."https://github.com/tegmentum/tvm-wasm.git"]
+tvm-wasmtime = { path = "../tvm-wasm/crates/tvm-wasmtime" }
