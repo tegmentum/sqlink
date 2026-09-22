@@ -6281,7 +6281,7 @@ impl Host {
             .ok();
         let is_provider = resolved_component
             .as_ref()
-            .map(|c| compose_provider::exports_endpoint(c, self.runtime.engine()))
+            .map(|c| compose_provider::exports_endpoint(c, &self.runtime))
             .unwrap_or(false);
         if is_provider {
             let provider = compose_provider::ProviderHandle::new_resident_wasm_component(
@@ -6337,7 +6337,7 @@ impl Host {
         // `sqlite:extension/scalar-function::call` back through it.
         if resolved_component
             .as_ref()
-            .map(|c| compose_provider::is_dynlink_bridge(c, self.runtime.engine()))
+            .map(|c| compose_provider::is_dynlink_bridge(c, &self.runtime))
             .unwrap_or(false)
         {
             let bridge = compose_provider::instantiate_dynlink_bridge(
@@ -6356,7 +6356,7 @@ impl Host {
             let mutating = if resolved_component
                 .as_ref()
                 .map(|c| {
-                    compose_provider::exports_sqlite_extension_vtab_update(c, self.runtime.engine())
+                    compose_provider::exports_sqlite_extension_vtab_update(c, &self.runtime)
                 })
                 .unwrap_or(false)
             {
@@ -6438,7 +6438,7 @@ impl Host {
             CONTRACT_PACKAGE,
             name_hint,
         )?;
-        if !compose_provider::exports_endpoint(&component, self.runtime.engine()) {
+        if !compose_provider::exports_endpoint(&component, &self.runtime) {
             return Err(anyhow!(
                 "extension '{name_hint}': not a compose:dynlink provider (no \
                  endpoint export); the bespoke loader has been retired (#220) \
@@ -6548,7 +6548,7 @@ impl Host {
         // Stateful-store describe was retired with the bespoke loader; the provider
         // endpoint's `describe` returns the same manifest (name + declared
         // capabilities as strings) via `provider_envelope::Manifest`.
-        if !compose_provider::exports_endpoint(&component, self.runtime.engine()) {
+        if !compose_provider::exports_endpoint(&component, &self.runtime) {
             return Err(anyhow!(
                 "extension '{name_hint}': not a compose:dynlink provider (no \
                  endpoint export); the bespoke loader has been retired (#220) \

@@ -258,7 +258,7 @@ impl ProviderHandle {
             } => sqlite_runtime_invoke(method, payload, conn, stmts, next_stmt_id).await,
             ProviderKind::WasmComponent {
                 runtime, component, ..
-            } => wasm_component_invoke(method, payload, runtime.engine(), component).await,
+            } => wasm_component_invoke(method, payload, runtime, component).await,
             ProviderKind::ResidentWasmComponent {
                 runtime,
                 component,
@@ -274,7 +274,7 @@ impl ProviderHandle {
                 resident_wasm_component_invoke(
                     method,
                     payload,
-                    runtime.engine(),
+                    runtime,
                     component,
                     resident,
                     dynlink_bridge.as_ref(),
@@ -305,7 +305,7 @@ impl ProviderHandle {
             }
             | ProviderKind::ResidentWasmComponent {
                 runtime, component, ..
-            } => imports_cli_stdout(component, runtime.engine()),
+            } => imports_cli_stdout(component, runtime),
             _ => false,
         }
     }
@@ -324,9 +324,9 @@ impl ProviderHandle {
         match &self.kind {
             ProviderKind::WasmComponent {
                 runtime, component, ..
-            } if imports_cli_stdout(component, runtime.engine()) => {
+            } if imports_cli_stdout(component, runtime) => {
                 // Fresh-store variant carries no loader handle and no grant.
-                wasm_component_invoke_cli(method, payload, runtime.engine(), component, state, None, false)
+                wasm_component_invoke_cli(method, payload, runtime, component, state, None, false)
                     .await
             }
             ProviderKind::ResidentWasmComponent {
@@ -335,7 +335,7 @@ impl ProviderHandle {
                 loader_host,
                 spawn_build_granted,
                 ..
-            } if imports_cli_stdout(component, runtime.engine()) => {
+            } if imports_cli_stdout(component, runtime) => {
                 // The cli-aware (streaming) path needs the cli-stdout/stderr/
                 // state host imports satisfied with a per-invoke capture, which
                 // a plain resident store can't carry. A streaming dotcmd
@@ -349,7 +349,7 @@ impl ProviderHandle {
                 wasm_component_invoke_cli(
                     method,
                     payload,
-                    runtime.engine(),
+                    runtime,
                     component,
                     state,
                     loader_host.clone(),
@@ -864,10 +864,10 @@ pub async fn instantiate_dynlink_bridge_mutating(
 /// under the tabular-mutating world. Read-only bridges return false;
 /// the default `tabular` world's vtab (read) export is compatible with
 /// both shapes.
-pub fn exports_sqlite_extension_vtab_update(component: &Component, engine: &Engine) -> bool {
+pub fn exports_sqlite_extension_vtab_update(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .exports(engine)
+        .exports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/vtab-update"))
 }
 
@@ -876,10 +876,10 @@ pub fn exports_sqlite_extension_vtab_update(component: &Component, engine: &Engi
 /// providers) via the dynlink bridge. Task #228: the resident store adds
 /// the linker bridge to its linker only for these, so a plain (non-
 /// reentrant) resident provider still instantiates against WASI-only.
-pub fn imports_dynlink_linker(component: &Component, engine: &Engine) -> bool {
+pub fn imports_dynlink_linker(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("compose:dynlink/linker"))
 }
 
@@ -921,10 +921,10 @@ pub fn imports_dynlink_linker(component: &Component, engine: &Engine) -> bool {
 /// bridge self-recursive (endpoint.invoke → scalar-function.call →
 /// linker.resolve_by_id → its own endpoint again). The bridge is
 /// legitimately a third shape.
-pub fn exports_sqlite_extension_metadata(component: &Component, engine: &Engine) -> bool {
+pub fn exports_sqlite_extension_metadata(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .exports(engine)
+        .exports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/metadata"))
 }
 
@@ -934,10 +934,10 @@ pub fn exports_sqlite_extension_metadata(component: &Component, engine: &Engine)
 /// to detect the "sqlink-shim-codegen --dynlink" shape and route
 /// through the (forthcoming) dynlink-bridge loader instead of the
 /// retired-bespoke error path.
-pub fn is_dynlink_bridge(component: &Component, engine: &Engine) -> bool {
-    imports_dynlink_linker(component, engine)
-        && exports_sqlite_extension_metadata(component, engine)
-        && !exports_endpoint(component, engine)
+pub fn is_dynlink_bridge(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
+    imports_dynlink_linker(component, runtime)
+        && exports_sqlite_extension_metadata(component, runtime)
+        && !exports_endpoint(component, runtime)
 }
 
 /// Task #220: true if `component` imports `sqlite:extension/spi` — i.e. a
@@ -946,10 +946,10 @@ pub fn is_dynlink_bridge(component: &Component, engine: &Engine) -> bool {
 /// (the ext↔shape spi cycle is not wac-composable), so the host wires the
 /// spi surface onto the resident linker and forwards to an isolated
 /// connection (`ProviderSpiWrap`), at parity with the bespoke loader.
-pub fn imports_sqlite_spi(component: &Component, engine: &Engine) -> bool {
+pub fn imports_sqlite_spi(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/spi"))
 }
 
@@ -965,8 +965,8 @@ pub fn imports_sqlite_spi(component: &Component, engine: &Engine) -> bool {
 /// surviving bespoke path an EXPLICIT, narrow residual: a plain data extension
 /// reaching the bespoke loader (no `<ext>-provider.wasm` resolved) is treated as
 /// deprecated (warned), whereas a residual-tool import is the sanctioned path.
-pub fn needs_bespoke_residual(component: &Component, engine: &Engine) -> bool {
-    component.component_type().imports(engine).any(|(name, _)| {
+pub fn needs_bespoke_residual(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
+    component.component_type().imports(runtime.engine()).any(|(name, _)| {
         name.starts_with("sqlite:extension/session")
             || name.starts_with("sqlite:extension/authorizer")
             || name.starts_with("sqlite:extension/loader-bridge")
@@ -978,40 +978,40 @@ pub fn needs_bespoke_residual(component: &Component, engine: &Engine) -> bool {
 /// (`crate::loaded_minimal_http::sqlite::extension::http::add_to_linker`),
 /// forwarding to the same reqwest-backed surface + policy gate the bespoke
 /// loader uses. Deny-by-default policy (see `ProviderState.http_policy`).
-pub fn imports_sqlite_http(component: &Component, engine: &Engine) -> bool {
+pub fn imports_sqlite_http(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/http"))
 }
 
 /// Task #220: true if `component` imports `sqlite:extension/dns` — e.g. the
 /// `dns` extension. Host-satisfied on the resident linker via
 /// `crate::loaded_minimal_dns::sqlite::extension::dns::add_to_linker`.
-pub fn imports_sqlite_dns(component: &Component, engine: &Engine) -> bool {
+pub fn imports_sqlite_dns(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/dns"))
 }
 
 /// Task #220: true if `component` imports `sqlite:extension/wal-frames` — the
 /// WAL-introspection exts (`hookprobe`/`wal-archive`). Host-satisfied on the
 /// resident linker (deny-by-default capability, like http/dns).
-pub fn imports_sqlite_wal_frames(component: &Component, engine: &Engine) -> bool {
+pub fn imports_sqlite_wal_frames(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/wal-frames"))
 }
 
 /// Task #220: true if `component` imports `sqlite:extension/s3-base` — the
 /// s3-backed exts. Host-satisfied on the resident linker (deny-by-default
 /// capability: instantiates, refused at call time unless granted).
-pub fn imports_sqlite_s3_base(component: &Component, engine: &Engine) -> bool {
+pub fn imports_sqlite_s3_base(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/s3-base"))
 }
 
@@ -1019,20 +1019,20 @@ pub fn imports_sqlite_s3_base(component: &Component, engine: &Engine) -> bool {
 /// extension (and any other ext that compresses). Host-satisfied on the resident
 /// linker by forwarding to the warm `compression-endpoint` resident. Pure /
 /// non-egress, so no capability gate (unlike s3-base).
-pub fn imports_sqlite_compression(component: &Component, engine: &Engine) -> bool {
+pub fn imports_sqlite_compression(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/compression"))
 }
 
 /// bundle-cli: true if `component` imports `sqlite:extension/build` — the
 /// `.bundle build` surface. Host-satisfied with a v1.1 stub (returns a
 /// SQLITE_PERM error) on the CLI-provider linker; a real cargo spawn lands later.
-pub fn imports_sqlite_build(component: &Component, engine: &Engine) -> bool {
+pub fn imports_sqlite_build(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/build"))
 }
 
@@ -1040,10 +1040,10 @@ pub fn imports_sqlite_build(component: &Component, engine: &Engine) -> bool {
 /// — the CAS-backed SQL bridge that `.bundle list`/`.bundle show` run their
 /// queries through. Host-satisfied on the CLI-provider linker by opening the
 /// shared CAS db (`~/.cache/sqlink/cas.sqlite`) and marshalling a query-result.
-pub fn imports_sqlite_dispatch_bridge_cas(component: &Component, engine: &Engine) -> bool {
+pub fn imports_sqlite_dispatch_bridge_cas(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/dispatch-bridge-cas"))
 }
 
@@ -1051,10 +1051,10 @@ pub fn imports_sqlite_dispatch_bridge_cas(component: &Component, engine: &Engine
 /// the changeset/session extension (`session-cli`). Host-satisfied on the
 /// resident linker against this provider's own `spi_conn` + `session_handles`
 /// (parity with the bespoke loader's per-host session surface).
-pub fn imports_sqlite_session(component: &Component, engine: &Engine) -> bool {
+pub fn imports_sqlite_session(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/session"))
 }
 
@@ -1062,20 +1062,20 @@ pub fn imports_sqlite_session(component: &Component, engine: &Engine) -> bool {
 /// — the loader-introspection ext (`sqlink-meta-cli`). Host-satisfied on the
 /// resident linker via the threaded `Host` handle (parity with the bespoke
 /// loader's `LoadedState.host_ref`).
-pub fn imports_sqlite_loader_bridge(component: &Component, engine: &Engine) -> bool {
+pub fn imports_sqlite_loader_bridge(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/loader-bridge"))
 }
 
 /// Task #220: true if `component` imports `sqlite:extension/cli-state` — a
 /// streaming-dotcmd ext that reads the cli key/value snapshot. (`cli-stdout`
 /// is covered by `imports_cli_stdout`.)
-pub fn imports_cli_state(component: &Component, engine: &Engine) -> bool {
+pub fn imports_cli_state(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/cli-state"))
 }
 
@@ -1595,9 +1595,10 @@ pub struct ProviderLoaderBridgeWrap<'a> {
 async fn wasm_component_invoke(
     method: &str,
     payload: &[u8],
-    engine: &Engine,
+    runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
     component: &Component,
 ) -> Result<Vec<u8>, String> {
+    let engine = runtime.engine();
     let mut linker: Linker<ProviderState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| format!("wasi linker: {e}"))?;
     let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
@@ -1650,7 +1651,7 @@ async fn wasm_component_invoke(
 async fn resident_wasm_component_invoke(
     method: &str,
     payload: &[u8],
-    engine: &Engine,
+    runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
     component: &Component,
     resident: &Arc<AsyncMutex<Option<ResidentProvider>>>,
     dynlink_bridge: Option<&datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
@@ -1660,6 +1661,7 @@ async fn resident_wasm_component_invoke(
     dns_policy: Option<crate::DnsPolicy>,
     s3_granted: bool,
 ) -> Result<Vec<u8>, String> {
+    let engine = runtime.engine();
     let mut guard = resident.lock().await;
     if guard.is_none() {
         // Task #228: a resident provider that imports `compose:dynlink/
@@ -1670,7 +1672,7 @@ async fn resident_wasm_component_invoke(
         // Non-reentrant residents keep the plain sync WASI-only linker.
         let reentrant = dynlink_bridge
             .as_ref()
-            .map(|_| imports_dynlink_linker(component, engine))
+            .map(|_| imports_dynlink_linker(component, runtime))
             .unwrap_or(false);
         // Task #220: a resident provider wrapping an spi-importing
         // extension (its static `sqlite:extension/spi` import cannot be
@@ -1678,34 +1680,34 @@ async fn resident_wasm_component_invoke(
         // not wac-composable — so the host satisfies it on the linker).
         // The spi Host surface is async, so it also forces the async WASI
         // linker.
-        let imports_spi = imports_sqlite_spi(component, engine);
+        let imports_spi = imports_sqlite_spi(component, runtime);
         // Task #220: host/dns are host-satisfied on the resident linker too
         // (the `http`/`dns` exts import them); their Host surfaces are async,
         // so they also force the async WASI linker.
-        let imports_http = imports_sqlite_http(component, engine);
-        let imports_dns = imports_sqlite_dns(component, engine);
+        let imports_http = imports_sqlite_http(component, runtime);
+        let imports_dns = imports_sqlite_dns(component, runtime);
         // Task #220: the remaining capability/cli host surfaces, satisfied on
         // the resident linker so the stateful/streaming exts instantiate
         // provider-only. wal-frames + s3-base are CAPABILITY-gated
         // (deny-by-default, exactly like http/dns — the provider instantiates,
         // calls are refused unless granted). cli-stdout/-stderr/-state back the
         // streaming-dotcmd exts. All async surfaces → force the async linker.
-        let imports_wal = imports_sqlite_wal_frames(component, engine);
-        let imports_s3 = imports_sqlite_s3_base(component, engine);
+        let imports_wal = imports_sqlite_wal_frames(component, runtime);
+        let imports_s3 = imports_sqlite_s3_base(component, runtime);
         // The `compression` surface (the zstd ext) — host-satisfied on the
         // resident linker by forwarding to the warm compression-endpoint. Async
         // → forces the async WASI linker.
-        let imports_compression = imports_sqlite_compression(component, engine);
-        let imports_cli = imports_cli_stdout(component, engine) || imports_cli_state(component, engine);
+        let imports_compression = imports_sqlite_compression(component, runtime);
+        let imports_cli = imports_cli_stdout(component, runtime) || imports_cli_state(component, runtime);
         // #220 full-port: the stateful `sqlite:extension/session` surface
         // (session-cli), host-satisfied on the resident linker against this
         // provider's own `spi_conn` + `session_handles`. Async → forces the
         // async WASI linker.
-        let imports_session = imports_sqlite_session(component, engine);
+        let imports_session = imports_sqlite_session(component, runtime);
         // #220 full-port: the loader-bridge surface (sqlink-meta-cli) lets an
         // ext re-enter the loader. Host-satisfied on the resident linker;
         // async → forces the async WASI linker.
-        let imports_loader_bridge = imports_sqlite_loader_bridge(component, engine);
+        let imports_loader_bridge = imports_sqlite_loader_bridge(component, runtime);
         let mut linker: Linker<ProviderState> = Linker::new(engine);
         if reentrant || imports_spi || imports_http || imports_dns || imports_wal || imports_s3 || imports_compression || imports_cli || imports_session || imports_loader_bridge {
             wasmtime_wasi::p2::add_to_linker_async(&mut linker)
@@ -2272,10 +2274,10 @@ impl cli_ext::cli_state::Host for ProviderState {
 
 /// True if `component` imports the streaming cli surface — i.e. it's a
 /// streaming dotcmd provider that needs `wasm_component_invoke_cli`.
-pub fn imports_cli_stdout(component: &Component, engine: &Engine) -> bool {
+pub fn imports_cli_stdout(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     let ct = component.component_type();
     let found = ct
-        .imports(engine)
+        .imports(runtime.engine())
         .any(|(name, _)| name.starts_with("sqlite:extension/cli-stdout"));
     found
 }
@@ -2285,10 +2287,10 @@ pub fn imports_cli_stdout(component: &Component, engine: &Engine) -> bool {
 /// bespoke `sqlite:extension`-world extension. Task #228: the real
 /// composed CLI's `.load` uses this to route a provider component onto
 /// the resident compose:dynlink path instead of the bespoke loader.
-pub fn exports_endpoint(component: &Component, engine: &Engine) -> bool {
+pub fn exports_endpoint(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     let ct = component.component_type();
     let found = ct
-        .exports(engine)
+        .exports(runtime.engine())
         .any(|(name, _)| name.starts_with("compose:dynlink/endpoint"));
     found
 }
@@ -2299,12 +2301,13 @@ pub fn exports_endpoint(component: &Component, engine: &Engine) -> bool {
 async fn wasm_component_invoke_cli(
     method: &str,
     payload: &[u8],
-    engine: &Engine,
+    runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
     component: &Component,
     state: CliStateSnapshot,
     loader_host: Option<crate::Host>,
     spawn_build_granted: bool,
 ) -> Result<(Vec<u8>, CliCapture), String> {
+    let engine = runtime.engine();
     let mut linker: Linker<ProviderCliState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| format!("wasi linker: {e}"))?;
@@ -2317,7 +2320,7 @@ async fn wasm_component_invoke_cli(
     // #220: a streaming-dotcmd ext may ALSO import spi (archive-cli etc.);
     // satisfy it on the cli store's linker with an isolated connection, exactly
     // as the resident path does (the ext↔shape spi cycle isn't wac-composable).
-    if imports_sqlite_spi(component, engine) {
+    if imports_sqlite_spi(component, runtime) {
         crate::bindings::sqlite::extension::spi::add_to_linker::<_, ProviderCliSpiData>(
             &mut linker,
             |s: &mut ProviderCliState| ProviderSpiWrap {
@@ -2330,14 +2333,14 @@ async fn wasm_component_invoke_cli(
     // bundle-cli: its `dispatch-bridge-cas` (real CAS SQL) + `build` imports
     // are satisfied directly on `ProviderCliState` via `ProviderCliHostData`
     // + `|s| s`.
-    if imports_sqlite_dispatch_bridge_cas(component, engine) {
+    if imports_sqlite_dispatch_bridge_cas(component, runtime) {
         crate::loaded_bundle_cli::sqlite::extension::dispatch_bridge_cas::add_to_linker::<
             _,
             ProviderCliHostData,
         >(&mut linker, |s| s)
         .map_err(|e| format!("cli sqlite:extension/dispatch-bridge-cas linker: {e}"))?;
     }
-    if imports_sqlite_build(component, engine) {
+    if imports_sqlite_build(component, runtime) {
         crate::loaded::sqlite::extension::build::add_to_linker::<_, ProviderCliHostData>(
             &mut linker,
             |s| s,
@@ -2349,7 +2352,7 @@ async fn wasm_component_invoke_cli(
     // `load-extension-from-bytes` actually loads a bundle's member extensions.
     // When `loader_host` is None (off the real .load path) the view reports
     // "not wired", exactly as on the resident path.
-    if imports_sqlite_loader_bridge(component, engine) {
+    if imports_sqlite_loader_bridge(component, runtime) {
         crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::add_to_linker::<
             _,
             ProviderLoaderBridgeData,
