@@ -6144,15 +6144,35 @@ impl Host {
         bytes: Vec<u8>,
         name: &str,
     ) -> Result<Component> {
-        let meta = self.runtime_run.metadata();
+        Self::deserialize_via(&self.runtime_run, bytes, name).await
+    }
+
+    /// Extension-tier sibling of [`Self::deserialize_component_run`]:
+    /// routes precompiled bytes through `self.runtime` (the fuel-
+    /// metered engine). Called by the C2 component-blob cache path
+    /// where the seal was originally produced against the same
+    /// runtime.
+    async fn deserialize_component(
+        &self,
+        bytes: Vec<u8>,
+        name: &str,
+    ) -> Result<Component> {
+        Self::deserialize_via(&self.runtime, bytes, name).await
+    }
+
+    async fn deserialize_via(
+        runtime: &Arc<WasmtimeV48Runtime>,
+        bytes: Vec<u8>,
+        name: &str,
+    ) -> Result<Component> {
+        let meta = runtime.metadata();
         let source = ComponentSource::Precompiled {
             bytes: bytes.into(),
             runtime: meta.implementation.clone().into_owned(),
             runtime_version: meta.implementation_version.clone().into_owned(),
             name: Some(name.to_string()),
         };
-        let compiled = self
-            .runtime_run
+        let compiled = runtime
             .compile_component(source, CompileOptions::default())
             .await
             .map_err(|e| anyhow!("deserialize {name}: {e:?}"))?;
@@ -6297,6 +6317,7 @@ impl Host {
         // loader only sees plain extension components.
         let resolved_component = self
             .component_for_digest(&bytes, &blake3::hash(&bytes).to_hex().to_string(), &hint)
+            .await
             .ok();
         let is_provider = resolved_component
             .as_ref()
@@ -6551,7 +6572,7 @@ impl Host {
         // real load path. This is what lets describe seed the
         // C2 row on first run; later processes hit C2 from cold
         // start and skip the from_binary parse entirely.
-        let component = self.component_for_digest(&bytes, &digest, name_hint)?;
+        let component = self.component_for_digest(&bytes, &digest, name_hint).await?;
         // Contract-version guard (#220): reject an ABI-skewed component before
         // instantiating (mirrors instantiate_provider_from_bytes).
         let imported_major =
@@ -6605,10 +6626,10 @@ impl Host {
 
     /// Resolve a `Component` for the given digest via the
     /// three-tier cache: C1 (in-process LRU) → C2 (precompiled
-    /// blobs in the user db, HMAC-verified) → cold parse via
-    /// `Component::from_binary`. Inserts into both cache tiers
-    /// on cold parse.
-    fn component_for_digest(
+    /// blobs in the user db, HMAC-verified) → cold compile via the
+    /// wasmos runtime facade. Inserts into both cache tiers on cold
+    /// compile.
+    async fn component_for_digest(
         &self,
         bytes: &[u8],
         digest: &str,
@@ -6616,14 +6637,13 @@ impl Host {
     ) -> Result<Component> {
         // PLAN-component-cache.md C3 instrumentation hook:
         // SQLITE_WASM_DISABLE_COMPONENT_CACHE=1 skips both tiers
-        // so benchmarks measure cold from_binary cost.
+        // so benchmarks measure cold-compile cost.
         if self.component_cache_disabled() {
             self.component_cache_stats
                 .bypassed
                 .fetch_add(1, Ordering::Relaxed);
             let t0 = std::time::Instant::now();
-            let c = Component::from_binary(self.runtime.engine(), bytes)
-                .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
+            let c = self.compile_via_runtime(bytes, name_hint).await?;
             self.component_cache_stats
                 .parse_ms
                 .fetch_add(t0.elapsed().as_millis() as u64, Ordering::Relaxed);
@@ -6644,7 +6664,7 @@ impl Host {
         }
         // C2 — precompiled blob in the user db. Only attempted
         // when a db_path is configured and the HMAC secret loads.
-        if let Some(c) = self.try_c2_lookup(digest) {
+        if let Some(c) = self.try_c2_lookup(digest).await {
             self.component_cache_stats
                 .c2_hits
                 .fetch_add(1, Ordering::Relaxed);
@@ -6653,10 +6673,9 @@ impl Host {
                 .insert(digest.to_string(), c.clone());
             return Ok(c);
         }
-        // Cold path: parse + populate both caches.
+        // Cold path: compile via wasmos + populate both caches.
         let t0 = std::time::Instant::now();
-        let component = Component::from_binary(self.runtime.engine(), bytes)
-            .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
+        let component = self.compile_via_runtime(bytes, name_hint).await?;
         self.component_cache_stats
             .parse_ms
             .fetch_add(t0.elapsed().as_millis() as u64, Ordering::Relaxed);
@@ -6670,7 +6689,7 @@ impl Host {
         Ok(component)
     }
 
-    fn try_c2_lookup(&self, digest: &str) -> Option<Component> {
+    async fn try_c2_lookup(&self, digest: &str) -> Option<Component> {
         let key = self.blob_cache_key()?;
         let blob = self
             .with_user_conn(|conn| {
@@ -6684,21 +6703,27 @@ impl Host {
             digest = %&digest[..16],
             "C2 hit"
         );
-        // SAFETY: the blob was produced by `Component::serialize`
-        // on this same wasmtime version (the cache key includes
-        // engine_identity), and the HMAC verified — so the
-        // caller-trust contract `Component::deserialize` requires
-        // is satisfied.
+        // The blob was produced by `Component::serialize` on this
+        // same wasmtime version (the cache key includes
+        // engine_identity), and the HMAC verified — so
+        // `deserialize_component`'s `ComponentSource::Precompiled`
+        // arm will accept it. Deserialise failures fall through to
+        // a reparse.
         let t0 = std::time::Instant::now();
-        let result = unsafe { Component::deserialize(self.runtime.engine(), &blob) }
-            .map_err(|e| {
+        let result = match self
+            .deserialize_component(blob, &format!("c2-cache:{}", &digest[..16.min(digest.len())]))
+            .await
+        {
+            Ok(c) => Some(c),
+            Err(e) => {
                 tracing::warn!(
                     digest = %&digest[..16],
                     error = %e,
                     "component_cache: deserialize failed; will reparse"
                 );
-            })
-            .ok();
+                None
+            }
+        };
         self.component_cache_stats
             .deserialize_ms
             .fetch_add(t0.elapsed().as_millis() as u64, Ordering::Relaxed);
