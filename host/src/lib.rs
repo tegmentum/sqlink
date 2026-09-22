@@ -85,6 +85,16 @@ use std::cell::RefCell;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Cache, CacheConfig, Config, Engine};
 
+// S1 — wasmos runtime facade. Host::new builds a
+// `WasmtimeV48Runtime` alongside the raw `wasmtime::Engine` so
+// downstream code can migrate to the wasmos surface incrementally
+// (S1b/c/...); the two share the same underlying engine via
+// `WasmtimeV48Runtime::from_engine`. See host/src/lib.rs `Host::new`
+// for the wiring.
+use wasmos_runtime_api::config::OptimizationLevel;
+use wasmos_runtime_api::{CompileCacheConfig, RuntimeConfig};
+use wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime;
+
 pub use policy::{Capability, DnsPolicy, HttpPolicy, Policy};
 
 /// Bindgen against the `extension-loader-host` world. Generates a
@@ -4687,6 +4697,21 @@ type LanguageRuntimes = Arc<RwLock<HashMap<(String, String), Arc<LanguageRuntime
 pub struct Host {
     engine: Engine,
     engine_run: Engine,
+    /// S1a — wasmos runtime facade wrapping `engine`. Present
+    /// alongside the raw `engine` field during the S1 migration so
+    /// downstream consumers migrate off `self.engine` onto
+    /// `self.runtime.compile_component(...)` /
+    /// `self.runtime.instantiate(...)` incrementally. The pair
+    /// shares the same underlying wasmtime engine via
+    /// [`WasmtimeV48Runtime::from_engine`]. Retired (along with
+    /// `engine`) once every downstream site has migrated.
+    runtime: Arc<WasmtimeV48Runtime>,
+    /// S1a — wasmos runtime facade wrapping `engine_run`. Trusted-
+    /// tier counterpart of `runtime`; built with `consume_fuel(false)`
+    /// so per-instance fuel budgets no-op via the ADR §12
+    /// CapabilityError path documented on
+    /// [`wasmos_runtime_api::RuntimeConfig::consume_fuel`].
+    runtime_run: Arc<WasmtimeV48Runtime>,
     /// Database path the cli is using. Loaded extensions' spi.execute
     /// opens its own core::db::Connection to this path. Empty string
     /// means `:memory:`, and SPI returns an error then (in-memory
@@ -5319,6 +5344,39 @@ impl Host {
         spawn_epoch_bumper(engine.clone());
         spawn_epoch_bumper(engine_run.clone());
 
+        // S1a — wrap both engines with `WasmtimeV48Runtime::from_engine`
+        // so downstream code can migrate off `self.engine` /
+        // `self.engine_run` incrementally onto the wasmos surface.
+        // The RuntimeConfig here mirrors the wasmtime Config's
+        // semantic intent so `Runtime::identity()` returns a
+        // fingerprint that reflects sqlink's actual tuning. Downstream
+        // slices retire the raw `engine` / `engine_run` fields once
+        // every consumer has migrated to `runtime` / `runtime_run`.
+        let build_runtime_config = |consume_fuel: bool| -> RuntimeConfig {
+            let mut cfg = RuntimeConfig::default()
+                .with_optimization(OptimizationLevel::Speed)
+                .with_async_support(true)
+                .with_wasm_exceptions(true)
+                .with_wasm_memory64(true)
+                .with_wasm_multi_memory(true)
+                .with_consume_fuel(consume_fuel);
+            // Compile cache — mirror the wasmtime cache dir sqlink
+            // just wired above so `Runtime::identity()`'s config_hash
+            // reflects the same cache config.
+            if let Some(dir) = compile_cache_dir() {
+                cfg = cfg.with_compile_cache(CompileCacheConfig::new(dir));
+            }
+            cfg
+        };
+        let runtime = Arc::new(
+            WasmtimeV48Runtime::from_engine(engine.clone(), build_runtime_config(true))
+                .map_err(|e| anyhow!("wrap wasmtime engine as wasmos runtime: {e:?}"))?,
+        );
+        let runtime_run = Arc::new(
+            WasmtimeV48Runtime::from_engine(engine_run.clone(), build_runtime_config(false))
+                .map_err(|e| anyhow!("wrap wasmtime run-engine as wasmos runtime: {e:?}"))?,
+        );
+
         // F2: observable host contract version. Logged once per Host
         // instantiation so operators can see which contract this host
         // speaks (and bundles can pin to a matching one). Components
@@ -5357,6 +5415,8 @@ impl Host {
         Ok(Self {
             engine,
             engine_run,
+            runtime,
+            runtime_run,
             db_path: Arc::new(RwLock::new(String::new())),
             shared_spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
             user_conn: Arc::new(Mutex::new(None)),
