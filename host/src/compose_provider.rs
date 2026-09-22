@@ -390,7 +390,12 @@ fn invoke_to_dl(e: String) -> DlError {
 /// and holds no borrow of `Host`.
 #[derive(Clone)]
 pub struct HostWrapBackend {
-    pub engine: Engine,
+    /// S1-1 — was `engine: Engine`; now holds the wasmos runtime
+    /// facade. Downstream sites that still take a
+    /// `wasmtime::Engine` (ProviderHandle::new_wasm_component_from_bytes,
+    /// etc.) reach it via `self.runtime.engine()` (ADR §17 escape
+    /// hatch) until they migrate to runtime.compile_component.
+    pub runtime: std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
     pub compose_providers: Arc<RwLock<TenantedProviders>>,
     pub trust_policy: Arc<RwLock<TrustPolicy>>,
     pub cache: Arc<RwLock<Option<cache::Cache>>>,
@@ -445,7 +450,7 @@ impl AsyncProviderBackend for HostWrapBackend {
             }
         }
         let provider = ProviderHandle::new_wasm_component_from_bytes(
-            self.engine.clone(),
+            self.runtime.engine().clone(),
             &bytes,
             PathBuf::from(format!("blake3:{hex}")),
         )

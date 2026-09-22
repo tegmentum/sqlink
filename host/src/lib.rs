@@ -5413,7 +5413,7 @@ impl Host {
         let cache: Arc<RwLock<Option<cache::Cache>>> = Arc::new(RwLock::new(None));
         let dynlink_bridge =
             datalink_dynlink::AsyncDynLinkBridge::new(compose_provider::HostWrapBackend {
-                engine: engine.clone(),
+                runtime: runtime.clone(),
                 compose_providers: compose_providers.clone(),
                 trust_policy: trust_policy.clone(),
                 cache: cache.clone(),
