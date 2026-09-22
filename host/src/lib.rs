@@ -82,7 +82,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use parking_lot::{Mutex, ReentrantMutex, RwLock};
 use std::cell::RefCell;
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, HasData, Linker};
 use wasmtime::{Engine, Store};
 
 // S1 — wasmos runtime facade. Host::new builds a
@@ -4548,13 +4548,13 @@ datalink_dynlink::impl_datalink_dynlink_async_host!(
 
 /// HasData tag for the runnable linker setup.
 pub struct RunHostData;
-impl wasmtime::component::HasData for RunHostData {
+impl HasData for RunHostData {
     type Data<'a> = RunHostWrap<'a>;
 }
 
 fn make_run_linker(
     runtime: &Arc<WasmtimeV48Runtime>,
-    component: &wasmtime::component::Component,
+    component: &Component,
 ) -> Result<Linker<RunState>> {
     let engine = runtime.engine();
     let mut linker: Linker<RunState> = Linker::new(engine);
@@ -9741,7 +9741,7 @@ impl Host {
 pub struct RunLoaderStub;
 
 pub struct RunLoaderStubData;
-impl wasmtime::component::HasData for RunLoaderStubData {
+impl HasData for RunLoaderStubData {
     type Data<'a> = RunLoaderStub;
 }
 
@@ -10030,7 +10030,7 @@ impl bindings::sqlink::wasm::extension_loader::Host for RunLoaderStub {
 /// `host: Host` field exposes the loaded-extension registry that the
 /// loader interface routes against.
 pub struct LoaderData;
-impl wasmtime::component::HasData for LoaderData {
+impl HasData for LoaderData {
     type Data<'a> = HostWrap<'a>;
 }
 
