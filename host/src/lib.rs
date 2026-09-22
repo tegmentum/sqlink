@@ -83,7 +83,7 @@ use anyhow::{anyhow, Result};
 use parking_lot::{Mutex, ReentrantMutex, RwLock};
 use std::cell::RefCell;
 use wasmtime::component::{Component, Linker};
-use wasmtime::{Cache, CacheConfig, Config, Engine};
+use wasmtime::{Cache, CacheConfig, Config, Engine, Store};
 
 // S1 — wasmos runtime facade. Host::new builds a
 // `WasmtimeV48Runtime` alongside the raw `wasmtime::Engine` so
@@ -1428,7 +1428,7 @@ impl OpenSslVerifier {
             wasi: builder.build(),
             table: wasmtime_wasi::ResourceTable::new(),
         };
-        let mut store = wasmtime::Store::new(engine, state);
+        let mut store = Store::new(engine, state);
         store
             .set_fuel(u64::MAX / 2)
             .map_err(|e| anyhow!("verifier set_fuel: {e}"))?;
@@ -9496,7 +9496,7 @@ impl Host {
             dynlink_bridge: self.run_dynlink_bridge(tenant),
             tvm: tvm_wasmtime::TvmHost::new(),
         };
-        let mut store = wasmtime::Store::new(self.runtime_run.engine(), state);
+        let mut store = Store::new(self.runtime_run.engine(), state);
         store.set_epoch_deadline(1_000_000_000_000);
         let instance = run::Runnable::instantiate_async(&mut store, &component, &linker)
             .await
@@ -9733,7 +9733,7 @@ impl Host {
             dynlink_bridge: self.run_dynlink_bridge(DEFAULT_TENANT),
             tvm: tvm_wasmtime::TvmHost::new(),
         };
-        let mut store = wasmtime::Store::new(self.runtime.engine(), state);
+        let mut store = Store::new(self.runtime.engine(), state);
         store
             .set_fuel(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2))
             .map_err(|e| anyhow!("set_fuel: {e}"))?;
@@ -9796,7 +9796,7 @@ impl Host {
             dynlink_bridge: self.run_dynlink_bridge(DEFAULT_TENANT),
             tvm: tvm_wasmtime::TvmHost::new(),
         };
-        let mut store = wasmtime::Store::new(self.runtime.engine(), state);
+        let mut store = Store::new(self.runtime.engine(), state);
         store
             .set_fuel(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2))
             .map_err(|e| anyhow!("set_fuel: {e}"))?;
@@ -13367,7 +13367,7 @@ pub async fn run_cli_capture(
         host,
         tvm: tvm_wasmtime::TvmHost::new(),
     };
-    let mut store = wasmtime::Store::new(&engine, state);
+    let mut store = Store::new(&engine, state);
     store.set_epoch_deadline(1_000_000_000_000);
     let command =
         wasmtime_wasi::p2::bindings::Command::instantiate_async(&mut store, &component, &linker)
