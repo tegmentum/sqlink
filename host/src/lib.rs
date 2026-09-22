@@ -5341,9 +5341,6 @@ impl Host {
         let engine_run =
             Engine::new(&run_config).map_err(|e| anyhow!("create wasmtime run-engine: {e}"))?;
 
-        spawn_epoch_bumper(engine.clone());
-        spawn_epoch_bumper(engine_run.clone());
-
         // S1a — wrap both engines with `WasmtimeV48Runtime::from_engine`
         // so downstream code can migrate off `self.engine` /
         // `self.engine_run` incrementally onto the wasmos surface.
@@ -5352,6 +5349,13 @@ impl Host {
         // fingerprint that reflects sqlink's actual tuning. Downstream
         // slices retire the raw `engine` / `engine_run` fields once
         // every consumer has migrated to `runtime` / `runtime_run`.
+        //
+        // S1b — epoch ticker moves to wasmos. `with_epoch_tick_period`
+        // has the wasmos runtime spawn its own background thread
+        // that calls `engine.increment_epoch()` at the given cadence;
+        // because `from_engine` wraps the SAME wasmtime engine sqlink
+        // already owns, wasmos's ticker acts on the shared engine.
+        // Retires `spawn_epoch_bumper` on both engines.
         let build_runtime_config = |consume_fuel: bool| -> RuntimeConfig {
             let mut cfg = RuntimeConfig::default()
                 .with_optimization(OptimizationLevel::Speed)
@@ -5359,7 +5363,8 @@ impl Host {
                 .with_wasm_exceptions(true)
                 .with_wasm_memory64(true)
                 .with_wasm_multi_memory(true)
-                .with_consume_fuel(consume_fuel);
+                .with_consume_fuel(consume_fuel)
+                .with_epoch_tick_period(EPOCH_TICK);
             // Compile cache — mirror the wasmtime cache dir sqlink
             // just wired above so `Runtime::identity()`'s config_hash
             // reflects the same cache config.
@@ -12858,21 +12863,12 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     }
 }
 
-/// Spawn the background epoch-bumper thread. Holds a `Weak<Engine>`
-/// so it exits cleanly once the last `Engine` clone drops.
-fn spawn_epoch_bumper(engine: Engine) {
-    let weak = std::sync::Weak::clone(&Arc::downgrade(&Arc::new(engine)));
-    std::thread::Builder::new()
-        .name("sqlink-host-epoch".into())
-        .spawn(move || loop {
-            std::thread::sleep(EPOCH_TICK);
-            match weak.upgrade() {
-                Some(e) => e.increment_epoch(),
-                None => break,
-            }
-        })
-        .ok();
-}
+// S1b — sqlink's own `spawn_epoch_bumper` retired. The wasmos
+// runtime now owns the epoch ticker (`RuntimeConfig::with_epoch_tick_period`
+// wired in `Host::new`); it bumps the shared wasmtime engine on the
+// same cadence via a background thread the wasmos runtime holds and
+// tears down on last-clone drop. See
+// `wasmos-runtime-wasmtime-v48/src/runtime.rs` `EpochTicker`.
 
 #[cfg(test)]
 mod http_policy_tests {
