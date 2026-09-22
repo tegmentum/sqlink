@@ -4529,9 +4529,10 @@ impl wasmtime::component::HasData for RunHostData {
 }
 
 fn make_run_linker(
-    engine: &Engine,
+    runtime: &Arc<WasmtimeV48Runtime>,
     component: &wasmtime::component::Component,
 ) -> Result<Linker<RunState>> {
+    let engine = runtime.engine();
     let mut linker: Linker<RunState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| anyhow!("fiji WASI: {e}"))?;
     // The shared async linker bindings, driven by a per-call `RunHostWrap` view
@@ -9414,7 +9415,7 @@ impl Host {
         // deadline.
         let component = Component::from_binary(self.runtime_run.engine(), &bytes)
             .map_err(|e| anyhow!("compile {}: {e}", path.display()))?;
-        let linker = make_run_linker(self.runtime_run.engine(), &component)?;
+        let linker = make_run_linker(&self.runtime_run, &component)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
         let state = RunState {
@@ -9643,7 +9644,7 @@ impl Host {
                 anyhow!("no runtime registered for ext={ext:?} variant={variant:?}")
             })?
         };
-        let linker = make_run_linker(self.runtime.engine(), &runtime.component)?;
+        let linker = make_run_linker(&self.runtime, &runtime.component)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
         // Operator-supplied env vars  the caller picks which keys
@@ -9714,7 +9715,7 @@ impl Host {
             .to_string();
         // Build a fresh Store mirroring run_wasm_as. Each call gets
         // its own Store so per-call fuel/epoch caps are re-supplied.
-        let linker = make_run_linker(self.runtime.engine(), &runtime.component)?;
+        let linker = make_run_linker(&self.runtime, &runtime.component)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
         let state = RunState {
