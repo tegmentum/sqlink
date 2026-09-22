@@ -52,6 +52,13 @@ use wasmos_runtime_api::{
     host_iface, HostCallContext, HostImports, RuntimeError, RuntimeResult, WitEnum,
     WitRecord, WitVariant,
 };
+// S1-4 — wasmtime types retained only for the transitional
+// [`install_tvm_memory_imports`] wrapper (used by sqlink integration
+// tests still on the wasmtime linker path). The preferred surface
+// is the wasmtime-free [`build_tvm_memory_imports`] builder;
+// non-test callers within host/src have migrated to that + inline
+// async_bridge. The wrapper retires when the test suite migrates
+// to the ExecutionContext path (S1-7).
 use wasmos_runtime_wasmtime_v48::async_bridge;
 use wasmtime::component::{Component, Linker};
 use wasmtime::Engine;
@@ -629,6 +636,11 @@ impl<T: AsMut<TvmHost> + Send + 'static> TvmDiagnosticsHost<T> {
 /// wired against the same linker + component pair; a component
 /// only binds the imports it declares. Sqlink migrates one call
 /// site at a time.
+/// Transitional wrapper — builds the tvm:memory
+/// [`HostImports`] bundle and installs it onto `linker` via the
+/// v48 async bridge. Retained for sqlink's integration tests
+/// (`host/tests/tvm_*`) still on the wasmtime-linker path;
+/// non-test callers use [`build_tvm_memory_imports`] directly.
 pub fn install_tvm_memory_imports<T>(
     engine: &Engine,
     linker: &mut Linker<T>,
@@ -638,20 +650,16 @@ where
     T: AsMut<TvmHost> + Send + 'static,
 {
     use anyhow::anyhow;
-
     let imports = build_tvm_memory_imports::<T>();
-
     async_bridge::install_host_imports(engine, linker, component, &imports)
         .map_err(|e| anyhow!("wasmos_tvm install_host_imports: {e}"))
 }
 
 /// S1-4 — pure builder for the tvm:memory HostImports bundle,
-/// wasmtime-free. Callers that route through an
-/// [`wasmos_runtime_api::ExecutionContext`] (rather than a wasmtime
-/// linker) attach the returned bundle via
-/// `ExecutionContext::with_host_imports`. Callers still on the
-/// wasmtime-linker path use [`install_tvm_memory_imports`] which
-/// wraps this + the v48 async bridge together.
+/// wasmtime-free. Callers attach the returned bundle to their
+/// `ExecutionContext` (S1-7 shape) or route it via
+/// `wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports`
+/// (transitional wasmtime-linker path).
 pub fn build_tvm_memory_imports<T>() -> HostImports
 where
     T: AsMut<TvmHost> + Send + 'static,

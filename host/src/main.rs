@@ -1000,8 +1000,19 @@ async fn main() -> Result<()> {
     // sqlink-local `wasmos_tvm::install_tvm_memory_imports`
     // helper. Same host-side semantics; handler reaches
     // State.tvm via ctx.consumer_state::<State>().as_mut().
-    sqlink_host::wasmos_tvm::install_tvm_memory_imports::<State>(&engine, &mut linker, &component)
-        .map_err(|e| anyhow!("wire tvm:memory (wasmos): {e}"))?;
+    // S1-4 — inline builder + async_bridge so
+    // `sqlink_host::wasmos_tvm` stays wasmtime-free at its public
+    // API surface. The wasmtime linker naming here goes away when
+    // S1-3 migrates this CLI runner to `runtime.instantiate` +
+    // ExecutionContext.
+    let tvm_imports = sqlink_host::wasmos_tvm::build_tvm_memory_imports::<State>();
+    wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+        &engine,
+        &mut linker,
+        &component,
+        &tvm_imports,
+    )
+    .map_err(|e| anyhow!("wire tvm:memory (wasmos): {e}"))?;
 
     let mut wasi_builder = WasiCtxBuilder::new();
     wasi_builder.inherit_stdio();

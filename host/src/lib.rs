@@ -4568,7 +4568,18 @@ fn make_run_linker(
     // (handler reaches RunState.tvm via
     // ctx.consumer_state::<RunState>().as_mut()); portable across
     // every wasmos-backed adapter that gains a v46-flavored bridge.
-    crate::wasmos_tvm::install_tvm_memory_imports::<RunState>(engine, &mut linker, component)?;
+    // S1-4 — inline the wasmos_tvm builder + async_bridge call so
+    // wasmos_tvm.rs's public API stays wasmtime-free (only this
+    // callsite names the wasmtime linker, and that goes away when
+    // S1-7 retires the linker in favour of ExecutionContext).
+    let tvm_imports = crate::wasmos_tvm::build_tvm_memory_imports::<RunState>();
+    wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+        engine,
+        &mut linker,
+        component,
+        &tvm_imports,
+    )
+    .map_err(|e| anyhow!("install tvm:memory imports: {e}"))?;
     Ok(linker)
 }
 
@@ -13238,7 +13249,16 @@ pub async fn run_cli_capture(
     .map_err(|e| anyhow!("wire spi-loader: {e}"))?;
     // ADR-0029 Phase 6.9 D2 Session 15a — wasmos install path (see
     // make_run_linker for rationale).
-    crate::wasmos_tvm::install_tvm_memory_imports::<CliRunState>(&engine, &mut linker, &component)?;
+    // S1-4 — inline builder + async_bridge; see the sibling site
+    // above (register_wasi_run_bindings) for the pattern rationale.
+    let tvm_imports = crate::wasmos_tvm::build_tvm_memory_imports::<CliRunState>();
+    wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+        &engine,
+        &mut linker,
+        &component,
+        &tvm_imports,
+    )
+    .map_err(|e| anyhow!("install tvm:memory imports (cli): {e}"))?;
 
     let stdin = wasmtime_wasi::p2::pipe::MemoryInputPipe::new(stdin_script.as_bytes().to_vec());
     let stdout = wasmtime_wasi::p2::pipe::MemoryOutputPipe::new(usize::MAX);
