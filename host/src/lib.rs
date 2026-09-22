@@ -79,7 +79,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use parking_lot::{Mutex, ReentrantMutex, RwLock};
 use std::cell::RefCell;
 use wasmtime::component::{Component, HasData, Linker, Resource};
@@ -87,7 +87,9 @@ use wasmtime::{Engine, Store};
 
 use wasmos_runtime_api::config::OptimizationLevel;
 use wasmos_runtime_api::{
-    CompileCacheConfig, CompileOptions, ComponentSource, Runtime, RuntimeConfig,
+    CompileCacheConfig, CompileOptions, CompiledComponent as WasmosCompiledComponent,
+    ComponentSource, ExecutionContext, Runtime, RuntimeConfig, Value as WasmosValue,
+    WasiEnvironment,
 };
 use wasmos_runtime_wasmtime_v48::WasmtimeCompiledComponent;
 use wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime;
@@ -1286,39 +1288,6 @@ pub mod language_runtime {
     });
 }
 
-/// Bindgen against the vendored `openssl:component` subset
-/// (`host/wit/openssl/`) that the signature-verifier path needs.
-/// Bound against `verify-only` world — narrower than the real
-/// openssl-wasm `openssl` world so we only consume what we call.
-/// The composed binary (`openssl-composed.wasm`) exports the full
-/// surface; wasmtime is fine with the component exporting more
-/// than the world declares.
-pub mod openssl_ext {
-    wasmtime::component::bindgen!({
-        path: "wit/openssl",
-        world: "verify-only",
-        imports: { default: async },
-        exports: { default: async },
-    });
-}
-
-/// Per-Store state for the signature-verifier path. Holds just the
-/// WASI plumbing — openssl-composed needs WASI for things like
-/// clocks and random the way any other wasi-p2 component does.
-pub struct OpenSslState {
-    wasi: wasmtime_wasi::WasiCtx,
-    table: wasmtime_wasi::ResourceTable,
-}
-
-impl wasmtime_wasi::WasiView for OpenSslState {
-    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
-        wasmtime_wasi::WasiCtxView {
-            ctx: &mut self.wasi,
-            table: &mut self.table,
-        }
-    }
-}
-
 /// Lazily-instantiated openssl-wasm component used to verify
 /// signatures on registered providers. The component itself is
 /// loaded once and cached; each verification call builds a fresh
@@ -1337,12 +1306,10 @@ impl wasmtime_wasi::WasiView for OpenSslState {
 /// `Ed25519Signed` don't pay the load cost.
 pub struct OpenSslVerifier {
     /// The wasmos runtime facade the verifier compiles + instantiates
-    /// the openssl signature component against. Downstream still-
-    /// wasmtime-typed sites (bindgen'd `add_to_linker`, `Store::new`)
-    /// reach the engine via `self.runtime.engine()`.
+    /// the openssl signature component against.
     runtime: Arc<WasmtimeV48Runtime>,
     component_path: PathBuf,
-    component: tokio::sync::Mutex<Option<Component>>,
+    component: tokio::sync::Mutex<Option<WasmosCompiledComponent>>,
 }
 
 impl OpenSslVerifier {
@@ -1360,7 +1327,7 @@ impl OpenSslVerifier {
         }
     }
 
-    async fn ensure_loaded(&self) -> Result<Component> {
+    async fn ensure_loaded(&self) -> Result<WasmosCompiledComponent> {
         let mut g = self.component.lock().await;
         if let Some(c) = g.as_ref() {
             return Ok(c.clone());
@@ -1372,11 +1339,6 @@ impl OpenSslVerifier {
                 self.component_path.display()
             )
         })?;
-        // Compile via the wasmos runtime facade and downcast the
-        // returned `CompiledComponent` to the v48 adapter's
-        // `WasmtimeCompiledComponent` to hand the still-wasmtime-typed
-        // instantiate path (`VerifyOnly::instantiate_async` in
-        // `verify_ed25519`) its expected `wasmtime::component::Component`.
         let compiled = self
             .runtime
             .compile_component(
@@ -1388,59 +1350,82 @@ impl OpenSslVerifier {
             )
             .await
             .map_err(|e| anyhow!("compile openssl-composed.wasm: {e:?}"))?;
-        let component = compiled
-            .as_any()
-            .downcast_ref::<WasmtimeCompiledComponent>()
-            .ok_or_else(|| anyhow!("compile openssl-composed.wasm: adapter mismatch"))?
-            .inner
-            .clone();
-        *g = Some(component.clone());
-        Ok(component)
+        *g = Some(compiled.clone());
+        Ok(compiled)
     }
 
     /// Verify an Ed25519 signature over `message` using `pubkey`
     /// (32 raw bytes). Returns Ok(true) on a valid signature,
     /// Ok(false) on an arithmetically-valid-but-wrong signature,
     /// and Err on a setup / instantiation problem.
+    ///
+    /// Dispatched through wasmos's untyped `call_export` primitive
+    /// against the `openssl:component/pkey` interface; the `pkey`
+    /// resource returned by `from-raw-public` is threaded straight
+    /// back into `verify-message` as a
+    /// [`WasmosValue::Resource`] handle (no bindgen).
     pub async fn verify_ed25519(
         &self,
         pubkey: &[u8; 32],
         message: &[u8],
         signature: &[u8],
     ) -> Result<bool> {
-        use openssl_ext::exports::openssl::component::pkey::{EdwardsCurve, KeyType};
+        let compiled = self.ensure_loaded().await?;
+        let context = ExecutionContext::new().with_wasi(WasiEnvironment::inherit_stdio());
+        let mut instance = self
+            .runtime
+            .instantiate(&compiled, context)
+            .await
+            .map_err(|e| anyhow!("instantiate openssl-composed: {e:?}"))?;
 
-        let component = self.ensure_loaded().await?;
-        let engine = self.runtime.engine();
-        let mut linker: Linker<OpenSslState> = Linker::new(engine);
-        wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-            .map_err(|e| anyhow!("verifier WASI: {e}"))?;
-        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
-        builder.inherit_stdio();
-        let state = OpenSslState {
-            wasi: builder.build(),
-            table: wasmtime_wasi::ResourceTable::new(),
+        // `key-type` = variant { ..., ed(edwards-curve), ... };
+        // `edwards-curve` = enum { ed25519, ed448 }. Pass the tagged
+        // `ed(ed25519)` shape as the first arg to
+        // `[static]pkey.from-raw-public`.
+        let key_type = WasmosValue::Variant {
+            discriminant: "ed".to_string(),
+            payload: Some(Box::new(WasmosValue::Enum("ed25519".to_string()))),
         };
-        let mut store = Store::new(engine, state);
-        store
-            .set_fuel(u64::MAX / 2)
-            .map_err(|e| anyhow!("verifier set_fuel: {e}"))?;
-        store.set_epoch_deadline(1_000_000_000_000);
-        let instance = openssl_ext::VerifyOnly::instantiate_async(&mut store, &component, &linker)
+        let ret = instance
+            .call_export(
+                "openssl:component/pkey#[static]pkey.from-raw-public",
+                &[key_type, WasmosValue::Bytes(pubkey.to_vec().into())],
+            )
             .await
-            .map_err(|e| anyhow!("instantiate openssl-composed: {e}"))?;
-        let pkey_resource = instance.openssl_component_pkey().pkey();
-        let pk = pkey_resource
-            .call_from_raw_public(&mut store, KeyType::Ed(EdwardsCurve::Ed25519), &pubkey[..])
+            .map_err(|e| anyhow!("from-raw-public: {e:?}"))?;
+        let pkey_val = match ret.into_iter().next() {
+            Some(WasmosValue::Result(Ok(Some(v)))) => *v,
+            Some(WasmosValue::Result(Err(e))) => {
+                bail!("from-raw-public error: {:?}", e)
+            }
+            other => bail!("from-raw-public returned unexpected shape: {:?}", other),
+        };
+
+        // `verify-message: func(hash: option<hash>, message: list<u8>,
+        //  signature: list<u8>, padding: option<rsa-padding>)
+        //  -> result<bool, pkey-error>`. The resource `self` is the
+        // implicit first arg on a method call.
+        let ret = instance
+            .call_export(
+                "openssl:component/pkey#[method]pkey.verify-message",
+                &[
+                    pkey_val,
+                    WasmosValue::Option(None),
+                    WasmosValue::Bytes(message.to_vec().into()),
+                    WasmosValue::Bytes(signature.to_vec().into()),
+                    WasmosValue::Option(None),
+                ],
+            )
             .await
-            .map_err(|e| anyhow!("from-raw-public trap: {e}"))?
-            .map_err(|e| anyhow!("from-raw-public error: {e:?}"))?;
-        let ok = pkey_resource
-            .call_verify_message(&mut store, pk, None, message, signature, None)
-            .await
-            .map_err(|e| anyhow!("verify-message trap: {e}"))?
-            .map_err(|e| anyhow!("verify-message error: {e:?}"))?;
-        Ok(ok)
+            .map_err(|e| anyhow!("verify-message: {e:?}"))?;
+        match ret.into_iter().next() {
+            Some(WasmosValue::Result(Ok(Some(b)))) => match *b {
+                WasmosValue::Bool(v) => Ok(v),
+                other => bail!("verify-message ok payload not bool: {:?}", other),
+            },
+            Some(WasmosValue::Result(Err(e))) => bail!("verify-message error: {:?}", e),
+            other => bail!("verify-message returned unexpected shape: {:?}", other),
+        }
     }
 }
 
