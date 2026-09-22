@@ -1339,13 +1339,17 @@ impl wasmtime_wasi::WasiView for OpenSslState {
 /// trigger the verifier, so deployments that don't use
 /// `Ed25519Signed` don't pay the load cost.
 pub struct OpenSslVerifier {
-    engine: Engine,
+    /// S1-2 — holds the wasmos runtime facade instead of a raw
+    /// `wasmtime::Engine`. Reach the engine for still-wasmtime-typed
+    /// downstream (bindgen'd `add_to_linker`, `Store::new`) via
+    /// `self.runtime.engine()`.
+    runtime: Arc<WasmtimeV48Runtime>,
     component_path: PathBuf,
     component: tokio::sync::Mutex<Option<Component>>,
 }
 
 impl OpenSslVerifier {
-    fn new(engine: Engine) -> Self {
+    fn new(runtime: Arc<WasmtimeV48Runtime>) -> Self {
         let path = std::env::var("OPENSSL_WASM_PATH")
             .map(PathBuf::from)
             .unwrap_or_else(|_| {
@@ -1353,7 +1357,7 @@ impl OpenSslVerifier {
                 PathBuf::from(home).join("git/openssl-wasm/build/openssl-composed.wasm")
             });
         Self {
-            engine,
+            runtime,
             component_path: path,
             component: tokio::sync::Mutex::new(None),
         }
@@ -1371,7 +1375,7 @@ impl OpenSslVerifier {
                 self.component_path.display()
             )
         })?;
-        let component = Component::from_binary(&self.engine, &bytes)
+        let component = Component::from_binary(self.runtime.engine(), &bytes)
             .map_err(|e| anyhow!("compile openssl-composed.wasm: {e}"))?;
         *g = Some(component.clone());
         Ok(component)
@@ -1390,7 +1394,8 @@ impl OpenSslVerifier {
         use openssl_ext::exports::openssl::component::pkey::{EdwardsCurve, KeyType};
 
         let component = self.ensure_loaded().await?;
-        let mut linker: Linker<OpenSslState> = Linker::new(&self.engine);
+        let engine = self.runtime.engine();
+        let mut linker: Linker<OpenSslState> = Linker::new(engine);
         wasmtime_wasi::p2::add_to_linker_async(&mut linker)
             .map_err(|e| anyhow!("verifier WASI: {e}"))?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
@@ -1399,7 +1404,7 @@ impl OpenSslVerifier {
             wasi: builder.build(),
             table: wasmtime_wasi::ResourceTable::new(),
         };
-        let mut store = wasmtime::Store::new(&self.engine, state);
+        let mut store = wasmtime::Store::new(engine, state);
         store
             .set_fuel(u64::MAX / 2)
             .map_err(|e| anyhow!("verifier set_fuel: {e}"))?;
@@ -5390,7 +5395,7 @@ impl Host {
             CONTRACT_MAJOR
         );
 
-        let signature_verifier = Arc::new(OpenSslVerifier::new(engine.clone()));
+        let signature_verifier = Arc::new(OpenSslVerifier::new(runtime.clone()));
         // Component-cache cap is intentionally tiny: parsed
         // Components are big (100+ MB for postgis), and the win
         // is at small N (re-loading the same bundle, not a
