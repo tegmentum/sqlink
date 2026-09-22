@@ -51,7 +51,7 @@ pub enum ProviderKind {
     /// architecturally pure — providers can be authored in any
     /// language that targets the dynlink-provider world.
     WasmComponent {
-        engine: Engine,
+        runtime: std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
         component: Component,
         path: PathBuf,
     },
@@ -68,7 +68,7 @@ pub enum ProviderKind {
     /// extension. Serialized by the async mutex so concurrent dispatches
     /// against the same extension don't race the shared store.
     ResidentWasmComponent {
-        engine: Engine,
+        runtime: std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
         component: Component,
         path: PathBuf,
         /// The warm store + instance, materialized lazily on first
@@ -152,9 +152,12 @@ impl ProviderHandle {
     /// Build a wasm-component provider from a path on disk. Compiles
     /// the component once at registration time; subsequent invoke
     /// calls just instantiate it.
-    pub fn new_wasm_component(engine: Engine, path: PathBuf) -> Result<Self, String> {
+    pub fn new_wasm_component(
+        runtime: std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
+        path: PathBuf,
+    ) -> Result<Self, String> {
         let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
-        Self::new_wasm_component_from_bytes(engine, &bytes, path)
+        Self::new_wasm_component_from_bytes(runtime, &bytes, path)
     }
 
     /// Task #227: build a WARM-ONCE RESIDENT wasm-component provider.
@@ -162,7 +165,7 @@ impl ProviderHandle {
     /// the first invoke and reused for every subsequent call so guest
     /// state persists across tiers (vtab/hook/aggregate coherence).
     pub fn new_resident_wasm_component(
-        engine: Engine,
+        runtime: std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
         path: PathBuf,
         dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
         spi_db_path: String,
@@ -173,11 +176,11 @@ impl ProviderHandle {
         spawn_build_granted: bool,
     ) -> Result<Self, String> {
         let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
-        let component = Component::from_binary(&engine, &bytes)
+        let component = Component::from_binary(runtime.engine(), &bytes)
             .map_err(|e| format!("compile {}: {e}", path.display()))?;
         Ok(Self {
             kind: ProviderKind::ResidentWasmComponent {
-                engine,
+                runtime,
                 component,
                 path,
                 resident: Arc::new(AsyncMutex::new(None)),
@@ -197,7 +200,7 @@ impl ProviderHandle {
     /// loader-bridge sub-load), so no path read is needed. `path_label` is a
     /// synthetic identity for diagnostics + the resident store's `path` slot.
     pub fn new_resident_wasm_component_from_bytes(
-        engine: Engine,
+        runtime: std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
         bytes: &[u8],
         path_label: PathBuf,
         dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
@@ -208,11 +211,11 @@ impl ProviderHandle {
         s3_granted: bool,
         spawn_build_granted: bool,
     ) -> Result<Self, String> {
-        let component = Component::from_binary(&engine, bytes)
+        let component = Component::from_binary(runtime.engine(), bytes)
             .map_err(|e| format!("compile {}: {e}", path_label.display()))?;
         Ok(Self {
             kind: ProviderKind::ResidentWasmComponent {
-                engine,
+                runtime,
                 component,
                 path: path_label,
                 resident: Arc::new(AsyncMutex::new(None)),
@@ -231,15 +234,15 @@ impl ProviderHandle {
     /// `Host::register_wasm_provider` uses this to run a digest /
     /// trust check on the bytes before paying for compilation.
     pub fn new_wasm_component_from_bytes(
-        engine: Engine,
+        runtime: std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
         bytes: &[u8],
         path: PathBuf,
     ) -> Result<Self, String> {
-        let component = Component::from_binary(&engine, bytes)
+        let component = Component::from_binary(runtime.engine(), bytes)
             .map_err(|e| format!("compile {}: {e}", path.display()))?;
         Ok(Self {
             kind: ProviderKind::WasmComponent {
-                engine,
+                runtime,
                 component,
                 path,
             },
@@ -254,10 +257,10 @@ impl ProviderHandle {
                 next_stmt_id,
             } => sqlite_runtime_invoke(method, payload, conn, stmts, next_stmt_id).await,
             ProviderKind::WasmComponent {
-                engine, component, ..
-            } => wasm_component_invoke(method, payload, engine, component).await,
+                runtime, component, ..
+            } => wasm_component_invoke(method, payload, runtime.engine(), component).await,
             ProviderKind::ResidentWasmComponent {
-                engine,
+                runtime,
                 component,
                 resident,
                 dynlink_bridge,
@@ -271,7 +274,7 @@ impl ProviderHandle {
                 resident_wasm_component_invoke(
                     method,
                     payload,
-                    engine,
+                    runtime.engine(),
                     component,
                     resident,
                     dynlink_bridge.as_ref(),
@@ -298,11 +301,11 @@ impl ProviderHandle {
     pub fn is_streaming_cli(&self) -> bool {
         match &self.kind {
             ProviderKind::WasmComponent {
-                engine, component, ..
+                runtime, component, ..
             }
             | ProviderKind::ResidentWasmComponent {
-                engine, component, ..
-            } => imports_cli_stdout(component, engine),
+                runtime, component, ..
+            } => imports_cli_stdout(component, runtime.engine()),
             _ => false,
         }
     }
@@ -320,19 +323,19 @@ impl ProviderHandle {
     ) -> Result<(Vec<u8>, CliCapture), String> {
         match &self.kind {
             ProviderKind::WasmComponent {
-                engine, component, ..
-            } if imports_cli_stdout(component, engine) => {
+                runtime, component, ..
+            } if imports_cli_stdout(component, runtime.engine()) => {
                 // Fresh-store variant carries no loader handle and no grant.
-                wasm_component_invoke_cli(method, payload, engine, component, state, None, false)
+                wasm_component_invoke_cli(method, payload, runtime.engine(), component, state, None, false)
                     .await
             }
             ProviderKind::ResidentWasmComponent {
-                engine,
+                runtime,
                 component,
                 loader_host,
                 spawn_build_granted,
                 ..
-            } if imports_cli_stdout(component, engine) => {
+            } if imports_cli_stdout(component, runtime.engine()) => {
                 // The cli-aware (streaming) path needs the cli-stdout/stderr/
                 // state host imports satisfied with a per-invoke capture, which
                 // a plain resident store can't carry. A streaming dotcmd
@@ -346,7 +349,7 @@ impl ProviderHandle {
                 wasm_component_invoke_cli(
                     method,
                     payload,
-                    engine,
+                    runtime.engine(),
                     component,
                     state,
                     loader_host.clone(),
@@ -450,7 +453,7 @@ impl AsyncProviderBackend for HostWrapBackend {
             }
         }
         let provider = ProviderHandle::new_wasm_component_from_bytes(
-            self.runtime.engine().clone(),
+            self.runtime.clone(),
             &bytes,
             PathBuf::from(format!("blake3:{hex}")),
         )

@@ -57,7 +57,7 @@ async fn first_id(provider: &ProviderHandle, tier: &str) -> u64 {
 fn backed_host(ext: &str, file: &str) -> Option<Host> {
     let path = provider_path(file)?;
     let host = Host::new().unwrap();
-    let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path)
+    let provider = ProviderHandle::new_wasm_component(host.runtime().clone(), path)
         .unwrap_or_else(|e| panic!("compile {file}: {e}"));
     let manifest = tokio::runtime::Handle::current()
         .block_on(host.load_extension_as_provider(ext, provider))
@@ -76,7 +76,7 @@ async fn dispatch_scalar_via_provider() {
         return;
     };
     let host = Host::new().unwrap();
-    let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path).unwrap();
+    let provider = ProviderHandle::new_wasm_component(host.runtime().clone(), path).unwrap();
     let func_id = first_id(&provider, "scalars").await;
     let manifest = host
         .load_extension_as_provider("aba", provider)
@@ -103,7 +103,7 @@ async fn dispatch_collation_via_provider() {
         return;
     };
     let host = Host::new().unwrap();
-    let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path).unwrap();
+    let provider = ProviderHandle::new_wasm_component(host.runtime().clone(), path).unwrap();
     let coll_id = first_id(&provider, "collations").await;
     host.load_extension_as_provider("uint", provider)
         .await
@@ -134,7 +134,7 @@ async fn provider_backing_rejects_coherence_sensitive_tiers() {
             continue;
         };
         let host = Host::new().unwrap();
-        let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path).unwrap();
+        let provider = ProviderHandle::new_wasm_component(host.runtime().clone(), path).unwrap();
         let res = host.load_extension_as_provider(ext, provider).await;
         assert!(
             res.is_err(),

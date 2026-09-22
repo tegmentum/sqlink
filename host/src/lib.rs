@@ -5635,7 +5635,7 @@ impl Host {
             .verify(id, &digest)
             .map_err(|e| anyhow!("register {tenant}/{id}: {e}"))?;
         let provider = compose_provider::ProviderHandle::new_wasm_component_from_bytes(
-            self.engine.clone(),
+            self.runtime.clone(),
             &bytes,
             path,
         )
@@ -5696,7 +5696,7 @@ impl Host {
             }
         }
         let provider = compose_provider::ProviderHandle::new_wasm_component_from_bytes(
-            self.engine.clone(),
+            self.runtime.clone(),
             &bytes,
             path,
         )
@@ -6134,6 +6134,20 @@ impl Host {
         &self.engine_run
     }
 
+    /// S1a — wasmos runtime facade. Preferred over
+    /// [`Self::engine`] for new code; the two share the same
+    /// underlying wasmtime engine via
+    /// [`WasmtimeV48Runtime::from_engine`].
+    pub fn runtime(&self) -> &Arc<WasmtimeV48Runtime> {
+        &self.runtime
+    }
+
+    /// S1a — trusted-tier wasmos runtime facade, sibling of
+    /// [`Self::runtime`]. Wraps [`Self::engine_run`].
+    pub fn runtime_run(&self) -> &Arc<WasmtimeV48Runtime> {
+        &self.runtime_run
+    }
+
 
     /// Load an extension component from a host path, apply the policy,
     /// verify the manifest, and store the loaded component. Returns
@@ -6171,7 +6185,7 @@ impl Host {
             if let Some(prebuilt) = self.sub_ext_loader.prebuilt_path(&provider_sub_ext) {
                 let provider_id = sub_ext::sub_ext_provider_id(&provider_sub_ext);
                 let provider = compose_provider::ProviderHandle::new_resident_wasm_component(
-                    self.engine.clone(),
+                    self.runtime.clone(),
                     prebuilt.to_path_buf(),
                     Some(self.dynlink_bridge.clone()),
                     self.db_path(),
@@ -6276,7 +6290,7 @@ impl Host {
             .unwrap_or(false);
         if is_provider {
             let provider = compose_provider::ProviderHandle::new_resident_wasm_component(
-                self.engine.clone(),
+                self.runtime.clone(),
                 resolved.clone(),
                 // Task #228: thread the shared dynlink bridge so a resident
                 // provider importing `compose:dynlink/linker` (reentrant SPI)
@@ -6437,7 +6451,7 @@ impl Host {
             ));
         }
         let provider = compose_provider::ProviderHandle::new_resident_wasm_component_from_bytes(
-            self.engine.clone(),
+            self.runtime.clone(),
             bytes,
             PathBuf::from(format!("bytes:{name_hint}")),
             Some(self.dynlink_bridge.clone()),
@@ -6547,7 +6561,7 @@ impl Host {
             ));
         }
         let provider = compose_provider::ProviderHandle::new_resident_wasm_component_from_bytes(
-            self.engine.clone(),
+            self.runtime.clone(),
             &bytes,
             PathBuf::from(format!("describe:{name_hint}")),
             Some(self.dynlink_bridge.clone()),
@@ -12763,7 +12777,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         // the registration trampolines then dispatch through the warm store.
         let op_policy = crate::default_operator_policy();
         let provider = match compose_provider::ProviderHandle::new_resident_wasm_component(
-            self.host.engine().clone(),
+            self.host.runtime().clone(),
             PathBuf::from(&path),
             // Task #228: thread the shared dynlink bridge so a resident
             // provider importing `compose:dynlink/linker` (reentrant SPI)

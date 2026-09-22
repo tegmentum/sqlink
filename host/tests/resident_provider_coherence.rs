@@ -34,7 +34,7 @@ fn resident(host: &Host, file: &str) -> Option<ProviderHandle> {
         // These fixtures are the declarative (non-reentrant) tiers driven
         // directly through `Host`; no dynlink bridge needed (task #228).
         ProviderHandle::new_resident_wasm_component(
-            host.engine().clone(),
+            host.runtime().clone(),
             path,
             None,
             String::new(),

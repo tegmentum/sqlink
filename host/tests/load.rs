@@ -136,7 +136,7 @@ async fn wasm_component_provider_handles_invoke() {
     }
 
     let host = Host::new().unwrap();
-    let provider = ProviderHandle::new_wasm_component(host.engine().clone(), std_text)
+    let provider = ProviderHandle::new_wasm_component(host.runtime().clone(), std_text)
         .expect("compile std-text");
 
     // upper("hello") -> "HELLO"
@@ -328,7 +328,7 @@ async fn std_hashing_provider() {
         return;
     }
     let host = Host::new().unwrap();
-    let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path)
+    let provider = ProviderHandle::new_wasm_component(host.runtime().clone(), path)
         .expect("compile std-hashing");
 
     let req = {
@@ -383,7 +383,7 @@ async fn std_encoding_provider() {
         return;
     }
     let host = Host::new().unwrap();
-    let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path)
+    let provider = ProviderHandle::new_wasm_component(host.runtime().clone(), path)
         .expect("compile std-encoding");
 
     let encode_req = |bytes: Vec<u8>| -> Vec<u8> {

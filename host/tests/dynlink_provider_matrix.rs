@@ -29,7 +29,7 @@ fn provider_path(name: &str) -> Option<PathBuf> {
 fn open(name: &str) -> Option<(Host, ProviderHandle)> {
     let path = provider_path(name)?;
     let host = Host::new().unwrap();
-    let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path)
+    let provider = ProviderHandle::new_wasm_component(host.runtime().clone(), path)
         .unwrap_or_else(|e| panic!("compile {name}: {e}"));
     Some((host, provider))
 }

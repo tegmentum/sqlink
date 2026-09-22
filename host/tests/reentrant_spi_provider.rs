@@ -69,7 +69,7 @@ async fn resident_provider_satisfies_spi_import() {
     let host = Host::new().unwrap();
     // A resident provider (the spi surface is a resident-only concern).
     let provider = ProviderHandle::new_resident_wasm_component(
-        host.engine().clone(),
+        host.runtime().clone(),
         path,
         None,
         String::new(),
@@ -105,7 +105,7 @@ async fn eval_scalar_reenters_spi_execute() {
     };
     let host = Host::new().unwrap();
     let provider = ProviderHandle::new_resident_wasm_component(
-        host.engine().clone(),
+        host.runtime().clone(),
         path,
         None,
         String::new(),

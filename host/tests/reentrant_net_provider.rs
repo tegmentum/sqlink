@@ -40,7 +40,7 @@ async fn resident_provider_satisfies_http_import() {
     };
     let host = Host::new().unwrap();
     let provider = ProviderHandle::new_resident_wasm_component(
-        host.engine().clone(),
+        host.runtime().clone(),
         path,
         None,
         String::new(),
@@ -73,7 +73,7 @@ async fn resident_provider_satisfies_dns_import() {
     };
     let host = Host::new().unwrap();
     let provider = ProviderHandle::new_resident_wasm_component(
-        host.engine().clone(),
+        host.runtime().clone(),
         path,
         None,
         String::new(),
