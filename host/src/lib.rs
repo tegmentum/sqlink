@@ -6413,7 +6413,7 @@ impl Host {
             .unwrap_or(false)
         {
             let bridge = compose_provider::instantiate_dynlink_bridge(
-                self.runtime.engine(),
+                &self.runtime,
                 self.dynlink_bridge.clone(),
                 &bytes,
             )
@@ -6434,7 +6434,7 @@ impl Host {
             {
                 Some(
                     compose_provider::instantiate_dynlink_bridge_mutating(
-                        self.runtime.engine(),
+                        &self.runtime,
                         self.dynlink_bridge.clone(),
                         &bytes,
                     )

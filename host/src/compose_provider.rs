@@ -24,7 +24,7 @@ use parking_lot::{Mutex, ReentrantMutex, RwLock};
 use sqlite_component_core::db;
 use tokio::sync::Mutex as AsyncMutex;
 use wasmtime::component::{Component, Linker};
-use wasmtime::{Engine, Store};
+use wasmtime::Store;
 
 use crate::{cache, TenantedProviders, TrustPolicy};
 
@@ -769,12 +769,28 @@ pub struct MutatingBridgeInstance {
 /// call_describe()` and, per scalar spec, `.sqlite_extension_scalar_function()
 /// .call_call(func_id, args)`.
 pub async fn instantiate_dynlink_bridge(
-    engine: &Engine,
+    runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
     dynlink_bridge: datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>,
     bytes: &[u8],
 ) -> Result<BridgeInstance, String> {
-    let component = Component::from_binary(engine, bytes)
-        .map_err(|e| format!("compile dynlink bridge: {e}"))?;
+    use wasmos_runtime_api::{CompileOptions, ComponentSource, Runtime};
+    let engine = runtime.engine();
+    let compiled = runtime
+        .compile_component(
+            ComponentSource::Bytes {
+                bytes: bytes.to_vec().into(),
+                name: Some("dynlink-bridge".to_string()),
+            },
+            CompileOptions::default(),
+        )
+        .await
+        .map_err(|e| format!("compile dynlink bridge: {e:?}"))?;
+    let component = compiled
+        .as_any()
+        .downcast_ref::<wasmos_runtime_wasmtime_v48::WasmtimeCompiledComponent>()
+        .ok_or_else(|| "compile dynlink bridge: adapter mismatch".to_string())?
+        .inner
+        .clone();
     let mut linker: Linker<BridgeState> = Linker::new(engine);
     // WASI: added defensively (the bridge's own world doesn't import wasi,
     // but a future bridge variant might; unused linker entries are free).
@@ -821,12 +837,28 @@ pub async fn instantiate_dynlink_bridge(
 /// read-side `instantiate_dynlink_bridge`. The result is stashed
 /// under `Host::mutating_bridges`.
 pub async fn instantiate_dynlink_bridge_mutating(
-    engine: &Engine,
+    runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
     dynlink_bridge: datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>,
     bytes: &[u8],
 ) -> Result<MutatingBridgeInstance, String> {
-    let component = Component::from_binary(engine, bytes)
-        .map_err(|e| format!("compile dynlink bridge (mutating): {e}"))?;
+    use wasmos_runtime_api::{CompileOptions, ComponentSource, Runtime};
+    let engine = runtime.engine();
+    let compiled = runtime
+        .compile_component(
+            ComponentSource::Bytes {
+                bytes: bytes.to_vec().into(),
+                name: Some("dynlink-bridge-mutating".to_string()),
+            },
+            CompileOptions::default(),
+        )
+        .await
+        .map_err(|e| format!("compile dynlink bridge (mutating): {e:?}"))?;
+    let component = compiled
+        .as_any()
+        .downcast_ref::<wasmos_runtime_wasmtime_v48::WasmtimeCompiledComponent>()
+        .ok_or_else(|| "compile dynlink bridge (mutating): adapter mismatch".to_string())?
+        .inner
+        .clone();
     let mut linker: Linker<BridgeState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| format!("dynlink-bridge (mutating) wasi linker: {e}"))?;
