@@ -1756,13 +1756,22 @@ async fn resident_wasm_component_invoke(
         #[cfg(feature = "wasmos-install-path")]
         {
             let _ = (imports_http, imports_dns, imports_wal, imports_s3, imports_compression);
-            crate::wasmos_install_flow::install_wasmos_sqlink_imports(
-                engine,
-                &mut linker,
-                component,
+            // S1-4: build the wasmos HostImports set here and route
+            // it through the v48 async bridge. `wasmos_install_flow`
+            // owns the "compose the bundle" half; the "install onto
+            // a wasmtime linker" half stays local to this call site
+            // until S1-1 retires this linker in favour of an
+            // ExecutionContext-based instantiate.
+            let imports = crate::wasmos_install_flow::build_sqlink_imports(
                 dns_policy.clone(),
                 http_policy.clone(),
                 s3_granted,
+            );
+            wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+                engine,
+                &mut linker,
+                component,
+                &imports,
             )
             .map_err(|e| format!("resident wasmos install: {e}"))?;
         }
