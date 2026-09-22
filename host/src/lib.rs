@@ -6167,6 +6167,54 @@ impl Host {
         &self.runtime_run
     }
 
+    /// Compile a component via the wasmos runtime and extract the
+    /// underlying wasmtime `Component` for still-typed downstream
+    /// (bindgen'd instantiate, Store::new + linker.instantiate_async).
+    /// Small helper for S1-6 migration: consolidates the
+    /// `runtime.compile_component` + `WasmtimeCompiledComponent`
+    /// downcast pattern used at every non-precompiled compilation
+    /// site in the host.
+    async fn compile_via_runtime(&self, bytes: &[u8], name: &str) -> Result<Component> {
+        let compiled = self
+            .runtime
+            .compile_component(
+                ComponentSource::Bytes {
+                    bytes: bytes.to_vec().into(),
+                    name: Some(name.to_string()),
+                },
+                CompileOptions::default(),
+            )
+            .await
+            .map_err(|e| anyhow!("compile {name}: {e:?}"))?;
+        compiled
+            .as_any()
+            .downcast_ref::<WasmtimeCompiledComponent>()
+            .ok_or_else(|| anyhow!("compile {name}: adapter mismatch"))
+            .map(|c| c.inner.clone())
+    }
+
+    /// Trusted-tier variant of [`Self::compile_via_runtime`] using
+    /// the `runtime_run` engine (consume_fuel(false); no per-instance
+    /// fuel budgets). Called by CLI-shaped run paths.
+    async fn compile_via_runtime_run(&self, bytes: &[u8], name: &str) -> Result<Component> {
+        let compiled = self
+            .runtime_run
+            .compile_component(
+                ComponentSource::Bytes {
+                    bytes: bytes.to_vec().into(),
+                    name: Some(name.to_string()),
+                },
+                CompileOptions::default(),
+            )
+            .await
+            .map_err(|e| anyhow!("compile {name}: {e:?}"))?;
+        compiled
+            .as_any()
+            .downcast_ref::<WasmtimeCompiledComponent>()
+            .ok_or_else(|| anyhow!("compile {name}: adapter mismatch"))
+            .map(|c| c.inner.clone())
+    }
+
 
     /// Load an extension component from a host path, apply the policy,
     /// verify the manifest, and store the loaded component. Returns
@@ -6445,8 +6493,7 @@ impl Host {
         // loader-bridge sub-load / introspection callers.
         spawn_build_granted: bool,
     ) -> Result<String> {
-        let component = Component::from_binary(self.runtime.engine(), bytes)
-            .map_err(|e| anyhow!("compile provider {name_hint}: {e}"))?;
+        let component = self.compile_via_runtime(bytes, name_hint).await?;
         // Contract-version guard (#220): reject a component whose imported
         // `sqlite:extension` major differs from this host's BEFORE instantiating
         // — otherwise an ABI-skewed component traps cryptically or silently
@@ -9437,8 +9484,9 @@ impl Host {
         // extension engine has to emit. set_fuel is a no-op (and
         // would actually error) on this engine; just set the epoch
         // deadline.
-        let component = Component::from_binary(self.runtime_run.engine(), &bytes)
-            .map_err(|e| anyhow!("compile {}: {e}", path.display()))?;
+        let component = self
+            .compile_via_runtime_run(&bytes, &format!("run_wasm:{}", path.display()))
+            .await?;
         let linker = make_run_linker(&self.runtime_run, &component)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
