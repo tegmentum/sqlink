@@ -92,7 +92,10 @@ use wasmtime::{Cache, CacheConfig, Config, Engine};
 // `WasmtimeV48Runtime::from_engine`. See host/src/lib.rs `Host::new`
 // for the wiring.
 use wasmos_runtime_api::config::OptimizationLevel;
-use wasmos_runtime_api::{CompileCacheConfig, RuntimeConfig};
+use wasmos_runtime_api::{
+    CompileCacheConfig, CompileOptions, ComponentSource, Runtime, RuntimeConfig,
+};
+use wasmos_runtime_wasmtime_v48::WasmtimeCompiledComponent;
 use wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime;
 
 pub use policy::{Capability, DnsPolicy, HttpPolicy, Policy};
@@ -1375,8 +1378,29 @@ impl OpenSslVerifier {
                 self.component_path.display()
             )
         })?;
-        let component = Component::from_binary(self.runtime.engine(), &bytes)
-            .map_err(|e| anyhow!("compile openssl-composed.wasm: {e}"))?;
+        // S1-6 pilot — compile via the wasmos runtime facade. Returns a
+        // wasmos CompiledComponent; downcast to the v48 adapter's
+        // WasmtimeCompiledComponent to extract the wasmtime Component
+        // that the still-wasmtime-typed instantiate path
+        // (VerifyOnly::instantiate_async in verify_ed25519) needs.
+        // Retires when verify_ed25519 migrates to runtime.instantiate.
+        let compiled = self
+            .runtime
+            .compile_component(
+                ComponentSource::Bytes {
+                    bytes: bytes.into(),
+                    name: Some("openssl-composed".to_string()),
+                },
+                CompileOptions::default(),
+            )
+            .await
+            .map_err(|e| anyhow!("compile openssl-composed.wasm: {e:?}"))?;
+        let component = compiled
+            .as_any()
+            .downcast_ref::<WasmtimeCompiledComponent>()
+            .ok_or_else(|| anyhow!("compile openssl-composed.wasm: adapter mismatch"))?
+            .inner
+            .clone();
         *g = Some(component.clone());
         Ok(component)
     }
