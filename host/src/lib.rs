@@ -12917,13 +12917,6 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     }
 }
 
-// S1b — sqlink's own `spawn_epoch_bumper` retired. The wasmos
-// runtime now owns the epoch ticker (`RuntimeConfig::with_epoch_tick_period`
-// wired in `Host::new`); it bumps the shared wasmtime engine on the
-// same cadence via a background thread the wasmos runtime holds and
-// tears down on last-clone drop. See
-// `wasmos-runtime-wasmtime-v48/src/runtime.rs` `EpochTicker`.
-
 #[cfg(test)]
 mod http_policy_tests {
     //! Exercise the policy gate in `check_http_policy`. The
