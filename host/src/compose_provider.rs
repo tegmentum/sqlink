@@ -23,7 +23,7 @@ use datalink_dynlink::{
 use parking_lot::{Mutex, ReentrantMutex, RwLock};
 use sqlite_component_core::db;
 use tokio::sync::Mutex as AsyncMutex;
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, HasData, Linker};
 use wasmtime::Store;
 
 use crate::{cache, TenantedProviders, TrustPolicy};
@@ -631,7 +631,7 @@ datalink_dynlink::impl_datalink_dynlink_async_host!(
 
 /// HasData tag for the resident store's compose:dynlink linker wiring.
 pub struct ProviderStateHostData;
-impl wasmtime::component::HasData for ProviderStateHostData {
+impl HasData for ProviderStateHostData {
     type Data<'a> = ProviderStateHostWrap<'a>;
 }
 
@@ -708,7 +708,7 @@ datalink_dynlink::impl_datalink_dynlink_async_host!(
 /// `HasData` marker so `compose:dynlink/linker::add_to_linker` can thread a
 /// `BridgeStateHostWrap` accessor built from `&mut BridgeState`.
 pub struct BridgeStateHostData;
-impl wasmtime::component::HasData for BridgeStateHostData {
+impl HasData for BridgeStateHostData {
     type Data<'a> = BridgeStateHostWrap<'a>;
 }
 
@@ -1117,7 +1117,7 @@ pub fn imports_cli_state(component: &Component, runtime: &std::sync::Arc<wasmos_
 /// http/dns `Host` impls read only `self.{http,dns}_policy`), so — unlike spi
 /// — no borrow-splitting wrap is needed.
 pub struct ProviderNetData;
-impl wasmtime::component::HasData for ProviderNetData {
+impl HasData for ProviderNetData {
     type Data<'a> = &'a mut ProviderState;
 }
 
@@ -1126,7 +1126,7 @@ impl wasmtime::component::HasData for ProviderNetData {
 /// `ProviderSpiWrap` view the generated `spi::add_to_linker` builds from
 /// the store state.
 pub struct ProviderSpiData;
-impl wasmtime::component::HasData for ProviderSpiData {
+impl HasData for ProviderSpiData {
     type Data<'a> = ProviderSpiWrap<'a>;
 }
 
@@ -1432,7 +1432,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
 /// #220 full-port: `HasData` marker for wiring `sqlite:extension/session`
 /// onto a resident `ProviderState`'s linker.
 pub struct ProviderSessionData;
-impl wasmtime::component::HasData for ProviderSessionData {
+impl HasData for ProviderSessionData {
     type Data<'a> = ProviderSessionWrap<'a>;
 }
 
@@ -1610,7 +1610,7 @@ impl<'a> crate::loaded::sqlite::extension::session::Host for ProviderSessionWrap
 /// #220 full-port: `HasData` marker for wiring `sqlite:extension/loader-bridge`
 /// onto a resident `ProviderState`'s linker.
 pub struct ProviderLoaderBridgeData;
-impl wasmtime::component::HasData for ProviderLoaderBridgeData {
+impl HasData for ProviderLoaderBridgeData {
     type Data<'a> = ProviderLoaderBridgeWrap<'a>;
 }
 
@@ -2002,7 +2002,7 @@ pub struct ProviderCliState {
 /// #220: `HasData` marker to wire `sqlite:extension/spi` onto the cli store's
 /// linker, reusing `ProviderSpiWrap` (built from `ProviderCliState`'s fields).
 pub struct ProviderCliSpiData;
-impl wasmtime::component::HasData for ProviderCliSpiData {
+impl HasData for ProviderCliSpiData {
     type Data<'a> = ProviderSpiWrap<'a>;
 }
 
@@ -2021,7 +2021,7 @@ use crate::dynlink_provider_cli::sqlite::extension::types::SqlValue as CliSqlVal
 /// `HasData` marker so the generated `add_to_linker` can thread a
 /// `&mut ProviderCliState` accessor (mirrors `LoadedHostData`).
 pub struct ProviderCliHostData;
-impl wasmtime::component::HasData for ProviderCliHostData {
+impl HasData for ProviderCliHostData {
     type Data<'a> = &'a mut ProviderCliState;
 }
 
