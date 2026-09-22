@@ -5760,7 +5760,6 @@ dependencies = [
  "hickory-resolver",
  "http-extension",
  "humansize-extension",
- "hyper",
  "hyperloglog-extension",
  "iban-extension",
  "ical-extension",
@@ -5830,7 +5829,6 @@ dependencies = [
  "wasmos-runtime-wasmtime-v48",
  "wasmtime",
  "wasmtime-wasi",
- "wasmtime-wasi-http",
  "wat 1.240.0",
  "zorder-extension",
 ]
