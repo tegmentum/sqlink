@@ -83,7 +83,7 @@ use anyhow::{anyhow, Result};
 use parking_lot::{Mutex, ReentrantMutex, RwLock};
 use std::cell::RefCell;
 use wasmtime::component::{Component, Linker};
-use wasmtime::{Cache, CacheConfig, Config, Engine, Store};
+use wasmtime::{Engine, Store};
 
 // S1 — wasmos runtime facade. Host::new builds a
 // `WasmtimeV48Runtime` alongside the raw `wasmtime::Engine` so
@@ -5226,20 +5226,12 @@ fn compile_cache_dir() -> Option<std::path::PathBuf> {
     None
 }
 
-/// Build a wasmtime compilation cache rooted at [`compile_cache_dir`].
-/// Creates the directory if missing. Errors propagate out so the
-/// caller can degrade gracefully (cache disabled, host still works).
-fn build_compile_cache() -> Result<Cache> {
-    let dir = compile_cache_dir().ok_or_else(|| {
-        anyhow!("no cache directory available (HOME / XDG_CACHE_HOME unset and SQLITE_WASM_COMPILE_CACHE not set)")
-    })?;
-    if let Err(e) = std::fs::create_dir_all(&dir) {
-        return Err(anyhow!("create cache directory {}: {e}", dir.display()));
-    }
-    let mut cfg = CacheConfig::new();
-    cfg.with_directory(&dir);
-    Cache::new(cfg).map_err(|e| anyhow!("init wasmtime cache at {}: {e}", dir.display()))
-}
+// S1-8 slice 2 — sqlink's own `build_compile_cache` retired. The
+// wasmos v48 runtime constructs and configures the wasmtime `Cache`
+// internally from `RuntimeConfig::compile_cache` (a
+// `CompileCacheConfig { directory, max_size_bytes }`). `compile_cache_dir`
+// above still owns the sqlink-specific path resolution
+// (SQLITE_WASM_COMPILE_CACHE / XDG_CACHE_HOME / HOME priority).
 
 /// Return value from [`Host::record_function_for_extension`]. Bundles
 /// the per-function context that loader-bridge dispatch sites need:
@@ -5259,125 +5251,26 @@ pub struct RecordedFunction {
 }
 
 impl Host {
-    /// Build a Host with sensible default Engine config (fuel, epoch,
-    /// component-model, pooling). Spawns the epoch-bumper thread.
+    /// Build a Host with sensible default engine config (fuel, epoch,
+    /// component-model, memory tuning, compile cache).
     pub fn new() -> Result<Self> {
-        let mut config = Config::new();
-        config.wasm_component_model(true);
-        // Enable wasm exception-handling (CGAL-in-sfcgal-wasm relies on
-        // C++ throws for invariant checks in Approx_offset_base_2 etc.).
-        // Guest-side EH still needs a wasi-sdk audit before throws unwind
-        // through static SFCGAL library frames, but enabling on the host
-        // side is a prerequisite. See #692.
-        config.wasm_exceptions(true);
-        config.async_support(true);
-        // Enables the concurrent canonical ABI used by the reactor's
-        // bindgen (`imports/exports: { default: async | store }`) for
-        // live-SPI re-entry. See host/SPI-LIVE-ARCHITECTURE.md for the design.
-        config.wasm_component_model_async(true);
-        // PLAN-tvm-integration Phase 3: accept wasm64-wasip2 guests
-        // when (and if) the rustc / wasi-sdk toolchain ships them.
-        // Enabling this is free for wasm32 modules — the engine
-        // just gains the ability to ALSO instantiate wasm64. Once a
-        // buildable wasm64-wasip2 sqlite-lib exists, the mem64 path
-        // works without further host changes.
-        config.wasm_memory64(true);
-        // PLAN-browser-runtime Path 3: enable the multi-memory
-        // proposal so the host can run wasm modules that declare
-        // multiple linear memories. Required by the tvm-guest-mm
-        // substrate (multi-pool layout) used by the composed
-        // cli+sqlite-lib component. Enabling is free for single-
-        // memory modules; the engine just gains the ability to ALSO
-        // instantiate multi-memory ones.
-        config.wasm_multi_memory(true);
-        config.consume_fuel(true);
-        config.epoch_interruption(true);
-        config.cranelift_opt_level(wasmtime::OptLevel::Speed);
-        // Performance knobs: every backedge in the wasm module pays
-        // an epoch check + (optionally) a fuel decrement. Keeping
-        // both enabled at the Engine level is mandatory for
-        // extension safety, but we tune the bound-check + memory
-        // layout to make the rest of the hot path cheaper.
+        // S1-8 slice 2 — sqlink's own `wasmtime::Config` construction
+        // is retired. The wasmos v48 runtime owns Config building end
+        // to end via `RuntimeConfig` (portable knobs) +
+        // `WasmtimeV48Tuning` (wasmtime-specific memory / cranelift
+        // knobs). Both engines derive from the same base config;
+        // `runtime_run` only differs in `consume_fuel(false)` for the
+        // trusted-tier codegen path.
         //
-        // static_memory_maximum_size: preallocate 4 GiB of guard
-        // pages so loads/stores can omit bounds checks against
-        // memory.size  every linear-memory access becomes a
-        // straight `mov` + signal-handler-handled guard rather
-        // than a compare + conditional jump. Wasmtime catches the
-        // guard hit and traps with OOB; behavior identical.
-        //
-        // The pages are address-space only (no physical commit
-        // until faulted) so this is "free" beyond reserving
-        // virtual address space. macOS 11+ and Linux handle this
-        // pattern natively; older 32-bit hosts would need a
-        // smaller value, but we're targeting 64-bit hosts.
-        config.memory_reservation(4 * 1024 * 1024 * 1024);
-        config.memory_guard_size(2 * 1024 * 1024 * 1024);
-        // Don't canonicalize NaN bit patterns on every f64/f32
-        // op  the canonicalization is for determinism across
-        // hosts (we don't run wasm in lockstep) at the cost of
-        // a few cycles per fp op. Default is already false, set
-        // explicit for clarity + to defend against wasmtime
-        // version changes.
-        config.cranelift_nan_canonicalization(false);
-
-        // On-disk compilation cache. Wasmtime hashes (module bytes,
-        // compiler config, wasmtime version) and stashes the
-        // compiled artifact under the cache directory; subsequent
-        // `Component::new` / `Engine::precompile_component_file`
-        // calls hit the cache instead of re-running cranelift.
-        //
-        // Orthogonal to the .cwasm precompile path (which is an
-        // explicit precompile-to-disk for the cli component): cwasm
-        // wins when the same artifact is shipped to many hosts; this
-        // cache wins for any other component the host compiles on
-        // demand. They coexist  cwasm load skips compilation
-        // entirely, but Component::new for embedded / loaded
-        // extensions and cli embeds still pays a compile cost the
-        // first time.
-        //
-        // Failure to build the cache is non-fatal: extension load
-        // still works without the cache, just slower. We log a
-        // warning so an operator notices a misconfigured cache dir.
-        let cache = match build_compile_cache() {
-            Ok(c) => Some(c),
-            Err(e) => {
-                tracing::warn!("wasmtime compile cache disabled: {e}");
-                None
-            }
-        };
-        if let Some(ref cache) = cache {
-            config.cache(Some(cache.clone()));
-        }
-
-        let engine = Engine::new(&config).map_err(|e| anyhow!("create wasmtime engine: {e}"))?;
-
-        // engine_run: same config minus consume_fuel. Used to compile
-        // + run trusted-tier components (the cli itself, runnables
-        // installed by the operator). Re-deriving from the same
-        // Config base keeps every other setting (memory layout,
-        // SIMD, async, opt level) identical so the only delta in
-        // emitted code is the absence of fuel-decrement instructions.
-        let mut run_config = config.clone();
-        run_config.consume_fuel(false);
-        let engine_run =
-            Engine::new(&run_config).map_err(|e| anyhow!("create wasmtime run-engine: {e}"))?;
-
-        // S1a — wrap both engines with `WasmtimeV48Runtime::from_engine`
-        // so downstream code can migrate off `self.engine` /
-        // `self.engine_run` incrementally onto the wasmos surface.
-        // The RuntimeConfig here mirrors the wasmtime Config's
-        // semantic intent so `Runtime::identity()` returns a
-        // fingerprint that reflects sqlink's actual tuning. Downstream
-        // slices retire the raw `engine` / `engine_run` fields once
-        // every consumer has migrated to `runtime` / `runtime_run`.
-        //
-        // S1b — epoch ticker moves to wasmos. `with_epoch_tick_period`
-        // has the wasmos runtime spawn its own background thread
-        // that calls `engine.increment_epoch()` at the given cadence;
-        // because `from_engine` wraps the SAME wasmtime engine sqlink
-        // already owns, wasmos's ticker acts on the shared engine.
-        // Retires `spawn_epoch_bumper` on both engines.
+        // Every wasmtime `Config` setter previously called inline —
+        // wasm_component_model, wasm_exceptions, async_support,
+        // wasm_component_model_async, wasm_memory64, wasm_multi_memory,
+        // consume_fuel, epoch_interruption, cranelift_opt_level,
+        // memory_reservation, memory_guard_size,
+        // cranelift_nan_canonicalization, cache — is now expressed
+        // through the wasmos knob set. The v48 adapter's `build_engine`
+        // maps every one to the same wasmtime setter, so behaviour is
+        // identical.
         let build_runtime_config = |consume_fuel: bool| -> RuntimeConfig {
             let mut cfg = RuntimeConfig::default()
                 .with_optimization(OptimizationLevel::Speed)
@@ -5387,21 +5280,30 @@ impl Host {
                 .with_wasm_multi_memory(true)
                 .with_consume_fuel(consume_fuel)
                 .with_epoch_tick_period(EPOCH_TICK);
-            // Compile cache — mirror the wasmtime cache dir sqlink
-            // just wired above so `Runtime::identity()`'s config_hash
-            // reflects the same cache config.
             if let Some(dir) = compile_cache_dir() {
                 cfg = cfg.with_compile_cache(CompileCacheConfig::new(dir));
             }
             cfg
         };
+        let tuning = wasmos_runtime_wasmtime_v48::WasmtimeV48Tuning::default()
+            // 4 GiB static-memory reservation for bounds-check
+            // elision — every linear-memory access is a straight
+            // `mov` + signal-handler guard instead of a compare +
+            // branch. Virtual address space only; no physical commit.
+            .with_memory_reservation(4 * 1024 * 1024 * 1024)
+            .with_memory_guard_size(2 * 1024 * 1024 * 1024)
+            // Don't canonicalize NaN bit patterns on every f64/f32
+            // op — determinism across hosts isn't a sqlink invariant
+            // (we don't run wasm in lockstep) and the canonicalisation
+            // costs a few cycles per fp op.
+            .with_cranelift_nan_canonicalization(false);
         let runtime = Arc::new(
-            WasmtimeV48Runtime::from_engine(engine.clone(), build_runtime_config(true))
-                .map_err(|e| anyhow!("wrap wasmtime engine as wasmos runtime: {e:?}"))?,
+            WasmtimeV48Runtime::new_with_tuning(build_runtime_config(true), tuning.clone())
+                .map_err(|e| anyhow!("build wasmos runtime: {e:?}"))?,
         );
         let runtime_run = Arc::new(
-            WasmtimeV48Runtime::from_engine(engine_run.clone(), build_runtime_config(false))
-                .map_err(|e| anyhow!("wrap wasmtime run-engine as wasmos runtime: {e:?}"))?,
+            WasmtimeV48Runtime::new_with_tuning(build_runtime_config(false), tuning)
+                .map_err(|e| anyhow!("build wasmos run-runtime: {e:?}"))?,
         );
 
         // F2: observable host contract version. Logged once per Host
