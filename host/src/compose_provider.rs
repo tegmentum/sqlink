@@ -393,11 +393,10 @@ fn invoke_to_dl(e: String) -> DlError {
 /// and holds no borrow of `Host`.
 #[derive(Clone)]
 pub struct HostWrapBackend {
-    /// S1-1 — was `engine: Engine`; now holds the wasmos runtime
-    /// facade. Downstream sites that still take a
-    /// `wasmtime::Engine` (ProviderHandle::new_wasm_component_from_bytes,
-    /// etc.) reach it via `self.runtime.engine()` (ADR §17 escape
-    /// hatch) until they migrate to runtime.compile_component.
+    /// The wasmos runtime facade. Downstream sites that still take
+    /// a `wasmtime::Engine`
+    /// (`ProviderHandle::new_wasm_component_from_bytes`, etc.) reach
+    /// it via `self.runtime.engine()` (ADR §17 escape hatch).
     pub runtime: std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
     pub compose_providers: Arc<RwLock<TenantedProviders>>,
     pub trust_policy: Arc<RwLock<TrustPolicy>>,

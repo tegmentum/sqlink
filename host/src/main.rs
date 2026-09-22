@@ -927,12 +927,6 @@ async fn main() -> Result<()> {
     } else {
         let component_bytes = std::fs::read(&component_path)
             .map_err(|e| anyhow!("read {}: {e}", component_path.display()))?;
-        // S1-3 slice — non-cwasm compile now routes through wasmos
-        // `Host::compile_component_run`, which flows through
-        // `runtime_run.compile_component` and downcast to a
-        // wasmtime Component for still-typed downstream. The engine
-        // shared with the rest of main.rs is the same one wasmos
-        // built.
         host.compile_component_run(&component_bytes, "cli-component")
             .await?
     };
@@ -1002,18 +996,8 @@ async fn main() -> Result<()> {
     // tvm:memory after Stage 5f (it's a pure SPI client), but the
     // composed `cli + sqlite-lib` runnable does. sqlite-pcache-tvm
     // and sqlite-vfs-tvm use wit-bindgen-backed cold tiers on
-    // wasm32 unconditionally.
-    // ADR-0029 Phase 6.9 D2 Session 15a — wasmos install path
-    // (mirror of the lib.rs migration). Replaces the deprecated
-    // `tvm_wasmtime::add_to_linker(&mut linker)?` with the
-    // sqlink-local `wasmos_tvm::install_tvm_memory_imports`
-    // helper. Same host-side semantics; handler reaches
-    // State.tvm via ctx.consumer_state::<State>().as_mut().
-    // S1-4 — inline builder + async_bridge so
-    // `sqlink_host::wasmos_tvm` stays wasmtime-free at its public
-    // API surface. The wasmtime linker naming here goes away when
-    // S1-3 migrates this CLI runner to `runtime.instantiate` +
-    // ExecutionContext.
+    // wasm32 unconditionally. Handler reaches `State.tvm` via
+    // `ctx.consumer_state::<State>().as_mut()`.
     let tvm_imports = sqlink_host::wasmos_tvm::build_tvm_memory_imports::<State>();
     wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
         &engine,

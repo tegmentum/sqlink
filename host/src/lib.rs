@@ -85,12 +85,6 @@ use std::cell::RefCell;
 use wasmtime::component::{Component, HasData, Linker, Resource};
 use wasmtime::{Engine, Store};
 
-// S1 — wasmos runtime facade. Host::new builds a
-// `WasmtimeV48Runtime` alongside the raw `wasmtime::Engine` so
-// downstream code can migrate to the wasmos surface incrementally
-// (S1b/c/...); the two share the same underlying engine via
-// `WasmtimeV48Runtime::from_engine`. See host/src/lib.rs `Host::new`
-// for the wiring.
 use wasmos_runtime_api::config::OptimizationLevel;
 use wasmos_runtime_api::{
     CompileCacheConfig, CompileOptions, ComponentSource, Runtime, RuntimeConfig,
@@ -1342,10 +1336,10 @@ impl wasmtime_wasi::WasiView for OpenSslState {
 /// trigger the verifier, so deployments that don't use
 /// `Ed25519Signed` don't pay the load cost.
 pub struct OpenSslVerifier {
-    /// S1-2 — holds the wasmos runtime facade instead of a raw
-    /// `wasmtime::Engine`. Reach the engine for still-wasmtime-typed
-    /// downstream (bindgen'd `add_to_linker`, `Store::new`) via
-    /// `self.runtime.engine()`.
+    /// The wasmos runtime facade the verifier compiles + instantiates
+    /// the openssl signature component against. Downstream still-
+    /// wasmtime-typed sites (bindgen'd `add_to_linker`, `Store::new`)
+    /// reach the engine via `self.runtime.engine()`.
     runtime: Arc<WasmtimeV48Runtime>,
     component_path: PathBuf,
     component: tokio::sync::Mutex<Option<Component>>,
@@ -1378,12 +1372,11 @@ impl OpenSslVerifier {
                 self.component_path.display()
             )
         })?;
-        // S1-6 pilot — compile via the wasmos runtime facade. Returns a
-        // wasmos CompiledComponent; downcast to the v48 adapter's
-        // WasmtimeCompiledComponent to extract the wasmtime Component
-        // that the still-wasmtime-typed instantiate path
-        // (VerifyOnly::instantiate_async in verify_ed25519) needs.
-        // Retires when verify_ed25519 migrates to runtime.instantiate.
+        // Compile via the wasmos runtime facade and downcast the
+        // returned `CompiledComponent` to the v48 adapter's
+        // `WasmtimeCompiledComponent` to hand the still-wasmtime-typed
+        // instantiate path (`VerifyOnly::instantiate_async` in
+        // `verify_ed25519`) its expected `wasmtime::component::Component`.
         let compiled = self
             .runtime
             .compile_component(
@@ -1486,8 +1479,6 @@ async fn verify_against_anchors(
 // shared `datalink_dynlink::AsyncDynLinkBridge`; sqlink's trust/CAS/tenancy +
 // the SqliteRuntime/WasmComponent providers live in its `AsyncProviderBackend`
 // impls (`compose_provider::{HostWrapBackend, RunBackend}`).
-// S1-8 — `Resource` is now imported at the top of the file alongside
-// the other wasmtime::component types.
 
 use compose::sys::compose::types::Error as ComposeError;
 
@@ -4587,22 +4578,12 @@ fn make_run_linker(
         |_state: &mut RunState| RunLoaderStub,
     )
     .map_err(|e| anyhow!("run linker extension-loader stub: {e}"))?;
-    // tvm:memory wiring  cli + sqlite-lib-composed runnables
-    // always import tvm:memory/{types,manager,bytes,diagnostics}
+    // Wire tvm:memory/{types,manager,bytes,diagnostics}. Both the
+    // cli and the cli+sqlite-lib-composed runnables import all four
     // because sqlite-pcache-tvm + sqlite-vfs-tvm use the
     // wit-bindgen-backed cold tiers on wasm32 unconditionally.
-    // ADR-0029 Phase 6.9 D2 Session 15a — wasmos install path.
-    // Replaces the deprecated `tvm_wasmtime::add_to_linker(&mut linker)?`
-    // with the sqlink-local `wasmos_tvm::install_tvm_memory_imports`
-    // helper that wires all three tvm:memory@0.1.0 interfaces via
-    // the wasmos v46 async_bridge. Same host-side semantics
-    // (handler reaches RunState.tvm via
-    // ctx.consumer_state::<RunState>().as_mut()); portable across
-    // every wasmos-backed adapter that gains a v46-flavored bridge.
-    // S1-4 — inline the wasmos_tvm builder + async_bridge call so
-    // wasmos_tvm.rs's public API stays wasmtime-free (only this
-    // callsite names the wasmtime linker, and that goes away when
-    // S1-7 retires the linker in favour of ExecutionContext).
+    // Handlers reach `RunState.tvm` via
+    // `ctx.consumer_state::<RunState>().as_mut()`.
     let tvm_imports = crate::wasmos_tvm::build_tvm_memory_imports::<RunState>();
     wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
         engine,
@@ -4737,15 +4718,15 @@ type LanguageRuntimes = Arc<RwLock<HashMap<(String, String), Arc<LanguageRuntime
 ///     decode, value comparison)  5-10% in tight loops.
 #[derive(Clone)]
 pub struct Host {
-    /// S1 — wasmos runtime facade. Every internal `self.engine`
-    /// use in this file has migrated to `self.runtime.engine()`;
-    /// the raw `engine: Engine` field is gone as of the S1
-    /// engine-field retirement slice.
+    /// The extension-tier wasmos runtime — the fuel-metered engine
+    /// every loaded `sqlite:extension` component compiles and runs
+    /// against.
     runtime: Arc<WasmtimeV48Runtime>,
-    /// S1 — trusted-tier wasmos runtime facade. Trusted-tier
-    /// counterpart of `runtime`; built with `consume_fuel(false)`
-    /// so per-instance fuel budgets no-op via the ADR §12
-    /// CapabilityError path documented on
+    /// The trusted-tier wasmos runtime — the CLI runnable, the
+    /// precompile subcommand, and the run_wasm path all use this
+    /// engine. Built with `consume_fuel(false)` so per-instance fuel
+    /// budgets no-op via the ADR §12 `CapabilityError` path
+    /// documented on
     /// [`wasmos_runtime_api::RuntimeConfig::consume_fuel`].
     runtime_run: Arc<WasmtimeV48Runtime>,
     /// Database path the cli is using. Loaded extensions' spi.execute
@@ -5225,13 +5206,6 @@ fn compile_cache_dir() -> Option<std::path::PathBuf> {
     None
 }
 
-// S1-8 slice 2 — sqlink's own `build_compile_cache` retired. The
-// wasmos v48 runtime constructs and configures the wasmtime `Cache`
-// internally from `RuntimeConfig::compile_cache` (a
-// `CompileCacheConfig { directory, max_size_bytes }`). `compile_cache_dir`
-// above still owns the sqlink-specific path resolution
-// (SQLITE_WASM_COMPILE_CACHE / XDG_CACHE_HOME / HOME priority).
-
 /// Return value from [`Host::record_function_for_extension`]. Bundles
 /// the per-function context that loader-bridge dispatch sites need:
 /// the qualified SQL identifier to register, the prefix + expansion
@@ -5253,23 +5227,9 @@ impl Host {
     /// Build a Host with sensible default engine config (fuel, epoch,
     /// component-model, memory tuning, compile cache).
     pub fn new() -> Result<Self> {
-        // S1-8 slice 2 — sqlink's own `wasmtime::Config` construction
-        // is retired. The wasmos v48 runtime owns Config building end
-        // to end via `RuntimeConfig` (portable knobs) +
-        // `WasmtimeV48Tuning` (wasmtime-specific memory / cranelift
-        // knobs). Both engines derive from the same base config;
-        // `runtime_run` only differs in `consume_fuel(false)` for the
+        // Both engines derive from the same base config;
+        // `runtime_run` differs only in `consume_fuel(false)` for the
         // trusted-tier codegen path.
-        //
-        // Every wasmtime `Config` setter previously called inline —
-        // wasm_component_model, wasm_exceptions, async_support,
-        // wasm_component_model_async, wasm_memory64, wasm_multi_memory,
-        // consume_fuel, epoch_interruption, cranelift_opt_level,
-        // memory_reservation, memory_guard_size,
-        // cranelift_nan_canonicalization, cache — is now expressed
-        // through the wasmos knob set. The v48 adapter's `build_engine`
-        // maps every one to the same wasmtime setter, so behaviour is
-        // identical.
         let build_runtime_config = |consume_fuel: bool| -> RuntimeConfig {
             let mut cfg = RuntimeConfig::default()
                 .with_optimization(OptimizationLevel::Speed)
@@ -6056,15 +6016,14 @@ impl Host {
         self.runtime_run.engine()
     }
 
-    /// S1a — wasmos runtime facade. Preferred over
-    /// [`Self::engine`] for new code; the two share the same
-    /// underlying wasmtime engine via
-    /// [`WasmtimeV48Runtime::from_engine`].
+    /// The extension-tier wasmos runtime — the fuel-metered engine
+    /// every loaded `sqlite:extension` component compiles and runs
+    /// against.
     pub fn runtime(&self) -> &Arc<WasmtimeV48Runtime> {
         &self.runtime
     }
 
-    /// S1a — trusted-tier wasmos runtime facade, sibling of
+    /// The trusted-tier wasmos runtime, sibling of
     /// [`Self::runtime`]. Wraps [`Self::engine_run`].
     pub fn runtime_run(&self) -> &Arc<WasmtimeV48Runtime> {
         &self.runtime_run
@@ -13289,8 +13248,6 @@ pub async fn run_cli_capture(
     .map_err(|e| anyhow!("wire spi-loader: {e}"))?;
     // ADR-0029 Phase 6.9 D2 Session 15a — wasmos install path (see
     // make_run_linker for rationale).
-    // S1-4 — inline builder + async_bridge; see the sibling site
-    // above (register_wasi_run_bindings) for the pattern rationale.
     let tvm_imports = crate::wasmos_tvm::build_tvm_memory_imports::<CliRunState>();
     wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
         &engine,

@@ -62,12 +62,10 @@ impl HttpResidentProvider {
                 path.display()
             )));
         }
-        // S1-5 pilot — the resident's tiny compilation engine goes
-        // through the wasmos runtime facade instead of raw
-        // `wasmtime::Config` + `Engine::new`. AsyncProviderRegistry
-        // still consumes a `wasmtime::Engine` (datalink-dynlink
-        // type) so we extract the engine from the runtime via its
-        // adapter-native accessor.
+        // The resident's compilation engine is built through the
+        // wasmos runtime facade; `AsyncProviderRegistry`
+        // (datalink-dynlink type) still consumes a `wasmtime::Engine`
+        // so we extract via the runtime's adapter-native accessor.
         let runtime = wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime::new(
             wasmos_runtime_api::RuntimeConfig::default()
                 .with_async_support(true),

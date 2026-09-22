@@ -1,7 +1,7 @@
-//! S1-4 — build the sqlink host-import [`HostImports`] bundle.
+//! Build the sqlink host-import [`HostImports`] bundle.
 //!
 //! Sqlink's `wasmos_imports.rs` module declares the wasmos-native
-//! mirror of the 5 sqlink-host `sqlite:extension/*` host interfaces
+//! mirror of the sqlink-host `sqlite:extension/*` host interfaces
 //! (compression, dns, wal_frames, http, s3_base, plus the
 //! extension_loader test stub) and composes them via
 //! [`crate::wasmos_imports::install_sqlink_imports`]. This module is
@@ -9,18 +9,11 @@
 //! policy inputs and returns a fully-composed
 //! [`wasmos_runtime_api::HostImports`] set.
 //!
-//! ## No wasmtime types
-//!
-//! S1-4 rewrote this file to not name wasmtime — the previous
-//! version accepted `&Engine` + `&mut Linker<S>` + `&Component` and
-//! called the v48 async bridge directly. That path is now the
-//! caller's responsibility: `compose_provider` (and any future
-//! consumer) attaches the returned [`HostImports`] to an
-//! [`wasmos_runtime_api::ExecutionContext`] and hands it to
-//! `runtime.instantiate(...)`, OR routes it through
+//! Callers attach the returned bundle to an
+//! [`wasmos_runtime_api::ExecutionContext`] before handing it to
+//! `runtime.instantiate(...)`, or route it through
 //! `wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports`
-//! as a transitional escape hatch — whichever fits its current
-//! migration state.
+//! as a transitional escape hatch.
 
 use wasmos_runtime_api::HostImports;
 

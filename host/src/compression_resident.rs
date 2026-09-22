@@ -224,12 +224,10 @@ impl CompressionResidentProvider {
         let path = tokio::task::spawn_blocking(resolve_or_fetch)
             .await
             .map_err(|e| format!("compression resident resolve task: {e}"))??;
-        // S1-5 pilot — the resident's tiny compilation engine goes
-        // through the wasmos runtime facade instead of raw
-        // `wasmtime::Config` + `Engine::new`. AsyncProviderRegistry
-        // still takes a `wasmtime::Engine` (datalink-dynlink type)
-        // so we extract the underlying engine from the runtime via
-        // its adapter-native accessor.
+        // The resident's compilation engine is built through the
+        // wasmos runtime facade; `AsyncProviderRegistry`
+        // (datalink-dynlink type) still takes a `wasmtime::Engine`
+        // so we extract via the runtime's adapter-native accessor.
         let runtime = wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime::new(
             wasmos_runtime_api::RuntimeConfig::default()
                 .with_async_support(true),

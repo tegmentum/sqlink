@@ -52,13 +52,10 @@ use wasmos_runtime_api::{
     host_iface, HostCallContext, HostImports, RuntimeError, RuntimeResult, WitEnum,
     WitRecord, WitVariant,
 };
-// S1-4 — wasmtime types retained only for the transitional
+// Wasmtime types retained only for the transitional
 // [`install_tvm_memory_imports`] wrapper (used by sqlink integration
 // tests still on the wasmtime linker path). The preferred surface
-// is the wasmtime-free [`build_tvm_memory_imports`] builder;
-// non-test callers within host/src have migrated to that + inline
-// async_bridge. The wrapper retires when the test suite migrates
-// to the ExecutionContext path (S1-7).
+// is the wasmtime-free [`build_tvm_memory_imports`] builder.
 use wasmos_runtime_wasmtime_v48::async_bridge;
 use wasmtime::component::{Component, Linker};
 use wasmtime::Engine;
@@ -655,11 +652,10 @@ where
         .map_err(|e| anyhow!("wasmos_tvm install_host_imports: {e}"))
 }
 
-/// S1-4 — pure builder for the tvm:memory HostImports bundle,
+/// Pure builder for the `tvm:memory` [`HostImports`] bundle;
 /// wasmtime-free. Callers attach the returned bundle to their
-/// `ExecutionContext` (S1-7 shape) or route it via
-/// `wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports`
-/// (transitional wasmtime-linker path).
+/// `ExecutionContext` or route it via
+/// [`wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports`].
 pub fn build_tvm_memory_imports<T>() -> HostImports
 where
     T: AsMut<TvmHost> + Send + 'static,
