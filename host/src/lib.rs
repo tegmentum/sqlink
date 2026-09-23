@@ -61,6 +61,10 @@ pub mod wasmos_install_flow;
 // wasmtime-46 compatible). Retires the deprecated
 // tvm_wasmtime::add_to_linker calls at lib.rs:4544, 13166.
 pub mod wasmos_tvm;
+/// Phase 1.1 of the S2 wasmos migration: shim from
+/// `datalink_dynlink::AsyncProviderBackend` to
+/// `wasmos_compose_dynlink::AsyncProviderBackend`.
+pub mod wasmos_dynlink_shim;
 /// Resident `http-endpoint` compose:dynlink/endpoint provider routing — the
 /// default HTTP path. #106.
 #[cfg(not(feature = "native-http"))]
