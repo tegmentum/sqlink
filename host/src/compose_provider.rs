@@ -1770,90 +1770,28 @@ async fn resident_wasm_component_invoke(
             )
             .map_err(|e| format!("resident sqlite:extension/spi linker: {e}"))?;
         }
-        // ADR-0029 Phase 6.2.n Arc 1 Session 4 — the 5 sqlink-host
-        // `sqlite:extension/*` host interfaces install on one of
-        // two paths depending on the `wasmos-install-path` feature:
-        //
-        // * `wasmos-install-path` OFF (default) — the existing
-        //   wit-bindgen `add_to_linker` registrations. Behaviour
-        //   frozen since Phase 6.2.e; keeps the resident linker
-        //   flow byte-identical to what shipped before Arc 1.
-        // * `wasmos-install-path` ON — one call to
-        //   `wasmos_install_flow::install_wasmos_sqlink_imports`
-        //   drives the SAME 5 handlers through the wasmos v46
-        //   async bridge (`install_host_imports` walks the
-        //   `HostImports` composite and wires each interface with
-        //   `func_new_async`). Both paths dispatch to the same
-        //   host-side implementations under the hood — the
-        //   wasmos-native handlers in `wasmos_imports.rs` are
-        //   byte-identical mirrors of the wit-bindgen impls in
-        //   `lib.rs`.
-        //
-        // The two paths are mutually exclusive on a given linker
-        // (wasmtime rejects duplicate registrations on the same
-        // interface). Feature-gate lets consumers A/B-compare or
-        // ratchet the cutover when the wasmos path is proven for
-        // their environment.
-        #[cfg(feature = "wasmos-install-path")]
-        {
-            let _ = (imports_http, imports_dns, imports_wal, imports_s3, imports_compression);
-            // S1-4: build the wasmos HostImports set here and route
-            // it through the v48 async bridge. `wasmos_install_flow`
-            // owns the "compose the bundle" half; the "install onto
-            // a wasmtime linker" half stays local to this call site
-            // until S1-1 retires this linker in favour of an
-            // ExecutionContext-based instantiate.
-            let imports = crate::wasmos_install_flow::build_sqlink_imports(
-                dns_policy.clone(),
-                http_policy.clone(),
-                s3_granted,
-            );
-            wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
-                engine,
-                &mut linker,
-                component,
-                &imports,
-            )
-            .map_err(|e| format!("resident wasmos install: {e}"))?;
-        }
-        #[cfg(not(feature = "wasmos-install-path"))]
-        {
-            if imports_http {
-                crate::loaded_minimal_http::sqlite::extension::http::add_to_linker::<_, ProviderNetData>(
-                    &mut linker,
-                    |state: &mut ProviderState| state,
-                )
-                .map_err(|e| format!("resident sqlite:extension/http linker: {e}"))?;
-            }
-            if imports_dns {
-                crate::loaded_minimal_dns::sqlite::extension::dns::add_to_linker::<_, ProviderNetData>(
-                    &mut linker,
-                    |state: &mut ProviderState| state,
-                )
-                .map_err(|e| format!("resident sqlite:extension/dns linker: {e}"))?;
-            }
-            if imports_wal {
-                crate::loaded::sqlite::extension::wal_frames::add_to_linker::<_, ProviderNetData>(
-                    &mut linker,
-                    |state: &mut ProviderState| state,
-                )
-                .map_err(|e| format!("resident sqlite:extension/wal-frames linker: {e}"))?;
-            }
-            if imports_s3 {
-                crate::loaded::sqlite::extension::s3_base::add_to_linker::<_, ProviderNetData>(
-                    &mut linker,
-                    |state: &mut ProviderState| state,
-                )
-                .map_err(|e| format!("resident sqlite:extension/s3-base linker: {e}"))?;
-            }
-            if imports_compression {
-                crate::loaded::sqlite::extension::compression::add_to_linker::<_, ProviderNetData>(
-                    &mut linker,
-                    |state: &mut ProviderState| state,
-                )
-                .map_err(|e| format!("resident sqlite:extension/compression linker: {e}"))?;
-            }
-        }
+        // The 5 sqlink-host `sqlite:extension/*` host interfaces
+        // (http, dns, wal-frames, s3-base, compression) install
+        // through the wasmos `HostImports` set built by
+        // `wasmos_install_flow::build_sqlink_imports` and routed
+        // onto the wasmtime linker via
+        // `async_bridge::install_host_imports`. Same host-side
+        // implementations as the residents themselves — the
+        // wasmos-native handlers in `wasmos_imports.rs` are the
+        // production surface.
+        let _ = (imports_http, imports_dns, imports_wal, imports_s3, imports_compression);
+        let imports = crate::wasmos_install_flow::build_sqlink_imports(
+            dns_policy.clone(),
+            http_policy.clone(),
+            s3_granted,
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            engine,
+            &mut linker,
+            component,
+            &imports,
+        )
+        .map_err(|e| format!("resident wasmos install: {e}"))?;
         if imports_cli {
             cli_ext::cli_stdout::add_to_linker::<_, ProviderNetData>(
                 &mut linker,
