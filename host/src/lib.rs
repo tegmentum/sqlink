@@ -1183,25 +1183,6 @@ pub mod provider_envelope {
     }
 }
 
-/// Bindgen for language-runtime plugins — wasm components that
-/// embed an interpreter (CPython, MicroPython, JVM, R, etc.) and
-/// export `sqlink:wasm/runtime.execute(source-name, source) ->
-/// result<string, string>`. The host instantiates the plugin in
-/// a fresh Store and calls execute() when `.run foo.<ext>` matches
-/// a registered runtime.
-pub mod language_runtime {
-    wasmtime::component::bindgen!({
-        path: "../wit",
-        world: "language-runtime",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "compose:dynlink/linker": super::compose::compose::dynlink::linker,
-            "sys:compose/types": super::compose::sys::compose::types,
-        },
-    });
-}
-
 /// Lazily-instantiated openssl-wasm component used to verify
 /// signatures on registered providers. The component itself is
 /// loaded once and cached; each verification call builds a fresh
@@ -4379,56 +4360,6 @@ impl HasData for RunHostData {
     type Data<'a> = RunHostWrap<'a>;
 }
 
-fn make_run_linker(
-    runtime: &Arc<WasmtimeV48Runtime>,
-    component: &Component,
-) -> Result<Linker<RunState>> {
-    let engine = runtime.engine();
-    let mut linker: Linker<RunState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| anyhow!("fiji WASI: {e}"))?;
-    // The shared async linker bindings, driven by a per-call `RunHostWrap` view
-    // (borrowing the Store's `dynlink_bridge` + resource table). The bridge +
-    // resolve/invoke/drop routing live in `datalink-dynlink`; the
-    // `RunHostWrap` Host impls are macro-generated (no duplicated machinery).
-    compose::compose::dynlink::linker::add_to_linker::<_, RunHostData>(
-        &mut linker,
-        |state: &mut RunState| RunHostWrap {
-            bridge: &state.dynlink_bridge,
-            resources: &mut state.resources,
-        },
-    )
-    .map_err(|e| anyhow!("fiji compose linker: {e}"))?;
-    // Statically-composed runnables (e.g. examples/rust/runnable-sqlite-demo)
-    // bundle sqlite-lib at compose time. sqlite-lib itself imports
-    // `sqlink:wasm/extension-loader` because its `library` world
-    // exposes a programmatic `load-extension` that forwards to the
-    // host. The composed binary therefore inherits that import on
-    // its outer surface even though the runnable side never touches
-    // it. Wire a stub impl that satisfies the linker without
-    // surfacing the full Host registry: composed runnables that
-    // never call .load just work; ones that do get a structured
-    // LoaderError instead of an instantiate-time linker failure.
-    bindings::sqlink::wasm::extension_loader::add_to_linker::<_, RunLoaderStubData>(
-        &mut linker,
-        |_state: &mut RunState| RunLoaderStub,
-    )
-    .map_err(|e| anyhow!("run linker extension-loader stub: {e}"))?;
-    // Wire tvm:memory/{types,manager,bytes,diagnostics}. Both the
-    // cli and the cli+sqlite-lib-composed runnables import all four
-    // because sqlite-pcache-tvm + sqlite-vfs-tvm use the
-    // wit-bindgen-backed cold tiers on wasm32 unconditionally.
-    // Handlers reach `RunState.tvm` via
-    // `ctx.consumer_state::<RunState>().as_mut()`.
-    let tvm_imports = crate::wasmos_tvm::build_tvm_memory_imports::<RunState>();
-    wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
-        engine,
-        &mut linker,
-        component,
-        &tvm_imports,
-    )
-    .map_err(|e| anyhow!("install tvm:memory imports: {e}"))?;
-    Ok(linker)
-}
 
 
 
@@ -4864,7 +4795,7 @@ impl ComponentCache {
 pub struct LanguageRuntime {
     pub ext: String,
     pub flavor: String,
-    pub component: Component,
+    pub component: WasmosCompiledComponent,
     pub policy: Policy,
 }
 
@@ -5476,19 +5407,6 @@ impl Host {
     /// Every tenant that has at least one provider registered.
     pub fn list_tenants(&self) -> Vec<String> {
         self.compose_providers.read().keys().cloned().collect()
-    }
-
-    /// Build the shared async dynlink bridge for a runnable component scoped to
-    /// `tenant`. Carries a `RunBackend` (cheap Arc-clone of the tenant-scoped
-    /// provider map + the tenant id). Stored on the run's `RunState`.
-    fn run_dynlink_bridge(
-        &self,
-        tenant: &str,
-    ) -> datalink_dynlink::AsyncDynLinkBridge<compose_provider::RunBackend> {
-        datalink_dynlink::AsyncDynLinkBridge::new(compose_provider::RunBackend {
-            compose_providers: self.compose_providers.clone(),
-            active_tenant: tenant.to_string(),
-        })
     }
 
     /// Provide the CAS cache for resolver-fetched bytes. Optional;
@@ -9269,6 +9187,7 @@ impl Host {
             backend,
             None,
             Some(1_000_000_000_000),
+            &[],
         );
         let mut instance = self
             .runtime_run
@@ -9423,7 +9342,7 @@ impl Host {
     /// Register `path` as a language runtime for files with
     /// `(ext, flavor)`. Loads + compiles the component now;
     /// each later `run_source` reuses the cached `Component`.
-    pub fn register_runtime(
+    pub async fn register_runtime(
         &self,
         ext: &str,
         flavor: &str,
@@ -9432,8 +9351,17 @@ impl Host {
     ) -> Result<()> {
         let bytes = std::fs::read(&path)
             .map_err(|e| anyhow!("register-runtime: read {}: {e}", path.display()))?;
-        let component = Component::from_binary(self.runtime.engine(), &bytes)
-            .map_err(|e| anyhow!("register-runtime: compile {}: {e}", path.display()))?;
+        let component = self
+            .runtime
+            .compile_component(
+                ComponentSource::Bytes {
+                    bytes: bytes.into(),
+                    name: Some(format!("language_runtime:{}:{flavor}", ext)),
+                },
+                CompileOptions::default(),
+            )
+            .await
+            .map_err(|e| anyhow!("register-runtime: compile {}: {e:?}", path.display()))?;
         self.runtimes.write().insert(
             (ext.to_string(), flavor.to_string()),
             Arc::new(LanguageRuntime {
@@ -9500,46 +9428,8 @@ impl Host {
                 anyhow!("no runtime registered for ext={ext:?} variant={variant:?}")
             })?
         };
-        let linker = make_run_linker(&self.runtime, &runtime.component)?;
-        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
-        builder.inherit_stdio();
-        // Operator-supplied env vars  the caller picks which keys
-        // to surface (no implicit inherit_env() so the host process
-        // env doesn't leak unconditionally). Empty slice = no env;
-        // the component sees std::env::var(_) return Err for any
-        // key not in this list.
-        for (k, v) in env {
-            builder.env(k, v);
-        }
-        let state = RunState {
-            wasi: builder.build(),
-            resources: wasmtime_wasi::ResourceTable::new(),
-            dynlink_bridge: self.run_dynlink_bridge(DEFAULT_TENANT),
-            tvm: tvm_wasmtime::TvmHost::new(),
-        };
-        let mut store = Store::new(self.runtime.engine(), state);
-        store
-            .set_fuel(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2))
-            .map_err(|e| anyhow!("set_fuel: {e}"))?;
-        store.set_epoch_deadline(
-            runtime
-                .policy
-                .epoch_deadline_ms
-                .unwrap_or(1_000_000_000_000),
-        );
-        let instance = language_runtime::LanguageRuntime::instantiate_async(
-            &mut store,
-            &runtime.component,
-            &linker,
-        )
-        .await
-        .map_err(|e| anyhow!("instantiate runtime plugin: {e}"))?;
-        let r = instance
-            .sqlink_wasm_runtime()
-            .call_execute(&mut store, source_name, source)
+        self.dispatch_runtime_execute(&runtime, source_name, source, env)
             .await
-            .map_err(|e| anyhow!("runtime.execute trap: {e}"))?;
-        r.map_err(|e| anyhow!("runtime.execute returned error: {e}"))
     }
 
     /// Read `path`, look up the runtime for `(extension-of-path,
@@ -9569,39 +9459,58 @@ impl Host {
             .and_then(|s| s.to_str())
             .unwrap_or(path)
             .to_string();
-        // Build a fresh Store mirroring run_wasm_as. Each call gets
-        // its own Store so per-call fuel/epoch caps are re-supplied.
-        let linker = make_run_linker(&self.runtime, &runtime.component)?;
-        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
-        builder.inherit_stdio();
-        let state = RunState {
-            wasi: builder.build(),
-            resources: wasmtime_wasi::ResourceTable::new(),
-            dynlink_bridge: self.run_dynlink_bridge(DEFAULT_TENANT),
-            tvm: tvm_wasmtime::TvmHost::new(),
-        };
-        let mut store = Store::new(self.runtime.engine(), state);
-        store
-            .set_fuel(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2))
-            .map_err(|e| anyhow!("set_fuel: {e}"))?;
-        store.set_epoch_deadline(
-            runtime
-                .policy
-                .epoch_deadline_ms
-                .unwrap_or(1_000_000_000_000),
+        return self
+            .dispatch_runtime_execute(&runtime, &source_name, &source, &[])
+            .await;
+    }
+
+    /// Shared implementation for `invoke_runtime` and `run_source`:
+    /// build the fresh wasmos `ExecutionContext` for
+    /// `(runtime.component, policy, env)`, instantiate + dispatch
+    /// the `sqlink:wasm/runtime@0.1.0#execute` export.
+    async fn dispatch_runtime_execute(
+        &self,
+        runtime: &Arc<LanguageRuntime>,
+        source_name: &str,
+        source: &str,
+        env: &[(String, String)],
+    ) -> Result<String> {
+        let backend = std::sync::Arc::new(compose_provider::RunBackend {
+            compose_providers: self.compose_providers.clone(),
+            active_tenant: DEFAULT_TENANT.to_string(),
+        });
+        let context = crate::wasmos_run_context::make_run_execution_context(
+            backend,
+            Some(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2)),
+            Some(runtime.policy.epoch_deadline_ms.unwrap_or(1_000_000_000_000)),
+            env,
         );
-        let instance = language_runtime::LanguageRuntime::instantiate_async(
-            &mut store,
-            &runtime.component,
-            &linker,
-        )
-        .await
-        .map_err(|e| anyhow!("instantiate runtime plugin: {e}"))?;
-        let r = instance
-            .sqlink_wasm_runtime()
-            .call_execute(&mut store, &source_name, &source)
+        let mut instance = self
+            .runtime
+            .instantiate(&runtime.component, context)
             .await
-            .map_err(|e| anyhow!("runtime.execute trap: {e}"))?;
+            .map_err(|e| anyhow!("instantiate runtime plugin: {e:?}"))?;
+        let ret = instance
+            .call_export(
+                "sqlink:wasm/runtime@0.1.0#execute",
+                &[
+                    WasmosValue::String(source_name.to_string()),
+                    WasmosValue::String(source.to_string()),
+                ],
+            )
+            .await
+            .map_err(|e| anyhow!("runtime.execute: {e:?}"))?;
+        let r: std::result::Result<String, String> = match ret.into_iter().next() {
+            Some(WasmosValue::Result(Ok(Some(v)))) => match *v {
+                WasmosValue::String(s) => Ok(s),
+                other => bail!("runtime.execute ok payload not string: {:?}", other),
+            },
+            Some(WasmosValue::Result(Err(Some(v)))) => match *v {
+                WasmosValue::String(s) => Err(s),
+                other => bail!("runtime.execute err payload not string: {:?}", other),
+            },
+            other => bail!("runtime.execute returned unexpected shape: {:?}", other),
+        };
         r.map_err(|e| anyhow!("runtime.execute returned error: {e}"))
     }
 }
@@ -12687,6 +12596,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         match self
             .host
             .register_runtime(&ext, &flavor, PathBuf::from(&path), policy)
+            .await
         {
             Ok(()) => Ok(()),
             Err(e) => Err(LoaderError {

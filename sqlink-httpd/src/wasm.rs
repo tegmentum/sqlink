@@ -85,6 +85,7 @@ impl HostDispatcher {
             // capability tags yet  a future revision can thread
             // policy from the routes table.
             host.register_runtime("http", &name, path.clone(), Policy::deny_all())
+                .await
                 .map_err(|e| anyhow!("--load {name}={}: {e}", path.display()))?;
             tracing::info!("loaded wasm handler `{name}` from {}", path.display());
         }
