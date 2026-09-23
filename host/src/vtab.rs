@@ -401,17 +401,12 @@ fn sync_dispatch_vtab_fetch_batch(
     cursor_id: u64,
     max_rows: u32,
 ) -> Result<Vec<BatchRow>, String> {
-    use crate::convert_sql_value_from_loaded;
     match block_on(host().dispatch_vtab_fetch_batch(ext_name, vtab_id, cursor_id, max_rows)) {
         Ok(Ok(rows)) => Ok(rows
             .into_iter()
             .map(|r| BatchRow {
                 rowid: r.rowid,
-                columns: r
-                    .columns
-                    .into_iter()
-                    .map(convert_sql_value_from_loaded)
-                    .collect(),
+                columns: r.columns,
             })
             .collect()),
         Ok(Err(e)) => Err(e),

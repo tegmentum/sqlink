@@ -6280,7 +6280,7 @@ impl Host {
         let loaded_args: Vec<wasmos_extension_types::SqlValue> = args
             .iter()
             .cloned()
-            .map(convert_sql_value_to_loaded)
+            
             .collect();
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -6290,7 +6290,7 @@ impl Host {
         let result = bridge.dispatch.call_scalar_call(&mut bridge.store, func_id, &loaded_args)
             .await;
         Some(match result {
-            Ok(Ok(v)) => Ok(Ok(convert_sql_value_from_loaded(v))),
+            Ok(Ok(v)) => Ok(Ok(v)),
             Ok(Err(ext_err)) => Ok(Err(ext_err)),
             Err(trap) => Ok(Err(format!("dynlink bridge scalar trap: {trap}"))),
         })
@@ -6414,7 +6414,7 @@ impl Host {
     {
         let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
         if let Some(m_arc) = m_opt {
-            let loaded_info = convert_index_info_to_loaded_tabular(&info);
+            let loaded_info = info.clone();
             let mut guard = m_arc.lock().await;
             let m = &mut *guard;
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
@@ -6423,7 +6423,7 @@ impl Host {
             let result = m.dispatch.call_best_index(&mut m.store, vtab_id, instance_id, &loaded_info)
                 .await;
             return Some(match result {
-                Ok(Ok(plan)) => Ok(Ok(convert_index_plan_from_loaded_tabular(plan))),
+                Ok(Ok(plan)) => Ok(Ok(plan)),
                 Ok(Err(e)) => Ok(Err(e)),
                 Err(trap) => Ok(Err(format!(
                     "dynlink bridge (mutating) vtab.best-index trap: {trap}"
@@ -6431,7 +6431,7 @@ impl Host {
             });
         }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
-        let loaded_info = convert_index_info_to_loaded_tabular(&info);
+        let loaded_info = info.clone();
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
@@ -6440,7 +6440,7 @@ impl Host {
         let result = bridge.dispatch.call_best_index(&mut bridge.store, vtab_id, instance_id, &loaded_info)
             .await;
         Some(match result {
-            Ok(Ok(plan)) => Ok(Ok(convert_index_plan_from_loaded_tabular(plan))),
+            Ok(Ok(plan)) => Ok(Ok(plan)),
             Ok(Err(e)) => Ok(Err(e)),
             Err(trap) => Ok(Err(format!("dynlink bridge vtab.best-index trap: {trap}"))),
         })
@@ -6532,7 +6532,7 @@ impl Host {
         if let Some(m_arc) = m_opt {
             let loaded_args: Vec<wasmos_extension_types::SqlValue> = args
                 .into_iter()
-                .map(convert_sql_value_to_loaded)
+                
                 .collect();
             let mut guard = m_arc.lock().await;
             let m = &mut *guard;
@@ -6558,7 +6558,7 @@ impl Host {
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         let loaded_args: Vec<wasmos_extension_types::SqlValue> = args
             .into_iter()
-            .map(convert_sql_value_to_loaded)
+            
             .collect();
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -6715,7 +6715,7 @@ impl Host {
             let result = m.dispatch.call_column(&mut m.store, vtab_id, cursor_id, col)
                 .await;
             return Some(match result {
-                Ok(Ok(v)) => Ok(Ok(convert_sql_value_from_loaded(v))),
+                Ok(Ok(v)) => Ok(Ok(v)),
                 Ok(Err(e)) => Ok(Err(e)),
                 Err(trap) => Ok(Err(format!(
                     "dynlink bridge (mutating) vtab.column trap: {trap}"
@@ -6731,7 +6731,7 @@ impl Host {
         let result = bridge.dispatch.call_column(&mut bridge.store, vtab_id, cursor_id, col)
             .await;
         Some(match result {
-            Ok(Ok(v)) => Ok(Ok(convert_sql_value_from_loaded(v))),
+            Ok(Ok(v)) => Ok(Ok(v)),
             Ok(Err(e)) => Ok(Err(e)),
             Err(trap) => Ok(Err(format!("dynlink bridge vtab.column trap: {trap}"))),
         })
@@ -6806,7 +6806,7 @@ impl Host {
         let loaded_args: Vec<wasmos_extension_types::SqlValue> = args
             .iter()
             .cloned()
-            .map(convert_sql_value_to_loaded)
+            
             .collect();
         let mut guard = bridge_arc.lock().await;
         let bridge = &mut *guard;
@@ -7957,7 +7957,7 @@ impl Host {
                                 rowid,
                                 columns: cols
                                     .into_iter()
-                                    .map(convert_sql_value_to_loaded)
+                                    
                                     .collect(),
                             }
                         })
@@ -8847,27 +8847,6 @@ pub struct HostWrap<'a> {
     pub resources: Option<&'a mut wasmtime_wasi::ResourceTable>,
 }
 
-// The two former `convert_sql_value_to_loaded` / `_from_loaded`
-// helpers were shape-identical variant matches between the
-// `bindings::sqlite::extension::types::SqlValue` and
-// `wasmos_extension_types::SqlValue` universes. After Phase 4's
-// `with:` remap of `sqlite:extension/types@1.0.0` onto
-// `wasmos_extension_types`, the two paths resolve to the SAME
-// Rust type — the conversion is identity. Kept as pass-through
-// aliases so the ~14 call sites don't need touching; the compiler
-// inlines them to nothing.
-
-fn convert_sql_value_to_loaded(
-    v: wasmos_extension_types::SqlValue,
-) -> wasmos_extension_types::SqlValue {
-    v
-}
-
-fn convert_sql_value_from_loaded(
-    v: wasmos_extension_types::SqlValue,
-) -> wasmos_extension_types::SqlValue {
-    v
-}
 
 // Vtab type conversion between the host's dispatch-side bindgen
 // (`bindings::sqlite::extension::vtab`) and the hand-rolled
@@ -10443,7 +10422,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
                     columns: r
                         .columns
                         .into_iter()
-                        .map(convert_sql_value_from_loaded)
+                        
                         .collect(),
                 })
                 .collect()),
@@ -11818,31 +11797,3 @@ pub async fn run_cli_capture(
 
 // ---------------------------------------------------------------------------
 // Vtab type converters — bindings::…::vtab <-> wasmos_vtab_types
-// ---------------------------------------------------------------------------
-// Fold shape-identical records between the dispatch-side
-// (`bindings::sqlite::extension::vtab`) and the hand-rolled
-// `wasmos_vtab_types` records the bridge TypedFuncs lift against.
-// The two shapes carry the same WIT layout — the converters exist
-// only so the outer `dispatch_vtab_*` API keeps a stable
-// `bindings::` signature independent of which module owns the
-// bridge's Rust types.
-
-// Former vtab-index converters between the `bindings::…::vtab`
-// and `wasmos_vtab_types` universes are now identity — Phase 4's
-// `with:` remap of `sqlite:extension/vtab@1.0.0` unified the two.
-// The read-side helpers take `&IndexInfo` (borrow-in, owned-out) so
-// they clone; the plan-side takes an owned `IndexPlan` and moves it.
-// Kept as pass-through aliases so the 4 call sites don't need
-// touching; the compiler inlines them out.
-
-fn convert_index_info_to_loaded_tabular(
-    info: &wasmos_vtab_types::IndexInfo,
-) -> wasmos_vtab_types::IndexInfo {
-    info.clone()
-}
-
-fn convert_index_plan_from_loaded_tabular(
-    plan: wasmos_vtab_types::IndexPlan,
-) -> wasmos_vtab_types::IndexPlan {
-    plan
-}
