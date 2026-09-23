@@ -272,15 +272,24 @@ migrating live trait-impl clusters or coupling to the two
 **`bindgen!` count: 8 → 5.** Remaining: `bindings`, `loaded`,
 `loaded_tabular`, `loaded_tabular_mutating`, `dynlink_provider_cli`.
 
-**Next step:** `dynlink_provider_cli` retirement requires
-migrating the cli-stdout/stderr/state Host trait impls off the
-`cli_ext` alias (uniquely from `dynlink_provider_cli`'s type
-module). Requires either generalizing `wasmos_cli_imports.rs`
-handlers to work as a wasmtime-linker install via
-`async_bridge::install_host_imports` against ProviderState /
-ProviderCliState (both impl a `HasCliCapture`-shaped trait), or
-raw wasmtime `func_new` bindgen-free dispatch on the 3 cli-*
-sub-interfaces. Latter is smaller.
+**Next step:** `dynlink_provider_cli` retirement is HALFWAY done:
+the dispatch site is now bindgen-free (commit `1e4dab55`) via
+the same `TypedFunc` pattern as `dynlink_provider`. What remains
+is migrating the 6 cli-* Host trait impls (3 interfaces ×
+ProviderState + ProviderCliState) off the `cli_ext` alias, plus
+the 6 corresponding `add_to_linker` calls. Options:
+
+- **Raw wasmtime `Linker::instance()` + `func_new_async`** — a
+  bindgen-free helper `wire_cli_output_imports<T>(linker, cli_of,
+  state_of)` parameterized on accessor closures. ~150 lines
+  covering the 5+1+6 method surface. Called from resident and
+  cli dispatch paths.
+- **wasmos handlers via async_bridge with multi-type downcast**
+  — requires patching `HostCallContext::consumer_state` to
+  return `Option<&mut dyn Any>` for external downcast, or
+  duplicating handlers per store data type.
+
+Raw wasmtime is smaller and self-contained.
 
 ## Phase A / B earlier (commits `17c82fe6`, `cc549e3d`)
 
