@@ -312,9 +312,38 @@ reuse `loaded_tabular`'s vtab export types across BOTH bridge
 instances and delete the entire `_mut` converter cluster
 (~90 lines) in the same commit.
 
-**`bindgen!` count: 4 → 3.**
+Commit `16c3df7e`.
 
-Remaining: `bindings`, `loaded`, `loaded_tabular`.
+## Phase 2b: `loaded_tabular::Tabular` retirement — DONE
+
+Landed 2026-09-23 (commit `b2dcd692`). Refactored
+`wasmos_mutating_dispatch.rs` into two structs:
+
+- `VtabReadDispatch` — 13 handles (metadata.describe +
+  scalar-function.call + 11 vtab methods). Used by BOTH
+  `BridgeInstance` (read-only) and `MutatingBridgeInstance` (via
+  a `Deref` target from `MutatingBridgeDispatch`).
+- `VtabUpdateDispatch` — 11 vtab-update handles. Only the
+  mutating bridge embeds it (via `MutatingBridgeDispatch`).
+
+`BridgeInstance.instance` is now `wasmtime::component::Instance`
+(was `loaded_tabular::Tabular`). All 33 dispatch call sites in
+`lib.rs` — 13 on `BridgeInstance` + 22 on `MutatingBridgeInstance`
+— route through `.dispatch.call_XXX`. The `Tabular` /
+`TabularMutating` bindgen'd World structs are no longer
+instantiated anywhere.
+
+**`bindgen!` count: 4 → 3.** (`loaded_tabular` is kept but is
+now types-only — supplies the vtab record types
+`IndexInfo` / `IndexPlan` / `VtabRow` / `Constraint` /
+`Orderby` / `ConstraintUsage` and the `ConstraintOp` enum that
+the `VtabReadDispatch` TypedFuncs lift against. Full block
+retirement requires migrating 14 type-consumer sites to manual
+`#[derive(ComponentType, Lift, Lower)]` definitions — deferred
+to Phase 3 where `loaded` type migrations happen together.)
+
+Remaining bindgens: `bindings`, `loaded`, `loaded_tabular`
+(types-only until Phase 3).
 
 ## Empirical retirement pace
 
