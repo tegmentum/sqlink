@@ -254,7 +254,7 @@ migrating live trait-impl clusters or coupling to the two
   under `~/git/` with a `[patch]` table in the workspace root pinning
   each to the local checkout.
 
-## Phase A / B progress (commits `17c82fe6`, `cc549e3d`, `ba9b28b6`)
+## Phase A / B progress (commits `17c82fe6`, `cc549e3d`, `ba9b28b6`, `0ea808b6`)
 
 **Landed in this stretch:**
 - `loaded_bundle_cli` bindgen retired via wasmos-native
@@ -262,10 +262,25 @@ migrating live trait-impl clusters or coupling to the two
 - `loaded_dotcmd_aware` bindgen retired via wasmos-native
   `LoaderBridgeHost` handler (holds `Option<Host>` for the
   reentrant loader callback surface).
+- `dynlink_provider` bindgen retired via wasmtime `TypedFunc`
+  dispatch on `resident_wasm_component_invoke`'s cached
+  `handle_fn` (looked up once at instantiate time through the
+  `Instance::get_export` API).
 - 3 new HostImports modules: `wasmos_cli_imports.rs`,
   `wasmos_bundle_cli_imports.rs`, `wasmos_loader_bridge_imports.rs`.
 
-**`bindgen!` count: 8 → 6.**
+**`bindgen!` count: 8 → 5.** Remaining: `bindings`, `loaded`,
+`loaded_tabular`, `loaded_tabular_mutating`, `dynlink_provider_cli`.
+
+**Next step:** `dynlink_provider_cli` retirement requires
+migrating the cli-stdout/stderr/state Host trait impls off the
+`cli_ext` alias (uniquely from `dynlink_provider_cli`'s type
+module). Requires either generalizing `wasmos_cli_imports.rs`
+handlers to work as a wasmtime-linker install via
+`async_bridge::install_host_imports` against ProviderState /
+ProviderCliState (both impl a `HasCliCapture`-shaped trait), or
+raw wasmtime `func_new` bindgen-free dispatch on the 3 cli-*
+sub-interfaces. Latter is smaller.
 
 ## Phase A / B earlier (commits `17c82fe6`, `cc549e3d`)
 
