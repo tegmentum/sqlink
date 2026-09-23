@@ -202,12 +202,11 @@ cleanup at most.
 - **S1-7 (Store::new + linker.instantiate)** — not a separate task
   from S2; every such site is inside a bindgen-dispatched export path
   and retires together with the corresponding block.
-- **`contract_guard_bridge.rs` retirement** — its own doc says
-  "goes away when sqlink's loader migrates to
-  `Runtime::compile_component` and carries `CompiledComponent`s
-  directly." Happens naturally in P4.4 once
-  `datalink_contract::component_contract_major` sites carry the
-  wasmos `CompiledComponent` end-to-end.
+- **`contract_guard_bridge.rs` retirement** — **DONE** (commit
+  `11ab7495`, 2026-09-23). The 3 call sites now wrap the
+  wasmtime pair through `compose_provider::wrap_wasmtime_component`
+  inline and call `datalink_contract::component_contract_major`
+  directly. 100 lines of shim gone.
 - **Wasmos `sync_dispatch` WIP** — a wasmos-side WIP that has surfaced
   as build breakage during `cargo test --lib`. Not a sqlink concern
   to fix; the wasmos author owns it.
