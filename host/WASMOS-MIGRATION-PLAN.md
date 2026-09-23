@@ -254,17 +254,35 @@ migrating live trait-impl clusters or coupling to the two
   under `~/git/` with a `[patch]` table in the workspace root pinning
   each to the local checkout.
 
-## Phase A groundwork (commit `17c82fe6`)
+## Phase A / B partial (commits `17c82fe6`, `cc549e3d`)
 
-New module `host/src/wasmos_cli_imports.rs` — untyped `HostCall`
-handlers for `sqlite:extension/{cli-stdout, cli-stderr, cli-state}`
-with a `CliDispatchState` consumer-state pattern. Ready for
-consumption by the `wasm_component_invoke_cli` migration.
+**Landed:**
+- `wasmos_cli_imports.rs` — cli-stdout/stderr/state untyped
+  `HostCall` handlers with `CliDispatchState` consumer state.
+- `wasmos_bundle_cli_imports.rs` — bundle-cli
+  `dispatch-bridge-cas` untyped `HostCall` handler
+  (`BundleCliCasHost`). Ports the CAS SQL bridge with
+  hand-marshalled `sql-value` / `query-result` / `sqlite-error`
+  Value trees.
+- **`loaded_bundle_cli` bindgen retired** (P B.3) — the
+  `dispatch-bridge-cas` interface routes through the new
+  wasmos handler via `async_bridge::install_host_imports` on
+  the CLI-shape wasmtime linker; the wit-bindgen `impl Host` and
+  the bindgen block itself are gone. Deleted the now-unused
+  `loaded_value_to_db`/`db_value_to_loaded`/`db_err_to_loaded`
+  helpers.
 
-Remaining Phase A dispatch-fn rewrites still need HostImports for
-`spi`, `dispatch-bridge-cas`, `build`, `loader-bridge`
-(conditional; not all guests import them). Same untyped-`HostCall`
-recipe applies.
+**Pattern proven:** the `async_bridge::install_host_imports`
+escape hatch lets a wasmos-native `HostCall` handler coexist with
+the wasmtime linker path — no need to migrate the dispatch fn
+end-to-end to retire a bindgen. This unblocks incremental
+retirement of every bindgen whose only role is providing a Host
+trait impl for a single (or narrow) sub-interface.
+
+`bindgen!` count: 8 → 7. Next candidate: `loaded_dotcmd_aware`
+(only unique sub-interface used is `loader-bridge`, with 6
+methods on `ProviderLoaderBridgeWrap`; the impl reaches a
+captured `Option<Host>` clone which is cheap to shim).
 
 ## Sync-wrap breakthrough (2026-09-22, commits `6ddf13fa`+ `d9f8537e`)
 
