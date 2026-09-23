@@ -1880,12 +1880,16 @@ async fn resident_wasm_component_invoke(
             .map_err(|e| format!("resident sqlite:extension/session linker: {e}"))?;
         }
         if imports_loader_bridge {
-            crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::add_to_linker::<
-                _,
-                ProviderLoaderBridgeData,
-            >(&mut linker, |state: &mut ProviderState| ProviderLoaderBridgeWrap {
-                host: state.loader_host.as_ref(),
-            })
+            let lb_imports = crate::wasmos_loader_bridge_imports::install_loader_bridge_imports(
+                wasmos_runtime_api::HostImports::new(),
+                loader_host.cloned(),
+            );
+            wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+                engine,
+                &mut linker,
+                component,
+                &lb_imports,
+            )
             .map_err(|e| format!("resident sqlite:extension/loader-bridge linker: {e}"))?;
         }
         let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
@@ -2335,12 +2339,16 @@ async fn wasm_component_invoke_cli(
     // When `loader_host` is None (off the real .load path) the view reports
     // "not wired", exactly as on the resident path.
     if imports_sqlite_loader_bridge(component, runtime) {
-        crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::add_to_linker::<
-            _,
-            ProviderLoaderBridgeData,
-        >(&mut linker, |s: &mut ProviderCliState| ProviderLoaderBridgeWrap {
-            host: s.loader_host.as_ref(),
-        })
+        let lb_imports = crate::wasmos_loader_bridge_imports::install_loader_bridge_imports(
+            wasmos_runtime_api::HostImports::new(),
+            loader_host.clone(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            engine,
+            &mut linker,
+            component,
+            &lb_imports,
+        )
         .map_err(|e| format!("cli sqlite:extension/loader-bridge linker: {e}"))?;
     }
     let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
