@@ -6152,10 +6152,7 @@ impl Host {
             .store
             .set_fuel(u64::MAX / 2)
             .map_err(|e| anyhow!("refresh fuel (describe): {e}"))?;
-        let wit_manifest = bridge
-            .instance
-            .sqlite_extension_metadata()
-            .call_describe(&mut bridge.store)
+        let wit_manifest = bridge.dispatch.call_describe(&mut bridge.store)
             .await
             .map_err(|e| anyhow!("dynlink bridge describe: {e}"))?;
         let ext_name = if wit_manifest.name.is_empty() {
@@ -6294,10 +6291,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (call): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_scalar_function()
-            .call_call(&mut bridge.store, func_id, &loaded_args)
+        let result = bridge.dispatch.call_scalar_call(&mut bridge.store, func_id, &loaded_args)
             .await;
         Some(match result {
             Ok(Ok(v)) => Ok(Ok(convert_sql_value_from_loaded(v))),
@@ -6363,10 +6357,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.connect): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_connect(
+        let result = bridge.dispatch.call_connect(
                 &mut bridge.store,
                 vtab_id,
                 instance_id,
@@ -6409,10 +6400,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.disconnect): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_disconnect(&mut bridge.store, vtab_id, instance_id)
+        let result = bridge.dispatch.call_disconnect(&mut bridge.store, vtab_id, instance_id)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -6453,10 +6441,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.best-index): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_best_index(&mut bridge.store, vtab_id, instance_id, &loaded_info)
+        let result = bridge.dispatch.call_best_index(&mut bridge.store, vtab_id, instance_id, &loaded_info)
             .await;
         Some(match result {
             Ok(Ok(plan)) => Ok(Ok(convert_index_plan_from_loaded_tabular(plan))),
@@ -6494,10 +6479,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.open): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_open(&mut bridge.store, vtab_id, instance_id, cursor_id)
+        let result = bridge.dispatch.call_open(&mut bridge.store, vtab_id, instance_id, cursor_id)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -6533,10 +6515,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.close): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_close(&mut bridge.store, vtab_id, cursor_id)
+        let result = bridge.dispatch.call_close(&mut bridge.store, vtab_id, cursor_id)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -6590,10 +6569,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.filter): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_filter(
+        let result = bridge.dispatch.call_filter(
                 &mut bridge.store,
                 vtab_id,
                 cursor_id,
@@ -6645,10 +6621,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.fetch-batch): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_fetch_batch(&mut bridge.store, vtab_id, cursor_id, max_rows)
+        let result = bridge.dispatch.call_fetch_batch(&mut bridge.store, vtab_id, cursor_id, max_rows)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -6684,10 +6657,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.next): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_next(&mut bridge.store, vtab_id, cursor_id)
+        let result = bridge.dispatch.call_next(&mut bridge.store, vtab_id, cursor_id)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -6723,10 +6693,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.eof): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_eof(&mut bridge.store, vtab_id, cursor_id)
+        let result = bridge.dispatch.call_eof(&mut bridge.store, vtab_id, cursor_id)
             .await;
         Some(match result {
             Ok(b) => Ok(b),
@@ -6765,10 +6732,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.column): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_column(&mut bridge.store, vtab_id, cursor_id, col)
+        let result = bridge.dispatch.call_column(&mut bridge.store, vtab_id, cursor_id, col)
             .await;
         Some(match result {
             Ok(Ok(v)) => Ok(Ok(convert_sql_value_from_loaded(v))),
@@ -6805,10 +6769,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab.rowid): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab()
-            .call_rowid(&mut bridge.store, vtab_id, cursor_id)
+        let result = bridge.dispatch.call_rowid(&mut bridge.store, vtab_id, cursor_id)
             .await;
         Some(match result {
             Ok(r) => Ok(r),

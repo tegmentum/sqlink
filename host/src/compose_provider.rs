@@ -765,7 +765,8 @@ impl HasData for BridgeStateHostData {
 /// (if any — the shim-codegen output has none today) is split.
 pub struct BridgeInstance {
     pub store: Store<BridgeState>,
-    pub instance: crate::loaded_tabular::Tabular,
+    pub instance: wasmtime::component::Instance,
+    pub dispatch: crate::wasmos_mutating_dispatch::VtabReadDispatch,
 }
 
 /// Warm-once resident dynlink-bridge instance bound to the
@@ -850,11 +851,18 @@ pub async fn instantiate_dynlink_bridge(
         .set_fuel(u64::MAX / 2)
         .map_err(|e| format!("set_fuel: {e}"))?;
     store.set_epoch_deadline(1_000_000_000_000);
-    let instance =
-        crate::loaded_tabular::Tabular::instantiate_async(&mut store, &component, &linker)
-            .await
-            .map_err(|e| format!("instantiate dynlink bridge: {e}"))?;
-    Ok(BridgeInstance { store, instance })
+    let instance = linker
+        .instantiate_async(&mut store, &component)
+        .await
+        .map_err(|e| format!("instantiate dynlink bridge: {e}"))?;
+    let dispatch = crate::wasmos_mutating_dispatch::VtabReadDispatch::install(
+        &mut store, &instance,
+    )?;
+    Ok(BridgeInstance {
+        store,
+        instance,
+        dispatch,
+    })
 }
 
 /// Mutating variant of `instantiate_dynlink_bridge`. Same linker wiring

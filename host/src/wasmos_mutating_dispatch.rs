@@ -1,35 +1,47 @@
-//! S2 Phase 2 groundwork: bindgen-free dispatch for the
-//! `tabular-mutating`-world dynlink bridge.
+//! S2 Phase 2: bindgen-free dispatch for the `tabular` /
+//! `tabular-mutating`-world dynlink bridges.
 //!
-//! Retires `loaded_tabular_mutating` by caching one
-//! `wasmtime::component::TypedFunc` per vtab / vtab-update method
-//! at instantiate time and dispatching through those cached
-//! handles instead of the bindgen'd `TabularMutating` accessors.
-//! The vtab-export return types (`IndexInfo`, `IndexPlan`,
-//! `ConstraintOp`, `VtabRow`, `Constraint`, `Orderby`,
-//! `ConstraintUsage`) reuse `loaded_tabular`'s definitions — the
-//! two bindgens generate structurally identical types from the
-//! same WIT interface, so `TypedFunc<_, (loaded_tabular::IndexPlan,)>`
-//! lifts the mutating instance's `sqlite:extension/vtab#best-index`
-//! return exactly as the read-only bridge does.
+//! Two structs share this module:
+//!
+//! - [`VtabReadDispatch`] caches one `TypedFunc` per method of the
+//!   `sqlite:extension/vtab@1.0.0` interface (11 handles). Both
+//!   `BridgeInstance` (read-only) and `MutatingBridgeInstance`
+//!   embed it. The type identities (`IndexInfo`, `IndexPlan`,
+//!   `VtabRow`, etc.) live in `loaded_tabular::exports::...::vtab`;
+//!   `TypedFunc::typed` matches on structural component-type
+//!   layout, so both bridges use the same Rust types.
+//! - [`VtabUpdateDispatch`] caches one `TypedFunc` per method of
+//!   `sqlite:extension/vtab-update@1.0.0` (11 handles). Only
+//!   `MutatingBridgeInstance` embeds it (via
+//!   [`MutatingBridgeDispatch`]).
+//!
+//! Retires both the `loaded_tabular_mutating` and `loaded_tabular`
+//! bindgens: no more `Tabular::instantiate_async` or
+//! `TabularMutating::instantiate_async`; the bridges keep a bare
+//! `wasmtime::component::Instance` and route dispatch through the
+//! cached handles.
 
 use wasmtime::component::{Instance, TypedFunc};
 use wasmtime::Store;
 
 use crate::compose_provider::BridgeState;
 use crate::loaded::sqlite::extension::types::SqlValue;
+use crate::loaded::exports::sqlite::extension::metadata::Manifest;
 use crate::loaded_tabular::exports::sqlite::extension::vtab::{
     IndexInfo, IndexPlan, VtabRow,
 };
 
-/// One cached typed export.
+/// One cached typed export handle.
 type TF<P, R> = TypedFunc<P, (R,)>;
 
-/// All 22 vtab / vtab-update typed function handles a mutating
-/// bridge needs. Populated once at instantiate time; every
-/// dispatch site borrows through here.
-pub struct MutatingBridgeDispatch {
-    // ── sqlite:extension/vtab@1.0.0 (read side) ──
+/// Cached exports for a `tabular`-world bridge instance: 2
+/// metadata / scalar-function methods + 11 `vtab@1.0.0` methods.
+pub struct VtabReadDispatch {
+    // ── sqlite:extension/metadata@1.0.0 ──
+    describe: TF<(), Manifest>,
+    // ── sqlite:extension/scalar-function@1.0.0 ──
+    scalar_call: TF<(u64, Vec<SqlValue>), Result<SqlValue, String>>,
+    // ── sqlite:extension/vtab@1.0.0 ──
     connect: TF<(u64, u64, String, String, Vec<String>), Result<String, String>>,
     disconnect: TF<(u64, u64), Result<(), String>>,
     best_index: TF<(u64, u64, IndexInfo), Result<IndexPlan, String>>,
@@ -41,7 +53,10 @@ pub struct MutatingBridgeDispatch {
     column: TF<(u64, u64, i32), Result<SqlValue, String>>,
     rowid: TF<(u64, u64), Result<i64, String>>,
     fetch_batch: TF<(u64, u64, u32), Result<Vec<VtabRow>, String>>,
-    // ── sqlite:extension/vtab-update@1.0.0 ──
+}
+
+/// Cached `sqlite:extension/vtab-update@1.0.0` handles: 11 methods.
+pub struct VtabUpdateDispatch {
     update: TF<(u64, u64, Vec<SqlValue>), Result<i64, String>>,
     begin: TF<(u64, u64), Result<(), String>>,
     sync: TF<(u64, u64), Result<(), String>>,
@@ -53,6 +68,20 @@ pub struct MutatingBridgeDispatch {
     rollback_to: TF<(u64, u64, i32), Result<(), String>>,
     is_shadow_name: TF<(u64, String), bool>,
     integrity: TF<(u64, u64, String, String, u32), Result<(), String>>,
+}
+
+/// Combined dispatch for a mutating bridge: read side (via
+/// `deref` to the embedded `VtabReadDispatch`) + update side.
+pub struct MutatingBridgeDispatch {
+    read: VtabReadDispatch,
+    update_iface: VtabUpdateDispatch,
+}
+
+impl std::ops::Deref for MutatingBridgeDispatch {
+    type Target = VtabReadDispatch;
+    fn deref(&self) -> &VtabReadDispatch {
+        &self.read
+    }
 }
 
 fn typed_export<P, R>(
@@ -67,59 +96,65 @@ where
 {
     let (_, iface_idx) = instance
         .get_export(&mut *store, None, iface)
-        .ok_or_else(|| format!("mutating bridge: missing {iface} export"))?;
+        .ok_or_else(|| format!("dynlink bridge: missing {iface} export"))?;
     let (_, method_idx) = instance
         .get_export(&mut *store, Some(&iface_idx), method)
-        .ok_or_else(|| format!("mutating bridge: missing {iface}#{method} export"))?;
+        .ok_or_else(|| format!("dynlink bridge: missing {iface}#{method} export"))?;
     let func = instance
         .get_func(&mut *store, &method_idx)
-        .ok_or_else(|| format!("mutating bridge: get_func {iface}#{method} None"))?;
+        .ok_or_else(|| format!("dynlink bridge: get_func {iface}#{method} None"))?;
     func.typed::<P, R>(&*store)
-        .map_err(|e| format!("mutating bridge: typed {iface}#{method}: {e}"))
+        .map_err(|e| format!("dynlink bridge: typed {iface}#{method}: {e}"))
 }
 
-impl MutatingBridgeDispatch {
-    /// Cache all 22 typed handles from a freshly-instantiated
-    /// `tabular-mutating`-world instance.
+impl VtabReadDispatch {
     pub fn install(
         store: &mut Store<BridgeState>,
         instance: &Instance,
     ) -> Result<Self, String> {
-        const VTAB: &str = "sqlite:extension/vtab@1.0.0";
-        const VU: &str = "sqlite:extension/vtab-update@1.0.0";
+        const M: &str = "sqlite:extension/metadata@1.0.0";
+        const S: &str = "sqlite:extension/scalar-function@1.0.0";
+        const V: &str = "sqlite:extension/vtab@1.0.0";
         Ok(Self {
-            connect: typed_export(store, instance, VTAB, "connect")?,
-            disconnect: typed_export(store, instance, VTAB, "disconnect")?,
-            best_index: typed_export(store, instance, VTAB, "best-index")?,
-            open: typed_export(store, instance, VTAB, "open")?,
-            close: typed_export(store, instance, VTAB, "close")?,
-            filter: typed_export(store, instance, VTAB, "filter")?,
-            next: typed_export(store, instance, VTAB, "next")?,
-            eof: typed_export(store, instance, VTAB, "eof")?,
-            column: typed_export(store, instance, VTAB, "column")?,
-            rowid: typed_export(store, instance, VTAB, "rowid")?,
-            fetch_batch: typed_export(store, instance, VTAB, "fetch-batch")?,
-            update: typed_export(store, instance, VU, "update")?,
-            begin: typed_export(store, instance, VU, "begin")?,
-            sync: typed_export(store, instance, VU, "sync")?,
-            commit: typed_export(store, instance, VU, "commit")?,
-            rollback: typed_export(store, instance, VU, "rollback")?,
-            rename: typed_export(store, instance, VU, "rename")?,
-            savepoint: typed_export(store, instance, VU, "savepoint")?,
-            release: typed_export(store, instance, VU, "release")?,
-            rollback_to: typed_export(store, instance, VU, "rollback-to")?,
-            is_shadow_name: typed_export(store, instance, VU, "is-shadow-name")?,
-            integrity: typed_export(store, instance, VU, "integrity")?,
+            describe: typed_export(store, instance, M, "describe")?,
+            scalar_call: typed_export(store, instance, S, "call")?,
+            connect: typed_export(store, instance, V, "connect")?,
+            disconnect: typed_export(store, instance, V, "disconnect")?,
+            best_index: typed_export(store, instance, V, "best-index")?,
+            open: typed_export(store, instance, V, "open")?,
+            close: typed_export(store, instance, V, "close")?,
+            filter: typed_export(store, instance, V, "filter")?,
+            next: typed_export(store, instance, V, "next")?,
+            eof: typed_export(store, instance, V, "eof")?,
+            column: typed_export(store, instance, V, "column")?,
+            rowid: typed_export(store, instance, V, "rowid")?,
+            fetch_batch: typed_export(store, instance, V, "fetch-batch")?,
         })
     }
-}
 
-/// One dispatch method per typed handle. Each mirrors the
-/// bindgen accessor's argument shape (borrows for strings + slices)
-/// and returns `wasmtime::Result<Ret>` matching the bindgen call.
-/// The method-body pattern is uniform: build the owned-args tuple,
-/// `call_async`, `post_return_async`, unwrap the singleton tuple.
-impl MutatingBridgeDispatch {
+    pub async fn call_describe(
+        &self,
+        store: &mut Store<BridgeState>,
+    ) -> wasmtime::Result<Manifest> {
+        let (r,) = self.describe.call_async(&mut *store, ()).await?;
+        self.describe.post_return_async(&mut *store).await?;
+        Ok(r)
+    }
+
+    pub async fn call_scalar_call(
+        &self,
+        store: &mut Store<BridgeState>,
+        func_id: u64,
+        args: &[SqlValue],
+    ) -> wasmtime::Result<Result<SqlValue, String>> {
+        let (r,) = self
+            .scalar_call
+            .call_async(&mut *store, (func_id, args.to_vec()))
+            .await?;
+        self.scalar_call.post_return_async(&mut *store).await?;
+        Ok(r)
+    }
+
     pub async fn call_connect(
         &self,
         store: &mut Store<BridgeState>,
@@ -301,6 +336,28 @@ impl MutatingBridgeDispatch {
         self.fetch_batch.post_return_async(&mut *store).await?;
         Ok(r)
     }
+}
+
+impl VtabUpdateDispatch {
+    pub fn install(
+        store: &mut Store<BridgeState>,
+        instance: &Instance,
+    ) -> Result<Self, String> {
+        const V: &str = "sqlite:extension/vtab-update@1.0.0";
+        Ok(Self {
+            update: typed_export(store, instance, V, "update")?,
+            begin: typed_export(store, instance, V, "begin")?,
+            sync: typed_export(store, instance, V, "sync")?,
+            commit: typed_export(store, instance, V, "commit")?,
+            rollback: typed_export(store, instance, V, "rollback")?,
+            rename: typed_export(store, instance, V, "rename")?,
+            savepoint: typed_export(store, instance, V, "savepoint")?,
+            release: typed_export(store, instance, V, "release")?,
+            rollback_to: typed_export(store, instance, V, "rollback-to")?,
+            is_shadow_name: typed_export(store, instance, V, "is-shadow-name")?,
+            integrity: typed_export(store, instance, V, "integrity")?,
+        })
+    }
 
     pub async fn call_update(
         &self,
@@ -471,5 +528,146 @@ impl MutatingBridgeDispatch {
             .await?;
         self.integrity.post_return_async(&mut *store).await?;
         Ok(r)
+    }
+}
+
+impl MutatingBridgeDispatch {
+    /// Cache all 22 typed handles from a freshly-instantiated
+    /// `tabular-mutating`-world instance.
+    pub fn install(
+        store: &mut Store<BridgeState>,
+        instance: &Instance,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            read: VtabReadDispatch::install(store, instance)?,
+            update_iface: VtabUpdateDispatch::install(store, instance)?,
+        })
+    }
+}
+
+// Update-side methods on MutatingBridgeDispatch forward to the
+// embedded VtabUpdateDispatch. Kept as inherent methods (rather
+// than making callers reach into the field) so the migrated call
+// sites remain `bridge.dispatch.call_XXX(...)`.
+impl MutatingBridgeDispatch {
+    pub async fn call_update(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        instance_id: u64,
+        args: &[SqlValue],
+    ) -> wasmtime::Result<Result<i64, String>> {
+        self.update_iface
+            .call_update(store, vtab_id, instance_id, args)
+            .await
+    }
+
+    pub async fn call_begin(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> wasmtime::Result<Result<(), String>> {
+        self.update_iface.call_begin(store, vtab_id, instance_id).await
+    }
+
+    pub async fn call_sync(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> wasmtime::Result<Result<(), String>> {
+        self.update_iface.call_sync(store, vtab_id, instance_id).await
+    }
+
+    pub async fn call_commit(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> wasmtime::Result<Result<(), String>> {
+        self.update_iface.call_commit(store, vtab_id, instance_id).await
+    }
+
+    pub async fn call_rollback(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> wasmtime::Result<Result<(), String>> {
+        self.update_iface.call_rollback(store, vtab_id, instance_id).await
+    }
+
+    pub async fn call_rename(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        instance_id: u64,
+        new_name: &str,
+    ) -> wasmtime::Result<Result<(), String>> {
+        self.update_iface
+            .call_rename(store, vtab_id, instance_id, new_name)
+            .await
+    }
+
+    pub async fn call_savepoint(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        instance_id: u64,
+        savepoint: i32,
+    ) -> wasmtime::Result<Result<(), String>> {
+        self.update_iface
+            .call_savepoint(store, vtab_id, instance_id, savepoint)
+            .await
+    }
+
+    pub async fn call_release(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        instance_id: u64,
+        savepoint: i32,
+    ) -> wasmtime::Result<Result<(), String>> {
+        self.update_iface
+            .call_release(store, vtab_id, instance_id, savepoint)
+            .await
+    }
+
+    pub async fn call_rollback_to(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        instance_id: u64,
+        savepoint: i32,
+    ) -> wasmtime::Result<Result<(), String>> {
+        self.update_iface
+            .call_rollback_to(store, vtab_id, instance_id, savepoint)
+            .await
+    }
+
+    pub async fn call_is_shadow_name(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        name: &str,
+    ) -> wasmtime::Result<bool> {
+        self.update_iface
+            .call_is_shadow_name(store, vtab_id, name)
+            .await
+    }
+
+    pub async fn call_integrity(
+        &self,
+        store: &mut Store<BridgeState>,
+        vtab_id: u64,
+        instance_id: u64,
+        schema: &str,
+        table_name: &str,
+        mode_flags: u32,
+    ) -> wasmtime::Result<Result<(), String>> {
+        self.update_iface
+            .call_integrity(store, vtab_id, instance_id, schema, table_name, mode_flags)
+            .await
     }
 }
