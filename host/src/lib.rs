@@ -6150,12 +6150,12 @@ impl Host {
         } else {
             wit_manifest.name.clone()
         };
-        // Translate the WIT `loaded::sqlite::extension::metadata::Manifest`
-        // into the `provider_envelope::Manifest` shape the CLI +
-        // sqlink-extension consume. Scope 1: scalars are exhaustive;
-        // aggregates/vtabs get their specs mirrored so the outer
-        // registration machinery can enumerate them, but per-tier
-        // dispatch through the bridge is a follow-up.
+        // Translate the WIT `wasmos_extension_types::Manifest` into the
+        // `provider_envelope::Manifest` shape the CLI + sqlink-extension
+        // consume. Scope 1: scalars are exhaustive; aggregates/vtabs get
+        // their specs mirrored so the outer registration machinery can
+        // enumerate them, but per-tier dispatch through the bridge is a
+        // follow-up.
         let envelope_manifest = provider_envelope::Manifest {
             name: wit_manifest.name.clone(),
             version: wit_manifest.version.clone(),
@@ -6173,13 +6173,13 @@ impl Host {
                         provider_envelope::ScalarFlags {
                             deterministic: s
                                 .func_flags
-                                .contains(loaded::sqlite::extension::types::FunctionFlags::DETERMINISTIC),
+                                .contains(wasmos_extension_types::FunctionFlags::DETERMINISTIC),
                             direct_only: s
                                 .func_flags
-                                .contains(loaded::sqlite::extension::types::FunctionFlags::DIRECT_ONLY),
+                                .contains(wasmos_extension_types::FunctionFlags::DIRECT_ONLY),
                             innocuous: s
                                 .func_flags
-                                .contains(loaded::sqlite::extension::types::FunctionFlags::INNOCUOUS),
+                                .contains(wasmos_extension_types::FunctionFlags::INNOCUOUS),
                         },
                     )
                 })
@@ -6268,9 +6268,9 @@ impl Host {
     ) -> Option<Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>>>
     {
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
-        // Convert bindings::SqlValue → loaded::SqlValue (the same shape
-        // ferried across the bridge world). Existing pass-through
-        // converters used elsewhere on the dispatch path.
+        // Convert bindings::SqlValue → wasmos_extension_types::SqlValue
+        // (the same shape ferried across the bridge world). Existing
+        // pass-through converters used elsewhere on the dispatch path.
         let loaded_args: Vec<wasmos_extension_types::SqlValue> = args
             .iter()
             .cloned()

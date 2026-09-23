@@ -295,3 +295,181 @@ pub struct S3ListObjectsOutput {
     #[component(name = "is-truncated")]
     pub is_truncated: bool,
 }
+
+// ────────────────────────────────────────────────────────────────────
+// sqlite:extension/build@1.0.0
+// ────────────────────────────────────────────────────────────────────
+
+/// Mirrors the WIT `build.build-out` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct BuildOut {
+    #[component(name = "binary-path")]
+    pub binary_path: String,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+// ────────────────────────────────────────────────────────────────────
+// sqlite:extension/policy@1.0.0
+// ────────────────────────────────────────────────────────────────────
+
+/// Mirrors the WIT `policy.capability` variant — one arm per host-
+/// imported interface. Every variant is unit; kebab-case remaps
+/// bridge Rust identifiers back to the WIT names.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(variant)]
+pub enum Capability {
+    #[component(name = "spi")]
+    Spi,
+    #[component(name = "prepared")]
+    Prepared,
+    #[component(name = "transaction")]
+    Transaction,
+    #[component(name = "schema")]
+    Schema,
+    #[component(name = "state")]
+    State,
+    #[component(name = "cache")]
+    Cache,
+    #[component(name = "random")]
+    Random,
+    #[component(name = "text")]
+    Text,
+    #[component(name = "hashing")]
+    Hashing,
+    #[component(name = "encoding")]
+    Encoding,
+    #[component(name = "http")]
+    Http,
+    #[component(name = "dns")]
+    Dns,
+    #[component(name = "wal-frames")]
+    WalFrames,
+    #[component(name = "s3")]
+    S3,
+    #[component(name = "spawn-build")]
+    SpawnBuild,
+    #[component(name = "bundles")]
+    Bundles,
+}
+
+// ────────────────────────────────────────────────────────────────────
+// sqlite:extension/metadata@1.0.0
+// ────────────────────────────────────────────────────────────────────
+
+/// Mirrors `metadata.typed-value-binding` — per-record decoder /
+/// encoder binding for the `sql-value::wit-value` arm.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct TypedValueBinding {
+    #[component(name = "type-id")]
+    pub type_id: Vec<u8>,
+    #[component(name = "symbolic-name")]
+    pub symbolic_name: String,
+    #[component(name = "decoder-import")]
+    pub decoder_import: String,
+    #[component(name = "encoder-import")]
+    pub encoder_import: String,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct ScalarFunctionSpec {
+    pub id: u64,
+    pub name: String,
+    #[component(name = "num-args")]
+    pub num_args: i32,
+    #[component(name = "func-flags")]
+    pub func_flags: FunctionFlags,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct AggregateFunctionSpec {
+    pub id: u64,
+    pub name: String,
+    #[component(name = "num-args")]
+    pub num_args: i32,
+    #[component(name = "func-flags")]
+    pub func_flags: FunctionFlags,
+    #[component(name = "is-window")]
+    pub is_window: bool,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct CollationSpec {
+    pub id: u64,
+    pub name: String,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct VtabSpec {
+    pub id: u64,
+    pub name: String,
+    pub eponymous: bool,
+    pub mutable: bool,
+    pub batched: bool,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct DotCommandExample {
+    pub description: String,
+    pub command: String,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct DotCommandSpec {
+    pub id: u64,
+    pub name: String,
+    pub version: String,
+    pub summary: String,
+    pub usage: String,
+    pub help: String,
+    pub examples: Vec<DotCommandExample>,
+    #[component(name = "requires-write")]
+    pub requires_write: bool,
+    #[component(name = "no-args")]
+    pub no_args: bool,
+}
+
+/// Mirrors the WIT `metadata.manifest` record — the extension's full
+/// declared surface, returned from `describe()`.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct Manifest {
+    pub name: String,
+    pub version: String,
+    #[component(name = "scalar-functions")]
+    pub scalar_functions: Vec<ScalarFunctionSpec>,
+    #[component(name = "aggregate-functions")]
+    pub aggregate_functions: Vec<AggregateFunctionSpec>,
+    pub collations: Vec<CollationSpec>,
+    pub vtabs: Vec<VtabSpec>,
+    #[component(name = "dot-commands")]
+    pub dot_commands: Vec<DotCommandSpec>,
+    #[component(name = "has-authorizer")]
+    pub has_authorizer: bool,
+    #[component(name = "has-update-hook")]
+    pub has_update_hook: bool,
+    #[component(name = "has-commit-hook")]
+    pub has_commit_hook: bool,
+    #[component(name = "has-wal-hook")]
+    pub has_wal_hook: bool,
+    #[component(name = "wal-hook-id")]
+    pub wal_hook_id: u64,
+    #[component(name = "declared-capabilities")]
+    pub declared_capabilities: Vec<Capability>,
+    #[component(name = "optional-capabilities")]
+    pub optional_capabilities: Vec<Capability>,
+    #[component(name = "preferred-prefix")]
+    pub preferred_prefix: Option<String>,
+    #[component(name = "prefix-expansion")]
+    pub prefix_expansion: Option<String>,
+    #[component(name = "typed-values")]
+    pub typed_values: Vec<TypedValueBinding>,
+}
