@@ -332,6 +332,49 @@ Landed 2026-09-23 (commit `b2dcd692`). Refactored
 `TabularMutating` bindgen'd World structs are no longer
 instantiated anywhere.
 
+## Phase 3 Step 1: type-only migration off `loaded` — DONE
+
+Landed 2026-09-23 in four commits on `main`:
+
+- `97587828` — introduce `host/src/wasmos_extension_types.rs`
+  with hand-rolled `SqlValue` + `WitValuePayload` +
+  `SqliteError` + `FunctionFlags` (via `wasmtime::component::
+  flags!`). Retarget the two `convert_sql_value_{to,from}_loaded`
+  helpers to bridge `bindings::` ↔ `wasmos_extension_types::`.
+  Migrate `wasmos_vtab_types` + `wasmos_mutating_dispatch` +
+  the four `Vec<loaded::…::SqlValue>` annotations in lib.rs.
+- `d0c29da7` — add the 5 `sqlite:extension/http@1.0.0`
+  records/variants (Method, Scheme, Field, Request, Response,
+  HttpError) and swap `check_http_policy` + `net_http_handle`
+  in lib.rs, `http_resident.rs`, and the four converters +
+  `http_policy_tests` in wasmos_imports.rs.
+- `308dba49` — add the 12 `sqlite:extension/s3-base@1.0.0`
+  records/variants and swap `s3.rs`, `s3_resident.rs`, plus the
+  6 `dispatch_*` free fns + 12 converters in wasmos_imports.rs.
+  Both `--features native-s3` and default builds verified.
+- `be3c970f` — add `Manifest` (+ all sub-specs) + `Capability`
+  variant + `BuildOut`. Retarget `wasmos_mutating_dispatch`'s
+  `Manifest` import and lib.rs's `FunctionFlags::contains()` bit
+  checks in the `provider_envelope::Manifest` translation.
+
+**`loaded::sqlite::extension::` reference count 106 → 21** — the
+only remaining call sites are the `session::Host` + `build::Host`
+trait impls in `compose_provider.rs` (and one docstring in
+wasmos_imports.rs). Every non-Host-trait consumer is now on
+`wasmos_extension_types::`.
+
+**`bindgen!` count still 2** — the block itself remains only
+because of the two Host trait impls. Retirement is straight
+Phase 3 Step 2/3 work.
+
+**Manifest-layout validation caveat:** `cargo test --lib`
+doesn't exercise the hand-rolled `Manifest`'s Lift path (no live
+`describe()` call). First integration test run must verify
+`Manifest`'s field order, `Capability`'s 16-variant discriminant
+order, and `FunctionFlags`'s bit layout against a real extension
+component. Same posture as the Phase 2c `ConstraintOp`
+verification.
+
 ## Phase 2c: `loaded_tabular` bindgen fully retired — DONE
 
 Landed 2026-09-23 (commit `7fd712c1`). New module
