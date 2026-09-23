@@ -1,30 +1,35 @@
 # Wasmos migration plan — sqlink-host
 
 Living plan for finishing the sqlink → wasmos wasm-runtime migration.
-Snapshotted 2026-09-22 after 44 commits landed on `main` (S1 fully
-complete; S2 pilot proven).
+Snapshotted 2026-09-22 after 49 commits landed on `main`
+(**Phase 1 + Phase 2 complete**; extension-flavor Phase 3 next).
 
 ## Current state
 
 - **S1 (engine/config/component ops)**: **DONE**. Every
   `Component::from_binary`, `Component::deserialize`,
   `Component::deserialize_file`, `Engine::new`, and `Config::new` in
-  `host/src/` is retired through the wasmos runtime facade. Peer
-  crates (`sqlink-native`, `sqlink-extension`, `sqlink-httpd`,
-  `sqlink-cli-argv`, `sqlink-parsers`, `cli`) were already wasmtime-
-  free.
+  `host/src/` is retired through the wasmos runtime facade.
 
-- **S2 (bindgen retirement)**: **IN PROGRESS**. Openssl `verify-only`
-  block retired end-to-end via `runtime.instantiate` +
-  `Instance::call_export` + hand-marshalled `Value` trees. 5 dead
-  extension-world blocks deleted (planned flavors whose `impl Host`
-  blocks were never written).
+- **S2 (bindgen retirement)**: **IN PROGRESS**.
+  - Openssl `verify-only` block retired end-to-end.
+  - 5 dead extension-world blocks deleted (planned flavors whose
+    `impl Host` blocks were never written).
+  - **Phase 1** (infrastructure) done: `WasmosDynlinkAdapter` shim,
+    `ExtensionLoaderStub` `HostImports`, `make_run_execution_context`
+    helper.
+  - **Phase 2** (leaf export dispatchers) done: `run::Runnable` and
+    `language_runtime::LanguageRuntime` bindgen blocks retired.
+    Also deleted the now-dead `make_run_linker` +
+    `Host::run_dynlink_bridge` helpers.
 
-- **`bindgen!` blocks remaining in `host/src/lib.rs`**: 11 or 12
-  (grep to confirm). All live.
+- **`bindgen!` blocks remaining in `host/src/lib.rs`**: **10**
+  (down from 17 pre-session, 12 post-openssl-pilot). All live.
+  Next up: Phase 4 host-side imports (the `bindings::` + `loaded::`
+  block families), then Phase 3 extension-flavor export dispatchers.
 
-- **`sqlink-host` lib + `sqlink` bin build clean; 65/65 unit tests
-  pass.**
+- **`sqlink-host` lib + `sqlink` bin + `sqlink-httpd` build clean;
+  65/65 unit tests pass.**
 
 - **Blocking constraint from the user**: no `wasmtime::` symbols in
   sqlink outside what's internal to wasmos. Public re-exports of
@@ -78,40 +83,48 @@ deleting: `loaded_minimal_http` and `loaded_bundle_cli` LOOK dead in
 
 ## Phases
 
-### Phase 1 — Infrastructure (~1 session)
+### Phase 1 — Infrastructure — **DONE**
 
-Prerequisite for every Group B (export-dispatching) bindgen retirement.
+Landed in commits `7425ffd2` (P1.1), `a5c5dbb4` (P1.2), `eba1b0bb`
+(P1.3). Delivers three sqlink modules:
 
-- **P1.1 — `AsyncProviderBackend` shim.** Adapter that impls
-  `wasmos_compose_dynlink::AsyncProviderBackend` for a wrapper around
-  any type implementing `datalink_dynlink::AsyncProviderBackend`. The
-  traits are structurally isomorphic. Lives in
-  `host/src/compose_provider.rs` (or a new small module).
-- **P1.2 — `sqlink:wasm/extension-loader` stub as `HostImports`.**
-  Composed runnables inherit the loader import from sqlite-lib;
-  runnables that never call `.load` need a trapping stub. Build with
-  `#[host_iface]` handlers returning
-  `LoaderError::NotAvailable`-flavored errors.
-- **P1.3 — `make_run_execution_context()` helper.** Composes: WASI
-  (`WasiEnvironment::inherit_stdio`), tvm:memory (already exists),
-  compose:dynlink linker (via P1.1),
-  extension-loader stub (via P1.2), plus fuel + epoch + memory limits.
-  Returns `ExecutionContext`.
+- **`host/src/wasmos_dynlink_shim.rs`** — `WasmosDynlinkAdapter<B>`
+  wraps an `Arc<B>` where `B: datalink_dynlink::AsyncProviderBackend`
+  and impls the isomorphic `wasmos_compose_dynlink::AsyncProviderBackend`.
+  Error mapping folds `AsyncError { code, message, context }` into
+  `DynlinkError { code, message }`.
+- **`host/src/wasmos_run_stubs.rs`** — `ExtensionLoaderStub`
+  impls `HostCall` directly (untyped) so it doesn't need typed Rust
+  mirrors for the Ok-arm records. Every method returns the
+  appropriate `Value` shape (`Result(Err(loader-error record))` for
+  fallible methods, zero-values for `component-cache-stats` /
+  `list-extensions` / etc.).
+- **`host/src/wasmos_run_context.rs`** —
+  `make_run_execution_context(backend, fuel, epoch_ms, env)` builds
+  a wasmos `ExecutionContext` composing WASI + tvm:memory +
+  compose:dynlink linker + extension-loader stub, wired to a
+  `RunConsumerState { tvm: TvmHost }`.
 
-**Deliverable**: helper compiles; no bindgen retired yet.
+### Phase 2 — Leaf export dispatchers — **DONE**
 
-### Phase 2 — Leaf export dispatchers (~1 session)
+Landed in commits `47174dce` (P2.1) and `75c2877a` (P2.2).
 
-- **P2.1 — Retire `run::Runnable`.** One call site (`run_wasm_as`).
-  Export: `sqlink:wasm/run#run`. Result marshalled via
-  `Value::Result(Ok(Some(Value::String(...))))`. Delete
-  `pub mod run { bindgen! }`.
-- **P2.2 — Retire `language_runtime::LanguageRuntime`.** Same shape;
-  2 call sites (`run_source` + a sibling). Export:
-  `sqlink:wasm/runtime#execute` with two string args. Delete
-  `pub mod language_runtime { bindgen! }`.
+- **P2.1**: `Host::run_wasm_as` now compiles via
+  `runtime_run.compile_component(ComponentSource::Bytes)`, builds an
+  `ExecutionContext` via P1.3, and dispatches
+  `sqlink:wasm/run@0.1.0#run` via `Instance::call_export`. The `run`
+  bindgen block is gone.
+- **P2.2**: `LanguageRuntime.component` is now
+  `wasmos_runtime_api::CompiledComponent`. `Host::register_runtime`
+  is `async`; a shared `dispatch_runtime_execute` helper handles
+  both `invoke_runtime` and `run_source` (dispatches
+  `sqlink:wasm/runtime@0.1.0#execute`). The `language_runtime`
+  bindgen block is gone. Also deleted the now-dead
+  `make_run_linker` + `Host::run_dynlink_bridge` helpers.
+- `sqlink-httpd/src/wasm.rs`'s `register_runtime` caller gains
+  `.await`.
 
-**Deliverable**: `bindgen!` count 12 → 10.
+**Delivered**: `bindgen!` count 12 → 10; 65/65 unit tests pass.
 
 ### Phase 3 — Extension-flavor export dispatchers (~2-3 sessions)
 
@@ -204,17 +217,20 @@ cleanup at most.
 
 ## Rough total effort
 
-| Phase                | Effort               |
-| -------------------- | -------------------- |
-| Phases 1 + 2         | ~2 sessions          |
-| Phase 3              | ~2-3 sessions        |
-| Phase 4              | ~4-6 sessions        |
-| Phases 5 + 6         | ~1 session combined  |
-| **Total**            | **~9-12 sessions**   |
+| Phase                | Effort               | Status |
+| -------------------- | -------------------- | ------ |
+| Phases 1 + 2         | ~2 sessions          | **DONE** (landed in ~1 focused stretch) |
+| Phase 3              | ~2-3 sessions        | pending (best after Phase 4) |
+| Phase 4              | ~4-6 sessions        | pending — the bulk of the rewrite |
+| Phases 5 + 6         | ~1 session combined  | pending |
+| **Total**            | **~9-12 sessions**   | ~6-10 remaining |
 
-Phases 1-2 are the highest-value next chunk — they unblock every
-subsequent phase and prove the run-shaped dispatch pattern the way
-the openssl pilot proved the openssl-shaped one.
+The Phase-1 + Phase-2 estimate turned out generous: the openssl
+pilot pattern generalised cleanly, and the `HostCall` trait's
+untyped shape let the extension-loader stub skip the type-derive
+overhead entirely. That said, Phase 4 is where the surface widens
+substantially — 11+ trait-impl clusters spanning `bindings::` and
+`loaded::` — and the estimate reflects real per-cluster effort.
 
 ## Reference
 
