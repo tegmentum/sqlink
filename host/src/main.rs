@@ -956,14 +956,18 @@ async fn main() -> Result<()> {
     // imports `opfs-host` (browser OPFS primitives). The native runtime
     // never selects the opfs VFS, so a trapping stub satisfies the
     // import without ever firing.
-    bindings::sqlink::wasm::opfs_host::add_to_linker::<_, LoaderData>(
-        &mut linker,
-        |state: &mut State| HostWrap {
-            host: &mut state.host,
-            resources: Some(&mut state.resources),
-        },
-    )
-    .map_err(|e| anyhow!("wire opfs-host: {e}"))?;
+    {
+        let opfs_imports = sqlink_host::wasmos_opfs_imports::install_opfs_host_imports(
+            wasmos_runtime_api::HostImports::new(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            &engine,
+            &mut linker,
+            &component,
+            &opfs_imports,
+        )
+        .map_err(|e| anyhow!("wire opfs-host: {e}"))?;
+    }
 
     // PLAN-cli-shared-conn.md Stage 3: the cli component's
     // sqlite-cli-command world now declares it can import spi,

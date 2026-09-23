@@ -91,6 +91,12 @@ pub mod wasmos_build_imports;
 /// `impl session::Host for ProviderSessionWrap<'a>` block in
 /// `compose_provider.rs`.
 pub mod wasmos_session_imports;
+/// Phase 4: untyped `HostCall::call` handler for
+/// `sqlink:wasm/opfs-host` — 8-method trap stub for the browser
+/// OPFS file-handle primitives. Native wasmtime never selects the
+/// opfs VFS; the handler exists only so the composed
+/// `cli + sqlite-lib` runnable can instantiate.
+pub mod wasmos_opfs_imports;
 /// Phase 2 (bindgen-free tabular-mutating): cached `TypedFunc`
 /// dispatch for the 22 vtab / vtab-update methods on
 /// `MutatingBridgeInstance`, letting the `loaded_tabular_mutating`
@@ -10809,78 +10815,12 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
     }
 }
 
-/// Task #228: trapping `opfs-host` impl. The multi-memory composed
-/// `cli + sqlite-lib` runnable imports the browser OPFS file-handle
-/// primitives. Natively we use the wasi:filesystem VFS, so these are
-/// never invoked at runtime — but the import must be satisfiable for the
-/// component to instantiate. Every call returns an error (it would only
-/// fire if a guest explicitly selected the `opfs` VFS, which the native
-/// runtime never does).
-impl<'a> bindings::sqlink::wasm::opfs_host::Host for HostWrap<'a> {
-    async fn open(
-        &mut self,
-        _path: String,
-        _create: bool,
-    ) -> std::result::Result<u64, bindings::sqlink::wasm::opfs_host::OpfsError> {
-        Err(opfs_unsupported())
-    }
-    async fn read(
-        &mut self,
-        _handle: u64,
-        _offset: u64,
-        _len: u32,
-    ) -> std::result::Result<Vec<u8>, bindings::sqlink::wasm::opfs_host::OpfsError> {
-        Err(opfs_unsupported())
-    }
-    async fn write(
-        &mut self,
-        _handle: u64,
-        _offset: u64,
-        _data: Vec<u8>,
-    ) -> std::result::Result<u32, bindings::sqlink::wasm::opfs_host::OpfsError> {
-        Err(opfs_unsupported())
-    }
-    async fn truncate(
-        &mut self,
-        _handle: u64,
-        _size: u64,
-    ) -> std::result::Result<(), bindings::sqlink::wasm::opfs_host::OpfsError> {
-        Err(opfs_unsupported())
-    }
-    async fn sync(
-        &mut self,
-        _handle: u64,
-    ) -> std::result::Result<(), bindings::sqlink::wasm::opfs_host::OpfsError> {
-        Err(opfs_unsupported())
-    }
-    async fn size(
-        &mut self,
-        _handle: u64,
-    ) -> std::result::Result<u64, bindings::sqlink::wasm::opfs_host::OpfsError> {
-        Err(opfs_unsupported())
-    }
-    async fn close(
-        &mut self,
-        _handle: u64,
-    ) -> std::result::Result<(), bindings::sqlink::wasm::opfs_host::OpfsError> {
-        Err(opfs_unsupported())
-    }
-    async fn delete(
-        &mut self,
-        _path: String,
-    ) -> std::result::Result<(), bindings::sqlink::wasm::opfs_host::OpfsError> {
-        Err(opfs_unsupported())
-    }
-}
-
-fn opfs_unsupported() -> bindings::sqlink::wasm::opfs_host::OpfsError {
-    bindings::sqlink::wasm::opfs_host::OpfsError {
-        message: "opfs-host is browser-only; the native runtime uses the \
-                  wasi:filesystem VFS (the opfs VFS is never selected natively)"
-            .to_string(),
-        code: bindings::sqlink::wasm::opfs_host::OpfsErrorCode::Invalid,
-    }
-}
+// Task #228: the `sqlink:wasm/opfs-host` trap-stub moved to
+// `crate::wasmos_opfs_imports::OpfsHostStub` (Phase 4). The native
+// runtime never selects the opfs VFS; the stub exists only so the
+// composed `cli + sqlite-lib` runnable can instantiate. Wiring
+// installed via `async_bridge::install_host_imports` at the two
+// call sites (main.rs and lib.rs's `run_cli_capture`).
 
 impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     async fn load_extension(
@@ -11963,10 +11903,18 @@ pub async fn run_cli_capture(
     // never selects the opfs VFS, so a trapping stub satisfies the
     // import without ever firing — mirrors the `sqlink` binary path in
     // main.rs so `run_cli_capture` can instantiate the composed cli.
-    bindings::sqlink::wasm::opfs_host::add_to_linker::<_, LoaderData>(&mut linker, |s: &mut CliRunState| {
-        HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
-    })
-    .map_err(|e| anyhow!("wire opfs-host: {e}"))?;
+    {
+        let opfs_imports = crate::wasmos_opfs_imports::install_opfs_host_imports(
+            wasmos_runtime_api::HostImports::new(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            &engine,
+            &mut linker,
+            &component,
+            &opfs_imports,
+        )
+        .map_err(|e| anyhow!("wire opfs-host: {e}"))?;
+    }
     bindings::sqlite::extension::spi::add_to_linker::<_, LoaderData>(&mut linker, |s: &mut CliRunState| {
         HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
     })
