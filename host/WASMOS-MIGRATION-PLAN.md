@@ -349,6 +349,20 @@ Landed 2026-09-24 in two commits on `main` (`f31e1fcf`,
   lib.rs `run_cli_capture`). ~80 lines of `impl` block +
   `opfs_unsupported()` helper deleted.
 
+- **`082b2f9b`** — inlined the 4 identity-alias converters
+  (`convert_sql_value_{to,from}_loaded`,
+  `convert_index_{info_to,plan_from}_loaded_tabular`) that were
+  pass-through after the `with:` remap unified the type
+  universes. Sed-safe substitutions across ~14 call sites +
+  the 4 fn definitions deleted (75 lines net removal).
+- **`d61e5826`** — bulk-renamed
+  `bindings::sqlite::extension::{types,vtab,policy}::X` →
+  hand-rolled `wasmos_{extension,vtab}_types::X` across
+  host/src/ (155 sites, `types`/`vtab`/`policy` reference count
+  drops to 0). No behavioral change — the paths were aliases;
+  the compiler generates identical code. Cleans up
+  stylistic-inconsistency wart from the `with:` remap.
+
 - **`99e91ad4`** — deleted dead `session::Host for HostWrap`
   (137-line impl + `lookup_session()` + `session_err()` helpers
   + `session_handles` field on `Host`). Same shape as
