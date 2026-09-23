@@ -329,6 +329,33 @@ Phase 1 wins, so realistic estimate remains ~3-4 more sessions.
 
 **Type-identity gotcha:** `loaded_tabular::exports::sqlite::extension::vtab::IndexInfo` and `loaded_tabular_mutating::exports::sqlite::extension::vtab::IndexInfo` are DIFFERENT Rust types (separate bindgen expansions from separate `bindgen!` blocks). Migrating both means picking ONE source of these types — either `loaded` (shared via `with:`) or a fresh manual definition.
 
+**Dedupe-via-`with:` attempt (2026-09-23) — CONFIRMED NEGATIVE.**
+`wasmtime::component::bindgen!`'s `with:` clause only remaps
+**imported** interfaces / types. Two forms were tried and both fail:
+
+- `"sqlite:extension/vtab": super::loaded_tabular::exports::sqlite::extension::vtab`
+  — silently ignored: the build succeeds but the two Rust types remain
+  distinct (the compile-succeeds signal was only because the existing
+  `_mut` converters still fold field-by-field between structurally
+  identical shapes).
+- `"sqlite:extension/vtab/index-info": …::IndexInfo` (per-type form)
+  — hard-errors with `interfaces were specified in the with config
+  option but are not referenced in the target world`.
+
+So the mutating world **must** own its own copy of the `vtab` export
+types (`IndexInfo`, `IndexPlan`, `ConstraintOp`, `VtabRow`,
+`Constraint`, `Orderby`, `ConstraintUsage`). The `_mut` converter
+cluster is load-bearing until we either (a) hand-roll these types
+outside bindgen and reference them from BOTH worlds via a proper
+`with:` on an imported interface (would require adding a new sub-
+interface to the WIT and referencing it via `use` in both worlds),
+or (b) migrate the mutating dispatch off `bindgen!`-generated
+accessors entirely (TypedFunc route) and thereby remove the
+`loaded_tabular_mutating` bindgen block wholesale.
+
+Route (b) is the retirement plan. Route (a) is a Phase 4-scope WIT
+change; treat as out-of-scope for the S2 bindgen retirement.
+
 ## Old Phase 1 note (kept for reference)
 
 **Old note:** `dynlink_provider_cli` retirement is HALFWAY done:
