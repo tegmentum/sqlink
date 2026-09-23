@@ -253,3 +253,54 @@ migrating live trait-impl clusters or coupling to the two
 - **Cross-repo layout**: sqlink / wasmos / tvm-wasm / datalink all
   under `~/git/` with a `[patch]` table in the workspace root pinning
   each to the local checkout.
+
+## Empirical scope confirmation (from aborted attempts)
+
+Twice attempted to migrate `dynlink_provider` end-to-end by changing
+`ProviderKind::{WasmComponent, ResidentWasmComponent}.component`
+from `wasmtime::component::Component` to
+`wasmos_runtime_api::CompiledComponent` with a `pub(crate) fn
+wt_component(&WasmosCompiledComponent) -> &Component` downcast shim.
+Reverted both times. Confirmed ripple:
+
+- `new_wasm_component_from_bytes` and
+  `new_resident_wasm_component_from_bytes` must become `async fn`
+  (they now call `runtime.compile_component().await` instead of
+  `Component::from_binary`).
+- The two SYNC-only wrapper constructors (`new_wasm_component`,
+  `new_resident_wasm_component`) must become async too.
+- Callers become async:
+  - `lib.rs:5000` (register_wasm_provider_in — sync entry point;
+    ed25519 path already block_ons through it, so the block_on now
+    wraps this).
+  - `lib.rs:5061` (register_wasm_provider_in_async — already async;
+    just `.await`).
+  - `lib.rs:5656`, `5775`, `5926`, `6035` (load-path constructors
+    inside a mix of sync/async callers).
+  - `lib.rs:12251` (loaded_dotcmd_aware `Host::register_provider`
+    trait impl — inside a bindgen-generated async method; just
+    `.await`).
+- ~10 inspection helpers (`imports_sqlite_http`,
+  `imports_sqlite_dns`, `imports_sqlite_wal_frames`,
+  `imports_sqlite_s3_base`, `imports_sqlite_compression`,
+  `imports_cli_stdout`, `imports_cli_state`,
+  `imports_sqlite_session`, `imports_sqlite_dispatch_bridge_cas`,
+  `imports_sqlite_build`, `imports_sqlite_loader_bridge`,
+  `imports_dynlink_linker`, `exports_endpoint`,
+  `exports_sqlite_extension_metadata`,
+  `exports_sqlite_extension_vtab_update`) take `&Component`.
+  Either add `wt_component` at each call site, or change signature
+  to `&WasmosCompiledComponent` and call `wt_component` inside.
+- Test callers in `host/tests/load.rs` (5 sites) +
+  `ed25519_trust_gate.rs` need `.await`.
+
+**Recommend the wt_component shim pattern** — keep field
+`WasmosCompiledComponent`, wrap with `wt_component(&*)` at every
+place a `&Component` was expected. Downstream dispatch code
+(`Store::new`, bindgen-typed linker, `component.component_type()`,
+`Component::from_binary`) then keeps working unchanged.
+
+Total change scope: ~300 lines across 2-3 files, mostly mechanical
+after the wt_component pattern is in place. **Estimate: 1 focused
+session for the whole `dynlink_provider` retirement (both fresh-
+store + resident + cli variants).**
