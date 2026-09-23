@@ -81,6 +81,11 @@ pub mod wasmos_bundle_cli_imports;
 /// the loader-bridge callback surface (load-from-bytes,
 /// digest, list, target-triple, env-var, prefix-pin).
 pub mod wasmos_loader_bridge_imports;
+/// Phase 2 (bindgen-free tabular-mutating): cached `TypedFunc`
+/// dispatch for the 22 vtab / vtab-update methods on
+/// `MutatingBridgeInstance`, letting the `loaded_tabular_mutating`
+/// bindgen retire.
+pub mod wasmos_mutating_dispatch;
 /// Phase 1 completion: generic `HostImports` handlers for cli-*
 /// interfaces, parameterised on the wasmtime store data type via
 /// the `CliStreamState` trait. Enables retirement of
@@ -160,42 +165,6 @@ pub mod loaded_tabular {
     wasmtime::component::bindgen!({
         path: "../sqlite-wit/wit/sqlite-extension",
         world: "tabular",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
-            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
-            "sqlite:extension/session": super::loaded::sqlite::extension::session,
-            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
-            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
-            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
-            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
-            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
-            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
-            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
-        },
-    });
-}
-
-/// Used when a loaded extension exports the mutating-vtab surface
-/// (`vtab-spec.mutable = true` on at least one vtab). The
-/// `tabular-mutating` world is `tabular` + the `vtab-update` export
-/// — same read surface as `loaded_tabular`, plus xUpdate /
-/// transactional callbacks. Shares `loaded`'s import-side types
-/// via `with:`; the exported `vtab` / `vtab-update` interfaces
-/// produce a per-world copy of their record/enum types since
-/// `with:` only remaps imports. The per-arm `_mut` converter
-/// siblings (`convert_vtab_index_info_to_loaded_mut`,
-/// `convert_vtab_index_plan_from_loaded_mut`,
-/// `convert_vtab_constraint_op_to_loaded_mut`) bridge the wire-
-/// side `IndexInfo` / `IndexPlan` / `ConstraintOp` into this
-/// world's variants.
-pub mod loaded_tabular_mutating {
-    wasmtime::component::bindgen!({
-        path: "../sqlite-wit/wit/sqlite-extension",
-        world: "tabular-mutating",
         imports: { default: async },
         exports: { default: async },
         with: {
@@ -6372,10 +6341,7 @@ impl Host {
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.connect): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_connect(
+            let result = m.dispatch.call_connect(
                     &mut m.store,
                     vtab_id,
                     instance_id,
@@ -6428,10 +6394,7 @@ impl Host {
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.disconnect): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_disconnect(&mut m.store, vtab_id, instance_id)
+            let result = m.dispatch.call_disconnect(&mut m.store, vtab_id, instance_id)
                 .await;
             return Some(match result {
                 Ok(r) => Ok(r),
@@ -6467,19 +6430,16 @@ impl Host {
     {
         let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
         if let Some(m_arc) = m_opt {
-            let loaded_info = convert_index_info_to_loaded_mut(&info);
+            let loaded_info = convert_index_info_to_loaded_tabular(&info);
             let mut guard = m_arc.lock().await;
             let m = &mut *guard;
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.best-index): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_best_index(&mut m.store, vtab_id, instance_id, &loaded_info)
+            let result = m.dispatch.call_best_index(&mut m.store, vtab_id, instance_id, &loaded_info)
                 .await;
             return Some(match result {
-                Ok(Ok(plan)) => Ok(Ok(convert_index_plan_from_loaded_mut(plan))),
+                Ok(Ok(plan)) => Ok(Ok(convert_index_plan_from_loaded_tabular(plan))),
                 Ok(Err(e)) => Ok(Err(e)),
                 Err(trap) => Ok(Err(format!(
                     "dynlink bridge (mutating) vtab.best-index trap: {trap}"
@@ -6519,10 +6479,7 @@ impl Host {
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.open): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_open(&mut m.store, vtab_id, instance_id, cursor_id)
+            let result = m.dispatch.call_open(&mut m.store, vtab_id, instance_id, cursor_id)
                 .await;
             return Some(match result {
                 Ok(r) => Ok(r),
@@ -6561,10 +6518,7 @@ impl Host {
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.close): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_close(&mut m.store, vtab_id, cursor_id)
+            let result = m.dispatch.call_close(&mut m.store, vtab_id, cursor_id)
                 .await;
             return Some(match result {
                 Ok(r) => Ok(r),
@@ -6610,10 +6564,7 @@ impl Host {
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.filter): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_filter(
+            let result = m.dispatch.call_filter(
                     &mut m.store,
                     vtab_id,
                     cursor_id,
@@ -6678,16 +6629,10 @@ impl Host {
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.fetch-batch): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_fetch_batch(&mut m.store, vtab_id, cursor_id, max_rows)
+            let result = m.dispatch.call_fetch_batch(&mut m.store, vtab_id, cursor_id, max_rows)
                 .await;
             return Some(match result {
-                Ok(Ok(rows)) => Ok(Ok(rows
-                    .into_iter()
-                    .map(convert_vtab_row_from_loaded_mut)
-                    .collect())),
+                Ok(Ok(rows)) => Ok(Ok(rows)),
                 Ok(Err(e)) => Ok(Err(e)),
                 Err(trap) => Ok(Err(format!(
                     "dynlink bridge (mutating) vtab.fetch-batch trap: {trap}"
@@ -6724,10 +6669,7 @@ impl Host {
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.next): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_next(&mut m.store, vtab_id, cursor_id)
+            let result = m.dispatch.call_next(&mut m.store, vtab_id, cursor_id)
                 .await;
             return Some(match result {
                 Ok(r) => Ok(r),
@@ -6766,10 +6708,7 @@ impl Host {
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.eof): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_eof(&mut m.store, vtab_id, cursor_id)
+            let result = m.dispatch.call_eof(&mut m.store, vtab_id, cursor_id)
                 .await;
             return Some(match result {
                 Ok(b) => Ok(b),
@@ -6810,10 +6749,7 @@ impl Host {
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.column): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_column(&mut m.store, vtab_id, cursor_id, col)
+            let result = m.dispatch.call_column(&mut m.store, vtab_id, cursor_id, col)
                 .await;
             return Some(match result {
                 Ok(Ok(v)) => Ok(Ok(convert_sql_value_from_loaded(v))),
@@ -6854,10 +6790,7 @@ impl Host {
             if let Err(e) = m.store.set_fuel(u64::MAX / 2) {
                 return Some(Err(anyhow!("refresh fuel (vtab.rowid): {e}")));
             }
-            let result = m
-                .instance
-                .sqlite_extension_vtab()
-                .call_rowid(&mut m.store, vtab_id, cursor_id)
+            let result = m.dispatch.call_rowid(&mut m.store, vtab_id, cursor_id)
                 .await;
             return Some(match result {
                 Ok(r) => Ok(r),
@@ -6923,10 +6856,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.update): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_update(&mut bridge.store, vtab_id, instance_id, &loaded_args)
+        let result = bridge.dispatch.call_update(&mut bridge.store, vtab_id, instance_id, &loaded_args)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -6946,10 +6876,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.begin): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_begin(&mut bridge.store, vtab_id, instance_id)
+        let result = bridge.dispatch.call_begin(&mut bridge.store, vtab_id, instance_id)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -6969,10 +6896,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.sync): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_sync(&mut bridge.store, vtab_id, instance_id)
+        let result = bridge.dispatch.call_sync(&mut bridge.store, vtab_id, instance_id)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -6992,10 +6916,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.commit): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_commit(&mut bridge.store, vtab_id, instance_id)
+        let result = bridge.dispatch.call_commit(&mut bridge.store, vtab_id, instance_id)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -7015,10 +6936,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.rollback): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_rollback(&mut bridge.store, vtab_id, instance_id)
+        let result = bridge.dispatch.call_rollback(&mut bridge.store, vtab_id, instance_id)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -7039,10 +6957,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.rename): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_rename(&mut bridge.store, vtab_id, instance_id, new_name)
+        let result = bridge.dispatch.call_rename(&mut bridge.store, vtab_id, instance_id, new_name)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -7063,10 +6978,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.savepoint): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_savepoint(&mut bridge.store, vtab_id, instance_id, savepoint)
+        let result = bridge.dispatch.call_savepoint(&mut bridge.store, vtab_id, instance_id, savepoint)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -7087,10 +6999,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.release): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_release(&mut bridge.store, vtab_id, instance_id, savepoint)
+        let result = bridge.dispatch.call_release(&mut bridge.store, vtab_id, instance_id, savepoint)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -7111,10 +7020,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.rollback-to): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_rollback_to(&mut bridge.store, vtab_id, instance_id, savepoint)
+        let result = bridge.dispatch.call_rollback_to(&mut bridge.store, vtab_id, instance_id, savepoint)
             .await;
         Some(match result {
             Ok(r) => Ok(r),
@@ -7136,10 +7042,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.is-shadow-name): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_is_shadow_name(&mut bridge.store, vtab_id, name)
+        let result = bridge.dispatch.call_is_shadow_name(&mut bridge.store, vtab_id, name)
             .await;
         Some(match result {
             Ok(b) => Ok(b),
@@ -7164,10 +7067,7 @@ impl Host {
         if let Err(e) = bridge.store.set_fuel(u64::MAX / 2) {
             return Some(Err(anyhow!("refresh fuel (vtab-update.integrity): {e}")));
         }
-        let result = bridge
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_integrity(
+        let result = bridge.dispatch.call_integrity(
                 &mut bridge.store,
                 vtab_id,
                 instance_id,
@@ -12566,98 +12466,12 @@ fn convert_index_plan_from_loaded_tabular(
     }
 }
 
-// ── Mirror converters against the `tabular-mutating` world ─────
-//
-// The `with:` bindgen directive shares imported interfaces (e.g.
-// `sqlite:extension/types::SqlValue`) but not exported ones — so
-// the `vtab` interface exports produce a per-world duplicate of
-// `IndexInfo` / `IndexPlan` / `ConstraintOp` / `VtabRow` etc. When
-// the read path routes through the mutating bridge instance (to
-// keep reads and writes on a single wasm store), these fold the
-// dispatch-side wire types into the mutating-world variants and
-// back.
-
-fn convert_constraint_op_to_loaded_mut(
-    op: bindings::sqlite::extension::vtab::ConstraintOp,
-) -> loaded_tabular_mutating::exports::sqlite::extension::vtab::ConstraintOp {
-    use bindings::sqlite::extension::vtab::ConstraintOp as From;
-    use loaded_tabular_mutating::exports::sqlite::extension::vtab::ConstraintOp as To;
-    match op {
-        From::Eq => To::Eq,
-        From::Gt => To::Gt,
-        From::Le => To::Le,
-        From::Lt => To::Lt,
-        From::Ge => To::Ge,
-        From::Ne => To::Ne,
-        From::Match => To::Match,
-        From::Like => To::Like,
-        From::Regexp => To::Regexp,
-        From::Glob => To::Glob,
-        From::IsNull => To::IsNull,
-        From::IsNotNull => To::IsNotNull,
-        From::Limit => To::Limit,
-        From::Offset => To::Offset,
-        From::Function => To::Function,
-    }
-}
-
-fn convert_index_info_to_loaded_mut(
-    info: &bindings::sqlite::extension::vtab::IndexInfo,
-) -> loaded_tabular_mutating::exports::sqlite::extension::vtab::IndexInfo {
-    loaded_tabular_mutating::exports::sqlite::extension::vtab::IndexInfo {
-        constraints: info
-            .constraints
-            .iter()
-            .map(|c| {
-                loaded_tabular_mutating::exports::sqlite::extension::vtab::Constraint {
-                    column: c.column,
-                    op: convert_constraint_op_to_loaded_mut(c.op),
-                    usable: c.usable,
-                }
-            })
-            .collect(),
-        orderbys: info
-            .orderbys
-            .iter()
-            .map(|o| {
-                loaded_tabular_mutating::exports::sqlite::extension::vtab::Orderby {
-                    column: o.column,
-                    desc: o.desc,
-                }
-            })
-            .collect(),
-        col_used: info.col_used,
-    }
-}
-
-fn convert_index_plan_from_loaded_mut(
-    plan: loaded_tabular_mutating::exports::sqlite::extension::vtab::IndexPlan,
-) -> bindings::sqlite::extension::vtab::IndexPlan {
-    bindings::sqlite::extension::vtab::IndexPlan {
-        constraint_usage: plan
-            .constraint_usage
-            .into_iter()
-            .map(|u| bindings::sqlite::extension::vtab::ConstraintUsage {
-                argv_index: u.argv_index,
-                omit: u.omit,
-            })
-            .collect(),
-        idx_num: plan.idx_num,
-        idx_str: plan.idx_str,
-        estimated_cost: plan.estimated_cost,
-        estimated_rows: plan.estimated_rows,
-        orderby_consumed: plan.orderby_consumed,
-    }
-}
-
-/// Fold a mutating-world VtabRow into the `loaded_tabular` VtabRow
-/// so `dispatch_vtab_fetch_batch` keeps its signature identical
-/// whether the batch came from the read-only or mutating instance.
-fn convert_vtab_row_from_loaded_mut(
-    row: loaded_tabular_mutating::exports::sqlite::extension::vtab::VtabRow,
-) -> loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
-    loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
-        rowid: row.rowid,
-        columns: row.columns,
-    }
-}
+// The `_mut` converter cluster that previously bridged the
+// `tabular-mutating` world's per-export `IndexInfo` / `IndexPlan` /
+// `ConstraintOp` / `VtabRow` types is gone. The mutating bridge's
+// dispatch now goes through cached TypedFuncs in
+// `wasmos_mutating_dispatch` that reuse `loaded_tabular`'s vtab
+// export types (structurally identical, same WIT source). The
+// non-mut `convert_index_info_to_loaded_tabular` +
+// `convert_index_plan_from_loaded_tabular` converters cover both
+// paths.

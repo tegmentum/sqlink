@@ -291,6 +291,31 @@ pair. All 65/65 unit tests pass.
 Remaining: `bindings`, `loaded`, `loaded_tabular`,
 `loaded_tabular_mutating`.
 
+## Phase 2a: `loaded_tabular_mutating` retirement — DONE
+
+Retired 2026-09-23 via cached-`TypedFunc` dispatch on
+`MutatingBridgeInstance`. New module
+`host/src/wasmos_mutating_dispatch.rs` holds 22 typed function
+handles (11 vtab reads + 11 vtab-update methods), populated once
+at instantiate time in `instantiate_dynlink_bridge_mutating`. All
+22 dispatch call sites in `lib.rs` now go through
+`m.dispatch.call_XXX` (mutating reads) or `bridge.dispatch.call_XXX`
+(vtab-update); the bindgen block is deleted.
+
+**Type-identity insight:** `TypedFunc<_,
+(loaded_tabular::exports::sqlite::extension::vtab::IndexPlan,)>`
+lifts the mutating instance's `sqlite:extension/vtab#best-index`
+return exactly as the read-only bridge does — the two bindgens
+produce structurally identical types from the same WIT source, and
+wasmtime's Lift only checks structural compatibility. This lets us
+reuse `loaded_tabular`'s vtab export types across BOTH bridge
+instances and delete the entire `_mut` converter cluster
+(~90 lines) in the same commit.
+
+**`bindgen!` count: 4 → 3.**
+
+Remaining: `bindings`, `loaded`, `loaded_tabular`.
+
 ## Empirical retirement pace
 
 Session 2026-09-22..23 delivered:

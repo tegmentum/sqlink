@@ -782,7 +782,8 @@ pub struct BridgeInstance {
 /// `AsyncDynLinkBridge`.
 pub struct MutatingBridgeInstance {
     pub store: Store<BridgeState>,
-    pub instance: crate::loaded_tabular_mutating::TabularMutating,
+    pub instance: wasmtime::component::Instance,
+    pub dispatch: crate::wasmos_mutating_dispatch::MutatingBridgeDispatch,
 }
 
 /// Instantiate a compose:dynlink bridge component.
@@ -913,12 +914,18 @@ pub async fn instantiate_dynlink_bridge_mutating(
         .set_fuel(u64::MAX / 2)
         .map_err(|e| format!("set_fuel: {e}"))?;
     store.set_epoch_deadline(1_000_000_000_000);
-    let instance = crate::loaded_tabular_mutating::TabularMutating::instantiate_async(
-        &mut store, &component, &linker,
-    )
-    .await
-    .map_err(|e| format!("instantiate dynlink bridge (mutating): {e}"))?;
-    Ok(MutatingBridgeInstance { store, instance })
+    let instance = linker
+        .instantiate_async(&mut store, &component)
+        .await
+        .map_err(|e| format!("instantiate dynlink bridge (mutating): {e}"))?;
+    let dispatch = crate::wasmos_mutating_dispatch::MutatingBridgeDispatch::install(
+        &mut store, &instance,
+    )?;
+    Ok(MutatingBridgeInstance {
+        store,
+        instance,
+        dispatch,
+    })
 }
 
 /// True if `component` exports `sqlite:extension/vtab-update@1.0.0` —
