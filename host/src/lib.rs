@@ -85,6 +85,12 @@ pub mod wasmos_loader_bridge_imports;
 /// `spawn-build`. Retires the `impl build::Host for ProviderCliState`
 /// block in `compose_provider.rs`.
 pub mod wasmos_build_imports;
+/// Phase 3 Step 3 of the S2 wasmos migration: `#[host_iface]`
+/// handler for `sqlite:extension/session@1.0.0` — 9 methods over
+/// the SQLite changeset/session FFI. Retires the
+/// `impl session::Host for ProviderSessionWrap<'a>` block in
+/// `compose_provider.rs`.
+pub mod wasmos_session_imports;
 /// Phase 2 (bindgen-free tabular-mutating): cached `TypedFunc`
 /// dispatch for the 22 vtab / vtab-update methods on
 /// `MutatingBridgeInstance`, letting the `loaded_tabular_mutating`
