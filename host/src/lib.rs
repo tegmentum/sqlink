@@ -68,6 +68,10 @@ pub mod wasmos_dynlink_shim;
 /// Phase 1.2 of the S2 wasmos migration: `HostImports` stubs for
 /// runnable-shape imports composed runnables inherit but never call.
 pub mod wasmos_run_stubs;
+/// Phase 1.3 of the S2 wasmos migration: `ExecutionContext` builder
+/// for runnable-shape guests (WASI + tvm + compose:dynlink +
+/// extension-loader stub, plus fuel/epoch policy).
+pub mod wasmos_run_context;
 /// Resident `http-endpoint` compose:dynlink/endpoint provider routing — the
 /// default HTTP path. #106.
 #[cfg(not(feature = "native-http"))]
