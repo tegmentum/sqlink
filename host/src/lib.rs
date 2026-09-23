@@ -28,7 +28,6 @@
 pub mod cache;
 pub mod component_blob_cache;
 pub mod compose_provider;
-mod contract_guard_bridge;
 pub mod policy;
 pub mod prefix_registry;
 /// Native, in-host S3 path (aws-sigv4 + reqwest). Superseded by the resident
@@ -5556,8 +5555,13 @@ impl Host {
         // `register_component` guard so version rejection survives the loader
         // deletion; runs before the endpoint check so an incompatible-version
         // component is rejected with the actionable contract message.
+        let compiled = compose_provider::wrap_wasmtime_component(
+            component.clone(),
+            name_hint.to_string(),
+            &self.runtime,
+        );
         let imported_major =
-            crate::contract_guard_bridge::component_contract_major(self.runtime.engine(), &component, CONTRACT_PACKAGE);
+            datalink_contract::component_contract_major(&compiled, CONTRACT_PACKAGE);
         datalink_contract::check_component_contract(
             imported_major,
             CONTRACT_MAJOR,
@@ -5662,8 +5666,13 @@ impl Host {
         let component = self.component_for_digest(&bytes, &digest, name_hint).await?;
         // Contract-version guard (#220): reject an ABI-skewed component before
         // instantiating (mirrors instantiate_provider_from_bytes).
+        let compiled = compose_provider::wrap_wasmtime_component(
+            component.clone(),
+            name_hint.to_string(),
+            &self.runtime,
+        );
         let imported_major =
-            crate::contract_guard_bridge::component_contract_major(self.runtime.engine(), &component, CONTRACT_PACKAGE);
+            datalink_contract::component_contract_major(&compiled, CONTRACT_PACKAGE);
         datalink_contract::check_component_contract(
             imported_major,
             CONTRACT_MAJOR,
@@ -12008,18 +12017,16 @@ mod contract_guard_tests {
 
     use super::{CONTRACT_MAJOR, CONTRACT_PACKAGE};
     use wasmtime::component::Component;
-    use wasmtime::Engine;
 
-    fn engine() -> Engine {
-        // Test-side engine flows through the wasmos runtime facade,
-        // mirroring the runtime constructions elsewhere in
-        // sqlink-host: `RuntimeConfig::default().with_wasm_exceptions(true)`
-        // (the async + component-model bits are on by default).
-        let rt = wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime::new(
+    fn runtime() -> wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime {
+        // Test-side runtime constructed the same way the host builds
+        // its `WasmtimeV48Runtime`: `RuntimeConfig::default()
+        // .with_wasm_exceptions(true)` (async + component-model bits
+        // are on by default).
+        wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime::new(
             wasmos_runtime_api::RuntimeConfig::default().with_wasm_exceptions(true),
         )
-        .expect("runtime");
-        rt.engine().clone()
+        .expect("runtime")
     }
 
     #[test]
@@ -12033,12 +12040,18 @@ mod contract_guard_tests {
         // the old "find a real one" approach picked up a major-1 component
         // and mis-asserted. Synthesis pins the legacy-rejection behavior
         // so a future loose patch can't silently accept ABI-skewed bytes.
-        let engine = engine();
+        let rt = runtime();
         let bytes = synth_component_targeting("0.1.0");
-        let component = Component::from_binary(&engine, &bytes).expect("parse component");
+        let component =
+            Component::from_binary(rt.engine(), &bytes).expect("parse component");
+        let compiled = crate::compose_provider::wrap_wasmtime_component(
+            component,
+            "legacy_v0_1".to_string(),
+            &rt,
+        );
 
         let major =
-            crate::contract_guard_bridge::component_contract_major(&engine, &component, CONTRACT_PACKAGE);
+            datalink_contract::component_contract_major(&compiled, CONTRACT_PACKAGE);
         assert_eq!(major, Some(0), "legacy component should target major 0");
 
         // Host CONTRACT_MAJOR is now 1; the guard must REJECT a legacy
