@@ -272,7 +272,23 @@ migrating live trait-impl clusters or coupling to the two
 **`bindgen!` count: 8 → 5.** Remaining: `bindings`, `loaded`,
 `loaded_tabular`, `loaded_tabular_mutating`, `dynlink_provider_cli`.
 
-**Next step:** `dynlink_provider_cli` retirement is HALFWAY done:
+## Phase 1 COMPLETE (commit `1c153c94`)
+
+`dynlink_provider_cli` fully retired. New module
+`wasmos_provider_cli_bridge.rs` provides `HostImports` handlers
+for cli-stdout/stderr/state using an `Arc<Mutex<CliCapture>>`-
+based per-invocation buffer captured at construction (sidesteps
+the async-trait Send/Sync cascade that a generic-over-T handler
+hit against `!Sync` `WasiCtx` inside `ProviderState`/`ProviderCliState`).
+
+**`bindgen!` count: 5 → 4.**
+
+Remaining: `bindings`, `loaded`, `loaded_tabular`,
+`loaded_tabular_mutating`.
+
+## Old Phase 1 note (kept for reference)
+
+**Old note:** `dynlink_provider_cli` retirement is HALFWAY done:
 the dispatch site is now bindgen-free (commit `1e4dab55`) via
 the same `TypedFunc` pattern as `dynlink_provider`. What remains
 is migrating the 6 cli-* Host trait impls (3 interfaces ×
