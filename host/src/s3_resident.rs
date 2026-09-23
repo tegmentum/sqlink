@@ -40,7 +40,7 @@ use datalink_dynlink::{
 };
 use tokio::sync::OnceCell;
 
-use crate::loaded::sqlite::extension::s3_base::{
+use crate::wasmos_extension_types::{
     S3Credentials, S3EndpointConfig, S3Error, S3GetObjectOptions, S3GetObjectOutput,
     S3HeadObjectOutput, S3ListObjectsOptions, S3ListObjectsOutput, S3ObjectInfo, S3ObjectMetadata,
     S3PutObjectOptions, S3PutObjectOutput,

@@ -159,3 +159,139 @@ pub enum HttpError {
     #[component(name = "other")]
     Other(String),
 }
+
+// ────────────────────────────────────────────────────────────────────
+// sqlite:extension/s3-base@1.0.0
+// ────────────────────────────────────────────────────────────────────
+
+/// Mirrors the WIT `s3-base.s3-error` variant. 5 unit + 4 string-
+/// payload arms.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(variant)]
+pub enum S3Error {
+    #[component(name = "access-denied")]
+    AccessDenied,
+    #[component(name = "no-such-bucket")]
+    NoSuchBucket,
+    #[component(name = "no-such-key")]
+    NoSuchKey,
+    #[component(name = "invalid-bucket-name")]
+    InvalidBucketName,
+    #[component(name = "invalid-request")]
+    InvalidRequest(String),
+    #[component(name = "network-error")]
+    NetworkError(String),
+    #[component(name = "parse-error")]
+    ParseError(String),
+    #[component(name = "internal")]
+    Internal(String),
+    #[component(name = "capability-not-granted")]
+    CapabilityNotGranted,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3Credentials {
+    #[component(name = "access-key-id")]
+    pub access_key_id: String,
+    #[component(name = "secret-access-key")]
+    pub secret_access_key: String,
+    #[component(name = "session-token")]
+    pub session_token: Option<String>,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3EndpointConfig {
+    pub url: String,
+    pub region: String,
+    #[component(name = "path-style")]
+    pub path_style: bool,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3ObjectMetadata {
+    #[component(name = "content-type")]
+    pub content_type: Option<String>,
+    #[component(name = "content-length")]
+    pub content_length: Option<u64>,
+    pub etag: Option<String>,
+    #[component(name = "last-modified")]
+    pub last_modified: Option<u64>,
+    pub custom: Vec<(String, String)>,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3ObjectInfo {
+    pub key: String,
+    pub size: u64,
+    pub etag: Option<String>,
+    #[component(name = "last-modified")]
+    pub last_modified: Option<u64>,
+    #[component(name = "storage-class")]
+    pub storage_class: Option<String>,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3GetObjectOptions {
+    pub range: Option<(u64, u64)>,
+    #[component(name = "if-match")]
+    pub if_match: Option<String>,
+    #[component(name = "if-none-match")]
+    pub if_none_match: Option<String>,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3PutObjectOptions {
+    #[component(name = "content-type")]
+    pub content_type: Option<String>,
+    pub metadata: Vec<(String, String)>,
+    #[component(name = "cache-control")]
+    pub cache_control: Option<String>,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3ListObjectsOptions {
+    pub prefix: Option<String>,
+    pub delimiter: Option<String>,
+    #[component(name = "max-keys")]
+    pub max_keys: Option<u32>,
+    #[component(name = "continuation-token")]
+    pub continuation_token: Option<String>,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3GetObjectOutput {
+    pub body: Vec<u8>,
+    pub metadata: S3ObjectMetadata,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3PutObjectOutput {
+    pub etag: String,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3HeadObjectOutput {
+    pub metadata: S3ObjectMetadata,
+}
+
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct S3ListObjectsOutput {
+    pub objects: Vec<S3ObjectInfo>,
+    #[component(name = "common-prefixes")]
+    pub common_prefixes: Vec<String>,
+    #[component(name = "next-continuation-token")]
+    pub next_continuation_token: Option<String>,
+    #[component(name = "is-truncated")]
+    pub is_truncated: bool,
+}

@@ -512,9 +512,9 @@ pub fn install_http_imports(imports: HostImports, http_policy: Option<HttpPolicy
 // ────────────────────────────────────────────────────────────────────
 // Phase 6.2.e-e — s3_base interface (5/6).
 //
-// Biggest slice by mirror-type count (12 types). Mirrors the
-// wit-bindgen `impl loaded::sqlite::extension::s3_base::Host for
-// ProviderState` at `crate::lib` line 2376.
+// Biggest slice by mirror-type count (12 types). Delegates to the
+// `dispatch_*` free fns below (whose wire types are the hand-rolled
+// `wasmos_extension_types::S3*` records/variants).
 //
 // Each of the 6 methods (get/put/delete/head/list/copy) checks
 // the captured `s3_granted` flag (deny-by-default fail-closed
@@ -539,8 +539,8 @@ pub enum S3Error {
 }
 
 impl S3Error {
-    fn from_bindgen(err: crate::loaded::sqlite::extension::s3_base::S3Error) -> Self {
-        use crate::loaded::sqlite::extension::s3_base::S3Error as B;
+    fn from_bindgen(err: crate::wasmos_extension_types::S3Error) -> Self {
+        use crate::wasmos_extension_types::S3Error as B;
         match err {
             B::AccessDenied => S3Error::AccessDenied,
             B::NoSuchBucket => S3Error::NoSuchBucket,
@@ -564,8 +564,8 @@ pub struct S3Credentials {
 }
 
 impl S3Credentials {
-    fn to_bindgen(self) -> crate::loaded::sqlite::extension::s3_base::S3Credentials {
-        crate::loaded::sqlite::extension::s3_base::S3Credentials {
+    fn to_bindgen(self) -> crate::wasmos_extension_types::S3Credentials {
+        crate::wasmos_extension_types::S3Credentials {
             access_key_id: self.access_key_id,
             secret_access_key: self.secret_access_key,
             session_token: self.session_token,
@@ -582,8 +582,8 @@ pub struct S3EndpointConfig {
 }
 
 impl S3EndpointConfig {
-    fn to_bindgen(self) -> crate::loaded::sqlite::extension::s3_base::S3EndpointConfig {
-        crate::loaded::sqlite::extension::s3_base::S3EndpointConfig {
+    fn to_bindgen(self) -> crate::wasmos_extension_types::S3EndpointConfig {
+        crate::wasmos_extension_types::S3EndpointConfig {
             url: self.url,
             region: self.region,
             path_style: self.path_style,
@@ -602,7 +602,7 @@ pub struct S3ObjectMetadata {
 }
 
 impl S3ObjectMetadata {
-    fn from_bindgen(m: crate::loaded::sqlite::extension::s3_base::S3ObjectMetadata) -> Self {
+    fn from_bindgen(m: crate::wasmos_extension_types::S3ObjectMetadata) -> Self {
         S3ObjectMetadata {
             content_type: m.content_type,
             content_length: m.content_length,
@@ -624,7 +624,7 @@ pub struct S3ObjectInfo {
 }
 
 impl S3ObjectInfo {
-    fn from_bindgen(i: crate::loaded::sqlite::extension::s3_base::S3ObjectInfo) -> Self {
+    fn from_bindgen(i: crate::wasmos_extension_types::S3ObjectInfo) -> Self {
         S3ObjectInfo {
             key: i.key,
             size: i.size,
@@ -644,8 +644,8 @@ pub struct S3GetObjectOptions {
 }
 
 impl S3GetObjectOptions {
-    fn to_bindgen(self) -> crate::loaded::sqlite::extension::s3_base::S3GetObjectOptions {
-        crate::loaded::sqlite::extension::s3_base::S3GetObjectOptions {
+    fn to_bindgen(self) -> crate::wasmos_extension_types::S3GetObjectOptions {
+        crate::wasmos_extension_types::S3GetObjectOptions {
             range: self.range,
             if_match: self.if_match,
             if_none_match: self.if_none_match,
@@ -662,8 +662,8 @@ pub struct S3PutObjectOptions {
 }
 
 impl S3PutObjectOptions {
-    fn to_bindgen(self) -> crate::loaded::sqlite::extension::s3_base::S3PutObjectOptions {
-        crate::loaded::sqlite::extension::s3_base::S3PutObjectOptions {
+    fn to_bindgen(self) -> crate::wasmos_extension_types::S3PutObjectOptions {
+        crate::wasmos_extension_types::S3PutObjectOptions {
             content_type: self.content_type,
             metadata: self.metadata,
             cache_control: self.cache_control,
@@ -681,8 +681,8 @@ pub struct S3ListObjectsOptions {
 }
 
 impl S3ListObjectsOptions {
-    fn to_bindgen(self) -> crate::loaded::sqlite::extension::s3_base::S3ListObjectsOptions {
-        crate::loaded::sqlite::extension::s3_base::S3ListObjectsOptions {
+    fn to_bindgen(self) -> crate::wasmos_extension_types::S3ListObjectsOptions {
+        crate::wasmos_extension_types::S3ListObjectsOptions {
             prefix: self.prefix,
             delimiter: self.delimiter,
             max_keys: self.max_keys,
@@ -699,7 +699,7 @@ pub struct S3GetObjectOutput {
 }
 
 impl S3GetObjectOutput {
-    fn from_bindgen(o: crate::loaded::sqlite::extension::s3_base::S3GetObjectOutput) -> Self {
+    fn from_bindgen(o: crate::wasmos_extension_types::S3GetObjectOutput) -> Self {
         S3GetObjectOutput {
             body: o.body,
             metadata: S3ObjectMetadata::from_bindgen(o.metadata),
@@ -714,7 +714,7 @@ pub struct S3PutObjectOutput {
 }
 
 impl S3PutObjectOutput {
-    fn from_bindgen(o: crate::loaded::sqlite::extension::s3_base::S3PutObjectOutput) -> Self {
+    fn from_bindgen(o: crate::wasmos_extension_types::S3PutObjectOutput) -> Self {
         S3PutObjectOutput { etag: o.etag }
     }
 }
@@ -726,7 +726,7 @@ pub struct S3HeadObjectOutput {
 }
 
 impl S3HeadObjectOutput {
-    fn from_bindgen(o: crate::loaded::sqlite::extension::s3_base::S3HeadObjectOutput) -> Self {
+    fn from_bindgen(o: crate::wasmos_extension_types::S3HeadObjectOutput) -> Self {
         S3HeadObjectOutput {
             metadata: S3ObjectMetadata::from_bindgen(o.metadata),
         }
@@ -743,7 +743,7 @@ pub struct S3ListObjectsOutput {
 }
 
 impl S3ListObjectsOutput {
-    fn from_bindgen(o: crate::loaded::sqlite::extension::s3_base::S3ListObjectsOutput) -> Self {
+    fn from_bindgen(o: crate::wasmos_extension_types::S3ListObjectsOutput) -> Self {
         S3ListObjectsOutput {
             objects: o.objects.into_iter().map(S3ObjectInfo::from_bindgen).collect(),
             common_prefixes: o.common_prefixes,
@@ -781,14 +781,14 @@ impl S3BaseHost {
 // `get_object` — matches the feature-gate + delegation pattern
 // used inside the wit-bindgen impl at `crate::lib` line 2391.
 async fn dispatch_get_object(
-    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
-    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    endpoint: crate::wasmos_extension_types::S3EndpointConfig,
+    credentials: crate::wasmos_extension_types::S3Credentials,
     bucket: String,
     key: String,
-    options: Option<crate::loaded::sqlite::extension::s3_base::S3GetObjectOptions>,
+    options: Option<crate::wasmos_extension_types::S3GetObjectOptions>,
 ) -> std::result::Result<
-    crate::loaded::sqlite::extension::s3_base::S3GetObjectOutput,
-    crate::loaded::sqlite::extension::s3_base::S3Error,
+    crate::wasmos_extension_types::S3GetObjectOutput,
+    crate::wasmos_extension_types::S3Error,
 > {
     #[cfg(not(feature = "native-s3"))]
     return crate::s3_resident::get_object(endpoint, credentials, bucket, key, options).await;
@@ -797,15 +797,15 @@ async fn dispatch_get_object(
 }
 
 async fn dispatch_put_object(
-    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
-    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    endpoint: crate::wasmos_extension_types::S3EndpointConfig,
+    credentials: crate::wasmos_extension_types::S3Credentials,
     bucket: String,
     key: String,
     body: Vec<u8>,
-    options: Option<crate::loaded::sqlite::extension::s3_base::S3PutObjectOptions>,
+    options: Option<crate::wasmos_extension_types::S3PutObjectOptions>,
 ) -> std::result::Result<
-    crate::loaded::sqlite::extension::s3_base::S3PutObjectOutput,
-    crate::loaded::sqlite::extension::s3_base::S3Error,
+    crate::wasmos_extension_types::S3PutObjectOutput,
+    crate::wasmos_extension_types::S3Error,
 > {
     #[cfg(not(feature = "native-s3"))]
     return crate::s3_resident::put_object(endpoint, credentials, bucket, key, body, options).await;
@@ -814,11 +814,11 @@ async fn dispatch_put_object(
 }
 
 async fn dispatch_delete_object(
-    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
-    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    endpoint: crate::wasmos_extension_types::S3EndpointConfig,
+    credentials: crate::wasmos_extension_types::S3Credentials,
     bucket: String,
     key: String,
-) -> std::result::Result<(), crate::loaded::sqlite::extension::s3_base::S3Error> {
+) -> std::result::Result<(), crate::wasmos_extension_types::S3Error> {
     #[cfg(not(feature = "native-s3"))]
     return crate::s3_resident::delete_object(endpoint, credentials, bucket, key).await;
     #[cfg(feature = "native-s3")]
@@ -826,13 +826,13 @@ async fn dispatch_delete_object(
 }
 
 async fn dispatch_head_object(
-    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
-    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    endpoint: crate::wasmos_extension_types::S3EndpointConfig,
+    credentials: crate::wasmos_extension_types::S3Credentials,
     bucket: String,
     key: String,
 ) -> std::result::Result<
-    crate::loaded::sqlite::extension::s3_base::S3HeadObjectOutput,
-    crate::loaded::sqlite::extension::s3_base::S3Error,
+    crate::wasmos_extension_types::S3HeadObjectOutput,
+    crate::wasmos_extension_types::S3Error,
 > {
     #[cfg(not(feature = "native-s3"))]
     return crate::s3_resident::head_object(endpoint, credentials, bucket, key).await;
@@ -841,13 +841,13 @@ async fn dispatch_head_object(
 }
 
 async fn dispatch_list_objects(
-    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
-    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    endpoint: crate::wasmos_extension_types::S3EndpointConfig,
+    credentials: crate::wasmos_extension_types::S3Credentials,
     bucket: String,
-    options: Option<crate::loaded::sqlite::extension::s3_base::S3ListObjectsOptions>,
+    options: Option<crate::wasmos_extension_types::S3ListObjectsOptions>,
 ) -> std::result::Result<
-    crate::loaded::sqlite::extension::s3_base::S3ListObjectsOutput,
-    crate::loaded::sqlite::extension::s3_base::S3Error,
+    crate::wasmos_extension_types::S3ListObjectsOutput,
+    crate::wasmos_extension_types::S3Error,
 > {
     #[cfg(not(feature = "native-s3"))]
     return crate::s3_resident::list_objects(endpoint, credentials, bucket, options).await;
@@ -856,15 +856,15 @@ async fn dispatch_list_objects(
 }
 
 async fn dispatch_copy_object(
-    endpoint: crate::loaded::sqlite::extension::s3_base::S3EndpointConfig,
-    credentials: crate::loaded::sqlite::extension::s3_base::S3Credentials,
+    endpoint: crate::wasmos_extension_types::S3EndpointConfig,
+    credentials: crate::wasmos_extension_types::S3Credentials,
     source_bucket: String,
     source_key: String,
     dest_bucket: String,
     dest_key: String,
 ) -> std::result::Result<
-    crate::loaded::sqlite::extension::s3_base::S3PutObjectOutput,
-    crate::loaded::sqlite::extension::s3_base::S3Error,
+    crate::wasmos_extension_types::S3PutObjectOutput,
+    crate::wasmos_extension_types::S3Error,
 > {
     #[cfg(not(feature = "native-s3"))]
     return crate::s3_resident::copy_object(

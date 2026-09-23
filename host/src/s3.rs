@@ -25,7 +25,7 @@ use std::time::SystemTime;
 use aws_sigv4::http_request::{sign, SignableBody, SignableRequest, SigningSettings};
 use aws_sigv4::sign::v4::SigningParams as V4SigningParams;
 
-use crate::loaded::sqlite::extension::s3_base::{
+use crate::wasmos_extension_types::{
     S3Credentials, S3EndpointConfig, S3Error, S3GetObjectOptions, S3GetObjectOutput,
     S3HeadObjectOutput, S3ListObjectsOptions, S3ListObjectsOutput, S3ObjectInfo, S3ObjectMetadata,
     S3PutObjectOptions, S3PutObjectOutput,
