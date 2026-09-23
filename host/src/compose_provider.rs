@@ -1862,21 +1862,21 @@ async fn resident_wasm_component_invoke(
         )
         .map_err(|e| format!("resident wasmos install: {e}"))?;
         if imports_cli {
-            cli_ext::cli_stdout::add_to_linker::<_, ProviderNetData>(
+            // The resident-provider cli output goes into a
+            // discard buffer — the resident `invoke()` path never
+            // drains it (only the CLI dispatch path does), so
+            // the buffer is inert-but-installed to keep the guest
+            // imports satisfiable.
+            let handles = crate::wasmos_provider_cli_bridge::CliBundleHandles::new(None);
+            let cli_imports =
+                crate::wasmos_provider_cli_bridge::install_cli_output_imports(&handles);
+            wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+                engine,
                 &mut linker,
-                |state: &mut ProviderState| state,
+                component,
+                &cli_imports,
             )
-            .map_err(|e| format!("resident sqlite:extension/cli-stdout linker: {e}"))?;
-            cli_ext::cli_stderr::add_to_linker::<_, ProviderNetData>(
-                &mut linker,
-                |state: &mut ProviderState| state,
-            )
-            .map_err(|e| format!("resident sqlite:extension/cli-stderr linker: {e}"))?;
-            cli_ext::cli_state::add_to_linker::<_, ProviderNetData>(
-                &mut linker,
-                |state: &mut ProviderState| state,
-            )
-            .map_err(|e| format!("resident sqlite:extension/cli-state linker: {e}"))?;
+            .map_err(|e| format!("resident cli-* imports install: {e}"))?;
         }
         if imports_session {
             crate::loaded::sqlite::extension::session::add_to_linker::<_, ProviderSessionData>(
@@ -2051,68 +2051,13 @@ impl wasmtime_wasi::WasiView for ProviderCliState {
     }
 }
 
-use crate::dynlink_provider_cli::sqlite::extension as cli_ext;
-use crate::dynlink_provider_cli::sqlite::extension::types::SqlValue as CliSqlValue;
-
-/// `HasData` marker so the generated `add_to_linker` can thread a
-/// `&mut ProviderCliState` accessor (mirrors `LoadedHostData`).
+/// `HasData` marker used by the still-wit-bindgen'd
+/// `sqlite:extension/{spi,build,session}` add_to_linker calls
+/// that thread a `&mut ProviderCliState` accessor. (cli-* is
+/// wasmos-native now via `wasmos_provider_cli_bridge`.)
 pub struct ProviderCliHostData;
 impl HasData for ProviderCliHostData {
     type Data<'a> = &'a mut ProviderCliState;
-}
-
-impl cli_ext::cli_stdout::Host for ProviderCliState {
-    async fn write(&mut self, text: String) {
-        self.cli.stdout.push_str(&text);
-    }
-    async fn flush(&mut self) {}
-    async fn row_end(&mut self) {
-        // `.load`-driven dotcmds default to list mode: newline per row.
-        self.cli.stdout.push('\n');
-    }
-}
-
-impl cli_ext::cli_stderr::Host for ProviderCliState {
-    async fn write(&mut self, text: String) {
-        self.cli.stderr.push_str(&text);
-    }
-}
-
-impl cli_ext::cli_state::Host for ProviderCliState {
-    async fn get_text(&mut self, key: String) -> String {
-        self.state.get(&key).cloned().unwrap_or_default()
-    }
-    async fn get_int(&mut self, key: String) -> i64 {
-        self.state
-            .get(&key)
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0)
-    }
-    async fn get_bool(&mut self, key: String) -> bool {
-        matches!(self.state.get(&key).map(|s| s.as_str()), Some("1" | "true"))
-    }
-    async fn get_real(&mut self, key: String) -> f64 {
-        self.state
-            .get(&key)
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0.0)
-    }
-    async fn get_value(&mut self, key: String) -> CliSqlValue {
-        match self.state.get(&key) {
-            Some(s) => CliSqlValue::Text(s.clone()),
-            None => CliSqlValue::Null,
-        }
-    }
-    async fn list_keys(&mut self, prefix: String) -> Vec<String> {
-        let mut keys: Vec<String> = self
-            .state
-            .keys()
-            .filter(|k| k.starts_with(&prefix))
-            .cloned()
-            .collect();
-        keys.sort();
-        keys
-    }
 }
 
 // bundle-cli CLI-provider path: the `bundle-cli` ext imports `cli-stdout`
@@ -2258,43 +2203,6 @@ impl crate::loaded::sqlite::extension::build::Host for ProviderCliState {
 // provider has no pre-seeded key/value state — a running dotcmd that needs a
 // live snapshot uses the fresh-store `wasm_component_invoke_cli` path). This
 // mirrors the `ProviderCliState` impls above verbatim.
-impl cli_ext::cli_stdout::Host for ProviderState {
-    async fn write(&mut self, text: String) {
-        self.cli.stdout.push_str(&text);
-    }
-    async fn flush(&mut self) {}
-    async fn row_end(&mut self) {
-        self.cli.stdout.push('\n');
-    }
-}
-
-impl cli_ext::cli_stderr::Host for ProviderState {
-    async fn write(&mut self, text: String) {
-        self.cli.stderr.push_str(&text);
-    }
-}
-
-impl cli_ext::cli_state::Host for ProviderState {
-    async fn get_text(&mut self, _key: String) -> String {
-        String::new()
-    }
-    async fn get_int(&mut self, _key: String) -> i64 {
-        0
-    }
-    async fn get_bool(&mut self, _key: String) -> bool {
-        false
-    }
-    async fn get_real(&mut self, _key: String) -> f64 {
-        0.0
-    }
-    async fn get_value(&mut self, _key: String) -> CliSqlValue {
-        CliSqlValue::Null
-    }
-    async fn list_keys(&mut self, _prefix: String) -> Vec<String> {
-        Vec::new()
-    }
-}
-
 /// True if `component` imports the streaming cli surface — i.e. it's a
 /// streaming dotcmd provider that needs `wasm_component_invoke_cli`.
 pub fn imports_cli_stdout(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
@@ -2334,12 +2242,21 @@ async fn wasm_component_invoke_cli(
     let mut linker: Linker<ProviderCliState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| format!("wasi linker: {e}"))?;
-    cli_ext::cli_stdout::add_to_linker::<_, ProviderCliHostData>(&mut linker, |s| s)
-        .map_err(|e| format!("cli-stdout linker: {e}"))?;
-    cli_ext::cli_stderr::add_to_linker::<_, ProviderCliHostData>(&mut linker, |s| s)
-        .map_err(|e| format!("cli-stderr linker: {e}"))?;
-    cli_ext::cli_state::add_to_linker::<_, ProviderCliHostData>(&mut linker, |s| s)
-        .map_err(|e| format!("cli-state linker: {e}"))?;
+    // cli-* handlers via wasmos-native `HostImports`. Buffer +
+    // cli-state snapshot live behind the `CliBundleHandles`; the
+    // caller drains the accumulated output via
+    // `handles.take_cli()` once dispatch returns.
+    let cli_handles =
+        crate::wasmos_provider_cli_bridge::CliBundleHandles::new(Some(state.clone()));
+    let cli_imports =
+        crate::wasmos_provider_cli_bridge::install_cli_output_imports(&cli_handles);
+    wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+        engine,
+        &mut linker,
+        component,
+        &cli_imports,
+    )
+    .map_err(|e| format!("cli-* imports install: {e}"))?;
     // #220: a streaming-dotcmd ext may ALSO import spi (archive-cli etc.);
     // satisfy it on the cli store's linker with an isolated connection, exactly
     // as the resident path does (the ext↔shape spi cycle isn't wac-composable).
@@ -2455,7 +2372,7 @@ async fn wasm_component_invoke_cli(
         .await
         .map_err(|e| format!("post_return: {e}"))?;
     let bytes = result.map_err(|e| format!("provider {method}: {}", e.message))?;
-    let cli = std::mem::take(&mut store.data_mut().cli);
+    let cli = cli_handles.take_cli();
     Ok((bytes, cli))
 }
 

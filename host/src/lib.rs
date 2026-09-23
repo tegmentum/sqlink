@@ -86,6 +86,13 @@ pub mod wasmos_bundle_cli_imports;
 /// the loader-bridge callback surface (load-from-bytes,
 /// digest, list, target-triple, env-var, prefix-pin).
 pub mod wasmos_loader_bridge_imports;
+/// Phase 1 completion: generic `HostImports` handlers for cli-*
+/// interfaces, parameterised on the wasmtime store data type via
+/// the `CliStreamState` trait. Enables retirement of
+/// `dynlink_provider_cli` bindgen by replacing the 6 cli-* Host
+/// trait impls (3 interfaces × ProviderState + ProviderCliState)
+/// with a single generic handler set.
+pub mod wasmos_provider_cli_bridge;
 /// Resident `http-endpoint` compose:dynlink/endpoint provider routing — the
 /// default HTTP path. #106.
 #[cfg(not(feature = "native-http"))]
@@ -229,23 +236,6 @@ pub mod compose {
     pub use datalink_dynlink::async_bindings::sys;
 }
 
-/// Bindgen for the STREAMING dynlink provider world (task #226). Same
-/// `endpoint` export as `dynlink-provider`, plus the cli streaming
-/// imports (`cli-stdout`/`cli-stderr`/`cli-state`) that a streaming
-/// dot-command provider calls back into. The host satisfies those in
-/// `compose_provider::wasm_component_invoke_cli` with a per-invoke
-/// capture buffer.
-pub mod dynlink_provider_cli {
-    wasmtime::component::bindgen!({
-        path: "../wit",
-        world: "compose:dynlink/dynlink-provider-cli@0.1.0",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sys:compose/types": super::compose::sys::compose::types,
-        },
-    });
-}
 
 /// Task #226: the CBOR envelope spoken by the production
 /// `sqlite-extension-endpoint` provider family (mirror of woco
