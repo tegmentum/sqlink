@@ -75,6 +75,166 @@ flags! {
     }
 }
 
+/// Mirrors the WIT `types.auth-action` enum — 32 SQLITE_* action
+/// codes passed to the authorizer callback.
+#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
+#[component(enum)]
+#[repr(u8)]
+pub enum AuthAction {
+    #[component(name = "create-index")]
+    CreateIndex,
+    #[component(name = "create-table")]
+    CreateTable,
+    #[component(name = "create-temp-index")]
+    CreateTempIndex,
+    #[component(name = "create-temp-table")]
+    CreateTempTable,
+    #[component(name = "create-temp-trigger")]
+    CreateTempTrigger,
+    #[component(name = "create-temp-view")]
+    CreateTempView,
+    #[component(name = "create-trigger")]
+    CreateTrigger,
+    #[component(name = "create-view")]
+    CreateView,
+    #[component(name = "delete")]
+    Delete,
+    #[component(name = "drop-index")]
+    DropIndex,
+    #[component(name = "drop-table")]
+    DropTable,
+    #[component(name = "drop-temp-index")]
+    DropTempIndex,
+    #[component(name = "drop-temp-table")]
+    DropTempTable,
+    #[component(name = "drop-temp-trigger")]
+    DropTempTrigger,
+    #[component(name = "drop-temp-view")]
+    DropTempView,
+    #[component(name = "drop-trigger")]
+    DropTrigger,
+    #[component(name = "drop-view")]
+    DropView,
+    #[component(name = "insert")]
+    Insert,
+    #[component(name = "pragma")]
+    Pragma,
+    #[component(name = "read")]
+    Read,
+    #[component(name = "select")]
+    Select,
+    #[component(name = "transaction")]
+    Transaction,
+    #[component(name = "update")]
+    Update,
+    #[component(name = "attach")]
+    Attach,
+    #[component(name = "detach")]
+    Detach,
+    #[component(name = "alter-table")]
+    AlterTable,
+    #[component(name = "reindex")]
+    Reindex,
+    #[component(name = "analyze")]
+    Analyze,
+    #[component(name = "create-vtable")]
+    CreateVtable,
+    #[component(name = "drop-vtable")]
+    DropVtable,
+    #[component(name = "function")]
+    Function,
+    #[component(name = "savepoint")]
+    Savepoint,
+    #[component(name = "recursive")]
+    Recursive,
+}
+
+/// Mirrors the WIT `types.auth-result` enum. 3 unit arms.
+#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
+#[component(enum)]
+#[repr(u8)]
+pub enum AuthResult {
+    #[component(name = "ok")]
+    Ok,
+    #[component(name = "deny")]
+    Deny,
+    #[component(name = "ignore")]
+    Ignore,
+}
+
+/// Mirrors the WIT `types.update-operation` enum.
+#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
+#[component(enum)]
+#[repr(u8)]
+pub enum UpdateOperation {
+    #[component(name = "insert")]
+    Insert,
+    #[component(name = "update")]
+    Update,
+    #[component(name = "delete")]
+    Delete,
+}
+
+/// Mirrors the WIT `types.log-level` enum.
+#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
+#[component(enum)]
+#[repr(u8)]
+pub enum LogLevel {
+    #[component(name = "error")]
+    Error,
+    #[component(name = "warn")]
+    Warn,
+    #[component(name = "info")]
+    Info,
+    #[component(name = "debug")]
+    Debug,
+    #[component(name = "trace")]
+    Trace,
+}
+
+/// Mirrors the WIT `types.column-info` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct ColumnInfo {
+    pub name: String,
+    #[component(name = "decl-type")]
+    pub decl_type: Option<String>,
+    pub database: Option<String>,
+    pub table: Option<String>,
+    pub origin: Option<String>,
+}
+
+/// Mirrors the WIT `types.table-info` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct TableInfo {
+    pub name: String,
+    pub columns: Vec<ColumnInfo>,
+    #[component(name = "pk-columns")]
+    pub pk_columns: Vec<String>,
+}
+
+/// Mirrors the WIT `types.query-result` record — the result shape
+/// returned by `spi.execute` and friends.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct QueryResult {
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<SqlValue>>,
+    pub changes: i64,
+    #[component(name = "last-insert-rowid")]
+    pub last_insert_rowid: i64,
+}
+
+/// Mirrors the WIT `spi.named-param` record — one row in a
+/// named-parameter binding list ferried to `spi.execute-multi`.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct NamedParam {
+    pub name: String,
+    pub value: SqlValue,
+}
+
 // ────────────────────────────────────────────────────────────────────
 // sqlite:extension/http@1.0.0
 // ────────────────────────────────────────────────────────────────────
