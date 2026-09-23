@@ -2000,9 +2000,6 @@ pub struct ProviderCliState {
     /// (the `db/path` cli-state key) in `wasm_component_invoke_cli`.
     spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
     spi_db_path: String,
-    /// bundle-cli `.bundle build`: whether `spawn-build` was granted at load
-    /// time. Gates the real cargo spawn in the `build::Host` impl below.
-    spawn_build_granted: bool,
 }
 
 /// #220: `HasData` marker to wire `sqlite:extension/spi` onto the cli store's
@@ -2039,123 +2036,13 @@ impl HasData for ProviderCliHostData {
 // `loader-bridge` are stubbed here (`.bundle install`/`build` are deferred),
 // which still leaves the read-only `.bundle` commands fully working.
 
-/// bundle-cli `.bundle build`: the host build SPI. Spawns `cargo build
-/// --release` against the caller-supplied crate root (bundle-cli passes the
-/// sqlink source checkout + `embed-<ext>` features), capturing output and
-/// returning the produced binary's path. Gated on the `spawn-build`
-/// capability grant (`sqlink --grant spawn-build`, threaded onto this store as
-/// `spawn_build_granted`); ungranted returns SQLITE_PERM, which bundle-cli
-/// surfaces as "capability not granted".
-impl crate::loaded::sqlite::extension::build::Host for ProviderCliState {
-    async fn spawn_build(
-        &mut self,
-        crate_root: String,
-        target_triple: Option<String>,
-        env: Vec<(String, String)>,
-        cargo_package: Option<String>,
-        features: Vec<String>,
-    ) -> std::result::Result<
-        crate::loaded::sqlite::extension::build::BuildOut,
-        crate::loaded::sqlite::extension::types::SqliteError,
-    > {
-        use crate::loaded::sqlite::extension::types::SqliteError;
-        let err = |code: i32, message: String| SqliteError {
-            code,
-            extended_code: code,
-            message,
-        };
-        // Capability gate. SQLITE_PERM (3) is the code bundle-cli's do_build
-        // keys off to print "spawn-build capability not granted".
-        if !self.spawn_build_granted {
-            return Err(err(
-                3,
-                "build.spawn-build: spawn-build capability not granted".into(),
-            ));
-        }
-        // Assemble `cargo build --release [--target T] [-p PKG] [--features …]`.
-        // `--message-format=json` puts machine-readable compiler-artifact
-        // records on stdout (human progress stays on stderr) so we can read the
-        // produced executable path back EXACTLY rather than guessing the
-        // target-dir layout.
-        let mut cmd = std::process::Command::new("cargo");
-        cmd.arg("build")
-            .arg("--release")
-            .arg("--message-format=json")
-            .current_dir(&crate_root);
-        if let Some(t) = &target_triple {
-            cmd.arg("--target").arg(t);
-        }
-        if let Some(p) = &cargo_package {
-            cmd.arg("-p").arg(p);
-        }
-        if !features.is_empty() {
-            cmd.arg("--features").arg(features.join(","));
-        }
-        for (k, v) in &env {
-            cmd.env(k, v);
-        }
-        // A cargo build is long and blocking; run it without holding up the
-        // async worker (the cli has nothing else to do while it builds).
-        let output = tokio::task::block_in_place(|| cmd.output())
-            .map_err(|e| err(1, format!("build.spawn-build: spawn cargo: {e}")))?;
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        if !output.status.success() {
-            // Surface cargo's exit + the tail of stderr (where the diagnostics
-            // land) so the failure is actionable in the SQL error.
-            let tail: String = stderr
-                .lines()
-                .rev()
-                .take(20)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect::<Vec<_>>()
-                .join("\n");
-            return Err(err(
-                1,
-                format!("build.spawn-build: cargo {}: {tail}", output.status),
-            ));
-        }
-        // The produced artifact: the LAST `compiler-artifact` record. Prefer an
-        // `executable` (bin crates) but fall back to `filenames[0]` (cdylib /
-        // staticlib crates like sqlite-cli, which cargo reports with no
-        // `executable`). Cargo emits one artifact per built target; the final
-        // is the top-level `-p` package we asked for.
-        let mut binary_path = String::new();
-        for line in stdout.lines() {
-            let Ok(v) = serde_json::from_slice::<serde_json::Value>(line.as_bytes()) else {
-                continue;
-            };
-            if v.get("reason").and_then(|r| r.as_str()) != Some("compiler-artifact") {
-                continue;
-            }
-            if let Some(exe) = v.get("executable").and_then(|e| e.as_str()) {
-                binary_path = exe.to_string();
-            } else if let Some(f) = v
-                .get("filenames")
-                .and_then(|f| f.as_array())
-                .and_then(|a| a.first())
-                .and_then(|f| f.as_str())
-            {
-                binary_path = f.to_string();
-            }
-        }
-        if binary_path.is_empty() {
-            return Err(err(
-                1,
-                "build.spawn-build: cargo succeeded but reported no artifact path \
-                 (no executable/filenames in the compiler-artifact records)"
-                    .into(),
-            ));
-        }
-        Ok(crate::loaded::sqlite::extension::build::BuildOut {
-            binary_path,
-            stdout,
-            stderr,
-        })
-    }
-}
+// bundle-cli `.bundle build`: the host build SPI moved to
+// `crate::wasmos_build_imports::BuildHost` (Phase 3 Step 2). The
+// wasmos-native `#[host_iface]` handler carries the same
+// `spawn_build_granted` capability gate + `cargo build --release`
+// spawn shape byte-for-byte. Wiring installed via
+// `async_bridge::install_host_imports` in `wasm_component_invoke_cli`
+// below.
 
 // bundle-cli `.bundle install`: the loader-bridge surface on the CLI-provider
 // path is satisfied by the SAME `ProviderLoaderBridgeWrap` → `Host` forwarding
@@ -2258,9 +2145,15 @@ async fn wasm_component_invoke_cli(
         .map_err(|e| format!("cli sqlite:extension/dispatch-bridge-cas linker: {e}"))?;
     }
     if imports_sqlite_build(component, runtime) {
-        crate::loaded::sqlite::extension::build::add_to_linker::<_, ProviderCliHostData>(
+        let build_imports = crate::wasmos_build_imports::install_build_imports(
+            wasmos_runtime_api::HostImports::new(),
+            spawn_build_granted,
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            engine,
             &mut linker,
-            |s| s,
+            component,
+            &build_imports,
         )
         .map_err(|e| format!("cli sqlite:extension/build linker: {e}"))?;
     }
@@ -2302,7 +2195,6 @@ async fn wasm_component_invoke_cli(
         resources: wasmtime_wasi::ResourceTable::new(),
         spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
         spi_db_path,
-        spawn_build_granted,
     };
     let mut store = Store::new(engine, st);
     store
