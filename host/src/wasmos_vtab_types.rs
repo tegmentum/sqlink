@@ -14,6 +14,45 @@ use wasmtime::component::{ComponentType, Lift, Lower};
 
 use crate::wasmos_extension_types::SqlValue;
 
+// Bindgen `with:` remap scaffolding. `sqlite:extension/vtab@1.0.0`
+// is types-only (no functions to implement — the vtab callback
+// surface lives in `sqlite:extension/vtab-update`), so both trait
+// definitions are empty markers and `add_to_linker` is a no-op.
+// When the `bindings` bindgen `with:` clause remaps
+// `sqlite:extension/vtab@1.0.0` onto this module, the macro-
+// generated code inside the target world sees these stubs and
+// compiles.
+pub trait Host {}
+impl<_T: Host + ?Sized> Host for &mut _T {}
+
+pub trait HostWithStore<T>: wasmtime::component::HasData {}
+impl<H: ?Sized, T> HostWithStore<T> for H where H: wasmtime::component::HasData {}
+
+pub fn add_to_linker_instance<T, D>(
+    _inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+    _host_getter: fn(&mut T) -> D::Data<'_>,
+) -> wasmtime::Result<()>
+where
+    D: HostWithStore<T>,
+    for<'a> D::Data<'a>: Host,
+    T: 'static,
+{
+    Ok(())
+}
+
+pub fn add_to_linker<T, D>(
+    linker: &mut wasmtime::component::Linker<T>,
+    host_getter: fn(&mut T) -> D::Data<'_>,
+) -> wasmtime::Result<()>
+where
+    D: HostWithStore<T>,
+    for<'a> D::Data<'a>: Host,
+    T: 'static,
+{
+    let mut inst = linker.instance("sqlite:extension/vtab@1.0.0")?;
+    add_to_linker_instance::<T, D>(&mut inst, host_getter)
+}
+
 #[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
 #[component(enum)]
 #[repr(u8)]

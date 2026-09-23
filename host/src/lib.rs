@@ -161,16 +161,14 @@ pub mod bindings {
         imports: { default: async },
         exports: { default: async },
         with: {
-            // Phase 4 remap: the `sqlite:extension/types@1.0.0`
-            // interface is types-only (SqlValue, WitValuePayload,
-            // SqliteError, FunctionFlags, AuthAction, AuthResult,
-            // UpdateOperation, LogLevel, ColumnInfo, TableInfo,
-            // QueryResult). Hand-rolled in `wasmos_extension_types`
-            // with wire-identical layout; the target module also
+            // Phase 4 remap: types-only interfaces unify with the
+            // hand-rolled sibling modules. Every remapped target
             // supplies empty Host / HostWithStore trait stubs +
-            // no-op add_to_linker fns so this remap satisfies the
-            // bindgen macro's scaffolding requirements.
+            // no-op add_to_linker fns so the bindgen macro's
+            // scaffolding requirements are satisfied even though
+            // the interface has no callable methods.
             "sqlite:extension/types@1.0.0": crate::wasmos_extension_types,
+            "sqlite:extension/vtab@1.0.0": crate::wasmos_vtab_types,
         },
     });
 }
@@ -12329,71 +12327,22 @@ pub async fn run_cli_capture(
 // `bindings::` signature independent of which module owns the
 // bridge's Rust types.
 
-fn convert_constraint_op_to_loaded_tabular(
-    op: bindings::sqlite::extension::vtab::ConstraintOp,
-) -> wasmos_vtab_types::ConstraintOp {
-    use bindings::sqlite::extension::vtab::ConstraintOp as From;
-    use wasmos_vtab_types::ConstraintOp as To;
-    match op {
-        From::Eq => To::Eq,
-        From::Gt => To::Gt,
-        From::Le => To::Le,
-        From::Lt => To::Lt,
-        From::Ge => To::Ge,
-        From::Ne => To::Ne,
-        From::Match => To::Match,
-        From::Like => To::Like,
-        From::Regexp => To::Regexp,
-        From::Glob => To::Glob,
-        From::IsNull => To::IsNull,
-        From::IsNotNull => To::IsNotNull,
-        From::Limit => To::Limit,
-        From::Offset => To::Offset,
-        From::Function => To::Function,
-    }
-}
+// Former vtab-index converters between the `bindings::…::vtab`
+// and `wasmos_vtab_types` universes are now identity — Phase 4's
+// `with:` remap of `sqlite:extension/vtab@1.0.0` unified the two.
+// The read-side helpers take `&IndexInfo` (borrow-in, owned-out) so
+// they clone; the plan-side takes an owned `IndexPlan` and moves it.
+// Kept as pass-through aliases so the 4 call sites don't need
+// touching; the compiler inlines them out.
 
 fn convert_index_info_to_loaded_tabular(
-    info: &bindings::sqlite::extension::vtab::IndexInfo,
+    info: &wasmos_vtab_types::IndexInfo,
 ) -> wasmos_vtab_types::IndexInfo {
-    wasmos_vtab_types::IndexInfo {
-        constraints: info
-            .constraints
-            .iter()
-            .map(|c| wasmos_vtab_types::Constraint {
-                column: c.column,
-                op: convert_constraint_op_to_loaded_tabular(c.op),
-                usable: c.usable,
-            })
-            .collect(),
-        orderbys: info
-            .orderbys
-            .iter()
-            .map(|o| wasmos_vtab_types::Orderby {
-                column: o.column,
-                desc: o.desc,
-            })
-            .collect(),
-        col_used: info.col_used,
-    }
+    info.clone()
 }
 
 fn convert_index_plan_from_loaded_tabular(
     plan: wasmos_vtab_types::IndexPlan,
-) -> bindings::sqlite::extension::vtab::IndexPlan {
-    bindings::sqlite::extension::vtab::IndexPlan {
-        constraint_usage: plan
-            .constraint_usage
-            .into_iter()
-            .map(|u| bindings::sqlite::extension::vtab::ConstraintUsage {
-                argv_index: u.argv_index,
-                omit: u.omit,
-            })
-            .collect(),
-        idx_num: plan.idx_num,
-        idx_str: plan.idx_str,
-        estimated_cost: plan.estimated_cost,
-        estimated_rows: plan.estimated_rows,
-        orderby_consumed: plan.orderby_consumed,
-    }
+) -> wasmos_vtab_types::IndexPlan {
+    plan
 }
