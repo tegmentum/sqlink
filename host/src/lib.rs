@@ -169,6 +169,7 @@ pub mod bindings {
             // the interface has no callable methods.
             "sqlite:extension/types@1.0.0": crate::wasmos_extension_types,
             "sqlite:extension/vtab@1.0.0": crate::wasmos_vtab_types,
+            "sqlite:extension/policy@1.0.0": crate::wasmos_extension_types,
         },
     });
 }

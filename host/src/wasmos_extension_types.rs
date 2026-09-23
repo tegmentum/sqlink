@@ -552,6 +552,89 @@ pub enum Capability {
     Bundles,
 }
 
+/// Mirrors the WIT `policy.http-policy` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct HttpPolicy {
+    #[component(name = "allowed-hosts")]
+    pub allowed_hosts: Vec<String>,
+    #[component(name = "allowed-methods")]
+    pub allowed_methods: Option<Vec<Method>>,
+    #[component(name = "max-body-bytes")]
+    pub max_body_bytes: Option<u64>,
+    #[component(name = "timeout-ms")]
+    pub timeout_ms: Option<u32>,
+}
+
+/// Mirrors the WIT `policy.dns-policy` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct DnsPolicy {
+    #[component(name = "allowed-domains")]
+    pub allowed_domains: Vec<String>,
+    #[component(name = "timeout-ms")]
+    pub timeout_ms: Option<u32>,
+}
+
+/// Mirrors the WIT `policy.fs-policy` record. Reserved for future
+/// use per the WIT spec.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct FsPolicy {
+    #[component(name = "readable-prefixes")]
+    pub readable_prefixes: Vec<String>,
+    #[component(name = "writable-prefixes")]
+    pub writable_prefixes: Vec<String>,
+    #[component(name = "max-write-bytes-per-call")]
+    pub max_write_bytes_per_call: Option<u64>,
+}
+
+/// Mirrors the WIT `policy.load-options` record — the load-time
+/// arguments the host passes to `extension-loader.load-extension`.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct LoadOptions {
+    #[component(name = "fuel-per-call")]
+    pub fuel_per_call: Option<u64>,
+    #[component(name = "memory-limit-bytes")]
+    pub memory_limit_bytes: Option<u64>,
+    #[component(name = "epoch-deadline-ms")]
+    pub epoch_deadline_ms: Option<u64>,
+    #[component(name = "http-policy")]
+    pub http_policy: Option<HttpPolicy>,
+    #[component(name = "dns-policy")]
+    pub dns_policy: Option<DnsPolicy>,
+    #[component(name = "fs-policy")]
+    pub fs_policy: Option<FsPolicy>,
+    pub grant: Vec<Capability>,
+}
+
+/// Mirrors the WIT `policy.policy-error` variant.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(variant)]
+pub enum PolicyError {
+    #[component(name = "capability-not-granted")]
+    CapabilityNotGranted(Capability),
+    #[component(name = "capability-not-declared")]
+    CapabilityNotDeclared(Capability),
+    #[component(name = "host-not-allowed")]
+    HostNotAllowed(String),
+    #[component(name = "method-not-allowed")]
+    MethodNotAllowed(Method),
+    #[component(name = "missing-http-policy")]
+    MissingHttpPolicy,
+    #[component(name = "dns-domain-not-allowed")]
+    DnsDomainNotAllowed(String),
+    #[component(name = "missing-dns-policy")]
+    MissingDnsPolicy,
+    #[component(name = "fuel-exhausted")]
+    FuelExhausted,
+    #[component(name = "memory-limit-exceeded")]
+    MemoryLimitExceeded,
+    #[component(name = "epoch-deadline-exceeded")]
+    EpochDeadlineExceeded,
+}
+
 // ────────────────────────────────────────────────────────────────────
 // sqlite:extension/metadata@1.0.0
 // ────────────────────────────────────────────────────────────────────
