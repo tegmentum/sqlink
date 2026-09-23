@@ -333,17 +333,32 @@ Landed 2026-09-23 (commit `b2dcd692`). Refactored
 `TabularMutating` bindgen'd World structs are no longer
 instantiated anywhere.
 
-**`bindgen!` count: 4 → 3.** (`loaded_tabular` is kept but is
-now types-only — supplies the vtab record types
-`IndexInfo` / `IndexPlan` / `VtabRow` / `Constraint` /
-`Orderby` / `ConstraintUsage` and the `ConstraintOp` enum that
-the `VtabReadDispatch` TypedFuncs lift against. Full block
-retirement requires migrating 14 type-consumer sites to manual
-`#[derive(ComponentType, Lift, Lower)]` definitions — deferred
-to Phase 3 where `loaded` type migrations happen together.)
+## Phase 2c: `loaded_tabular` bindgen fully retired — DONE
 
-Remaining bindgens: `bindings`, `loaded`, `loaded_tabular`
-(types-only until Phase 3).
+Landed 2026-09-23 (commit `7fd712c1`). New module
+`host/src/wasmos_vtab_types.rs` defines the 7 `sqlite:extension/
+vtab` record + enum types (ConstraintOp, Constraint, Orderby,
+IndexInfo, ConstraintUsage, IndexPlan, VtabRow) via
+`#[derive(wasmtime::component::ComponentType, Lift, Lower)]` —
+matching the WIT interface byte-for-byte via `#[component(name = ...)]`
+kebab-case remaps. Migrates the 14 consumer sites; deletes the
+`loaded_tabular` bindgen block. The two internal helpers
+`convert_index_info_to_loaded_tabular` and
+`convert_index_plan_from_loaded_tabular` keep their names for API
+stability but now fold between `bindings::...::vtab` and
+`wasmos_vtab_types`.
+
+**`bindgen!` count: 3 → 2.**
+
+Remaining: `bindings`, `loaded`.
+
+**Manual-derive validation caveat:** `cargo test --lib` doesn't
+exercise live bridge dispatch, so the record layouts + enum
+discriminant ordering are validated only by `TypedFunc::typed()`
+at instantiate time. First integration-test run should verify
+`ConstraintOp`'s 15-variant discriminant order matches the WIT
+declaration exactly — a mis-ordered arm would silently misparse
+`xBestIndex` constraints.
 
 ## Empirical retirement pace
 
