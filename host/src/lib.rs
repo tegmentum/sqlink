@@ -160,6 +160,18 @@ pub mod bindings {
         world: "extension-loader-host",
         imports: { default: async },
         exports: { default: async },
+        with: {
+            // Phase 4 remap: the `sqlite:extension/types@1.0.0`
+            // interface is types-only (SqlValue, WitValuePayload,
+            // SqliteError, FunctionFlags, AuthAction, AuthResult,
+            // UpdateOperation, LogLevel, ColumnInfo, TableInfo,
+            // QueryResult). Hand-rolled in `wasmos_extension_types`
+            // with wire-identical layout; the target module also
+            // supplies empty Host / HostWithStore trait stubs +
+            // no-op add_to_linker fns so this remap satisfies the
+            // bindgen macro's scaffolding requirements.
+            "sqlite:extension/types@1.0.0": crate::wasmos_extension_types,
+        },
     });
 }
 
@@ -9115,54 +9127,26 @@ pub struct HostWrap<'a> {
     pub resources: Option<&'a mut wasmtime_wasi::ResourceTable>,
 }
 
-/// Convert a SqlValue from the extension-loader-host bindgen's type
-/// universe to the hand-rolled `wasmos_extension_types` universe
-/// (the shape the loaded-extension bridge's TypedFuncs lift
-/// against). The two are shape-identical variants; the function is
-/// the bridge code at the cross-component boundary.
+// The two former `convert_sql_value_to_loaded` / `_from_loaded`
+// helpers were shape-identical variant matches between the
+// `bindings::sqlite::extension::types::SqlValue` and
+// `wasmos_extension_types::SqlValue` universes. After Phase 4's
+// `with:` remap of `sqlite:extension/types@1.0.0` onto
+// `wasmos_extension_types`, the two paths resolve to the SAME
+// Rust type — the conversion is identity. Kept as pass-through
+// aliases so the ~14 call sites don't need touching; the compiler
+// inlines them to nothing.
+
 fn convert_sql_value_to_loaded(
-    v: bindings::sqlite::extension::types::SqlValue,
+    v: wasmos_extension_types::SqlValue,
 ) -> wasmos_extension_types::SqlValue {
-    use bindings::sqlite::extension::types::SqlValue as From;
-    use wasmos_extension_types::SqlValue as To;
-    match v {
-        From::Null => To::Null,
-        From::Integer(i) => To::Integer(i),
-        From::Real(r) => To::Real(r),
-        From::Text(s) => To::Text(s),
-        From::Blob(b) => To::Blob(b),
-        // PHASE A: wit-value-payload is shape-identical across the two
-        // universes; passes through field-by-field. Phase B's host
-        // marshaling work doesn't change this site — it'll still pass
-        // through. The decode/encode invocation happens at the
-        // SQL-boundary sites (db_value_to_* / *_to_sqlite3_result).
-        From::WitValue(p) => To::WitValue(wasmos_extension_types::WitValuePayload {
-            type_id: p.type_id,
-            bytes: p.bytes,
-            symbolic_name: p.symbolic_name,
-        }),
-    }
+    v
 }
 
 fn convert_sql_value_from_loaded(
     v: wasmos_extension_types::SqlValue,
-) -> bindings::sqlite::extension::types::SqlValue {
-    use bindings::sqlite::extension::types::SqlValue as To;
-    use wasmos_extension_types::SqlValue as From;
-    match v {
-        From::Null => To::Null,
-        From::Integer(i) => To::Integer(i),
-        From::Real(r) => To::Real(r),
-        From::Text(s) => To::Text(s),
-        From::Blob(b) => To::Blob(b),
-        // PHASE A: shape-identical pass-through; see
-        // `convert_sql_value_to_loaded` for the rationale.
-        From::WitValue(p) => To::WitValue(bindings::sqlite::extension::types::WitValuePayload {
-            type_id: p.type_id,
-            bytes: p.bytes,
-            symbolic_name: p.symbolic_name,
-        }),
-    }
+) -> wasmos_extension_types::SqlValue {
+    v
 }
 
 // Vtab type conversion between the host's dispatch-side bindgen
