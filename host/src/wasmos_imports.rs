@@ -313,11 +313,11 @@ pub fn install_wal_frames_imports(imports: HostImports) -> HostImports {
 // ────────────────────────────────────────────────────────────────────
 // Phase 6.2.e-d — http interface (4/6).
 //
-// Mirrors the wit-bindgen `impl loaded::sqlite::extension::http::
-// Host for ProviderState` at `crate::lib` line 2202. Delegates to
-// `crate::net_http_handle` — the same free fn the wit-bindgen path
-// uses — with type-adapter converters bridging the wit-bindgen and
-// wasmos-native representations.
+// Delegates to `crate::net_http_handle` (whose wire types are now
+// the hand-rolled `wasmos_extension_types::{Request,Response,
+// HttpError,Method,Scheme}` records/variants); type-adapter
+// converters here bridge the wasmos-native mirror types into the
+// hand-rolled ones on both sides of the call.
 // ────────────────────────────────────────────────────────────────────
 
 /// Wasmos-native mirror of the WIT `sqlite:extension/http.method`
@@ -337,8 +337,8 @@ pub enum Method {
 }
 
 impl Method {
-    fn to_bindgen(self) -> crate::loaded::sqlite::extension::http::Method {
-        use crate::loaded::sqlite::extension::http::Method as B;
+    fn to_bindgen(self) -> crate::wasmos_extension_types::Method {
+        use crate::wasmos_extension_types::Method as B;
         match self {
             Method::Get => B::Get,
             Method::Head => B::Head,
@@ -364,8 +364,8 @@ pub enum Scheme {
 }
 
 impl Scheme {
-    fn to_bindgen(self) -> crate::loaded::sqlite::extension::http::Scheme {
-        use crate::loaded::sqlite::extension::http::Scheme as B;
+    fn to_bindgen(self) -> crate::wasmos_extension_types::Scheme {
+        use crate::wasmos_extension_types::Scheme as B;
         match self {
             Scheme::Http => B::Http,
             Scheme::Https => B::Https,
@@ -395,10 +395,10 @@ pub struct Request {
 }
 
 impl Request {
-    /// Convert to the wit-bindgen `Request` that
+    /// Convert to the hand-rolled `Request` that
     /// `crate::net_http_handle` accepts.
-    fn to_bindgen(self) -> crate::loaded::sqlite::extension::http::Request {
-        crate::loaded::sqlite::extension::http::Request {
+    fn to_bindgen(self) -> crate::wasmos_extension_types::Request {
+        crate::wasmos_extension_types::Request {
             method: self.method.to_bindgen(),
             scheme: self.scheme.map(Scheme::to_bindgen),
             authority: self.authority,
@@ -420,9 +420,9 @@ pub struct Response {
 }
 
 impl Response {
-    /// Convert from the wit-bindgen `Response` that
+    /// Convert from the hand-rolled `Response` that
     /// `crate::net_http_handle` returns on success.
-    fn from_bindgen(r: crate::loaded::sqlite::extension::http::Response) -> Self {
+    fn from_bindgen(r: crate::wasmos_extension_types::Response) -> Self {
         Response {
             status: r.status,
             headers: r.headers,
@@ -443,10 +443,10 @@ pub enum HttpError {
 }
 
 impl HttpError {
-    /// Convert from the wit-bindgen `HttpError` returned by
+    /// Convert from the hand-rolled `HttpError` returned by
     /// `crate::net_http_handle`.
-    fn from_bindgen(err: crate::loaded::sqlite::extension::http::HttpError) -> Self {
-        use crate::loaded::sqlite::extension::http::HttpError as B;
+    fn from_bindgen(err: crate::wasmos_extension_types::HttpError) -> Self {
+        use crate::wasmos_extension_types::HttpError as B;
         match err {
             B::InvalidUrl(s) => HttpError::InvalidUrl(s),
             B::TimedOut => HttpError::TimedOut,

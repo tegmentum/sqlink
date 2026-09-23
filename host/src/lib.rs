@@ -1755,8 +1755,8 @@ fn check_http_policy(
     policy: Option<&HttpPolicy>,
     authority: &str,
     method: &str,
-) -> std::result::Result<(), loaded::sqlite::extension::http::HttpError> {
-    use loaded::sqlite::extension::http::HttpError;
+) -> std::result::Result<(), wasmos_extension_types::HttpError> {
+    use wasmos_extension_types::HttpError;
     let policy = policy.ok_or_else(|| {
         HttpError::Other(
             "http policy denied: extension was not granted any http policy at load time"
@@ -1782,12 +1782,9 @@ fn check_http_policy(
 /// retired, to avoid touching the working loader in this additive change.)
 pub(crate) async fn net_http_handle(
     http_policy: Option<&HttpPolicy>,
-    req: loaded::sqlite::extension::http::Request,
-) -> std::result::Result<
-    loaded::sqlite::extension::http::Response,
-    loaded::sqlite::extension::http::HttpError,
-> {
-    use loaded::sqlite::extension::http::{HttpError, Method, Scheme};
+    req: wasmos_extension_types::Request,
+) -> std::result::Result<wasmos_extension_types::Response, wasmos_extension_types::HttpError> {
+    use wasmos_extension_types::{HttpError, Method, Scheme};
     let scheme_str = match req.scheme.unwrap_or(Scheme::Https) {
         Scheme::Http => "http",
         Scheme::Https => "https",
@@ -1857,7 +1854,7 @@ pub(crate) async fn net_http_handle(
             .bytes()
             .map_err(|e| HttpError::Other(e.to_string()))?
             .to_vec();
-        Ok(loaded::sqlite::extension::http::Response {
+        Ok(wasmos_extension_types::Response {
             status,
             headers,
             body,
@@ -11932,7 +11929,7 @@ mod http_policy_tests {
     //! the right error shape.
 
     use super::*;
-    use loaded::sqlite::extension::http::HttpError;
+    use wasmos_extension_types::HttpError;
 
     fn is_policy_denied(err: &HttpError, must_contain: &[&str]) -> bool {
         let HttpError::Other(s) = err else {

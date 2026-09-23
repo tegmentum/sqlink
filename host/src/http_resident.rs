@@ -28,7 +28,7 @@ use datalink_dynlink::{
 };
 use tokio::sync::OnceCell;
 
-use crate::loaded::sqlite::extension::http::{HttpError, Response};
+use crate::wasmos_extension_types::{HttpError, Response};
 
 /// The process-global resident HTTP provider, warmed on first use.
 static PROVIDER: OnceCell<HttpResidentProvider> = OnceCell::const_new();

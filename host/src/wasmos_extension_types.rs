@@ -74,3 +74,88 @@ flags! {
         const INNOCUOUS;
     }
 }
+
+// ────────────────────────────────────────────────────────────────────
+// sqlite:extension/http@1.0.0
+// ────────────────────────────────────────────────────────────────────
+
+/// Mirrors the WIT `http.method` variant. Mixed unit + `Other(String)`.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(variant)]
+pub enum Method {
+    #[component(name = "get")]
+    Get,
+    #[component(name = "head")]
+    Head,
+    #[component(name = "post")]
+    Post,
+    #[component(name = "put")]
+    Put,
+    #[component(name = "delete")]
+    Delete,
+    #[component(name = "connect")]
+    Connect,
+    #[component(name = "options")]
+    Options,
+    #[component(name = "trace")]
+    Trace,
+    #[component(name = "patch")]
+    Patch,
+    #[component(name = "other")]
+    Other(String),
+}
+
+/// Mirrors the WIT `http.scheme` variant. 2 unit + `Other(String)`.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(variant)]
+pub enum Scheme {
+    #[component(name = "http")]
+    Http,
+    #[component(name = "https")]
+    Https,
+    #[component(name = "other")]
+    Other(String),
+}
+
+/// WIT `http.field` type alias: `tuple<string, list<u8>>`.
+pub type Field = (String, Vec<u8>);
+
+/// Mirrors the WIT `http.request` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct Request {
+    pub method: Method,
+    pub scheme: Option<Scheme>,
+    pub authority: Option<String>,
+    #[component(name = "path-with-query")]
+    pub path_with_query: Option<String>,
+    pub headers: Vec<Field>,
+    pub body: Option<Vec<u8>>,
+    #[component(name = "timeout-ms")]
+    pub timeout_ms: Option<u32>,
+}
+
+/// Mirrors the WIT `http.response` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(record)]
+pub struct Response {
+    pub status: u16,
+    pub headers: Vec<Field>,
+    pub body: Vec<u8>,
+}
+
+/// Mirrors the WIT `http.http-error` variant.
+#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[component(variant)]
+pub enum HttpError {
+    #[component(name = "invalid-url")]
+    InvalidUrl(String),
+    #[component(name = "timed-out")]
+    TimedOut,
+    #[component(name = "connection-error")]
+    ConnectionError(String),
+    #[component(name = "protocol-error")]
+    ProtocolError(String),
+    #[component(name = "other")]
+    Other(String),
+}
