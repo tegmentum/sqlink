@@ -612,29 +612,14 @@ pub struct ProviderState {
     spi_db_path: String,
     /// #220: streamed-output capture for a resident provider that imports
     /// the cli surface (`cli-stdout`/`cli-stderr`) — the streaming-dotcmd
-    /// exts (`archive-cli`/`core-dotcmd`/`serialize-cli`/`sqlite-utils-maint`).
-    /// The fresh-store `wasm_component_invoke_cli` path uses a per-invoke
-    /// `ProviderCliState`; a RESIDENT provider persists its store, so its cli
-    /// output accumulates here and is drained by the caller per dot-invoke.
-    /// `cli-state` getters read an (empty for a `.load`ed provider) snapshot.
-    pub(crate) cli: CliCapture,
     /// #220 full-port: the resident provider's own session-handle registry
     /// (name -> `*mut sqlite3_session` as usize) for the
     /// `sqlite:extension/session` host surface, present when the resident
     /// provider wraps a session-importing ext (`session-cli`). Sessions are
     /// created on this provider's own `spi_conn` (coherent with its
     /// `spi.execute`), mirroring the bespoke loader's per-host
-    /// `session_handles` but isolated per resident provider. Retires the
-    /// `loaded::*` session residual for the provider path.
+    /// `session_handles` but isolated per resident provider.
     session_handles: Arc<Mutex<HashMap<String, usize>>>,
-    /// #220 full-port: a cheap `Host` handle for the `sqlite:extension/
-    /// loader-bridge` surface (`sqlink-meta-cli`), present when the resident
-    /// provider wraps a loader-bridge-importing ext AND the provider was
-    /// created on the real `.load` path. `None` => loader-bridge calls report
-    /// "not wired" (the provider still instantiates). Lets the ext re-enter
-    /// the loader (load/list/digest) provider-only — parity with the bespoke
-    /// `LoadedState.host_ref`. See the enum field docs re: re-entrancy safety.
-    loader_host: Option<crate::Host>,
 }
 
 impl wasmtime_wasi::WasiView for ProviderState {
@@ -1653,23 +1638,6 @@ impl<'a> crate::loaded::sqlite::extension::session::Host for ProviderSessionWrap
     }
 }
 
-/// #220 full-port: `HasData` marker for wiring `sqlite:extension/loader-bridge`
-/// onto a resident `ProviderState`'s linker.
-pub struct ProviderLoaderBridgeData;
-impl HasData for ProviderLoaderBridgeData {
-    type Data<'a> = ProviderLoaderBridgeWrap<'a>;
-}
-
-/// #220 full-port: the per-call view the generated `sqlite:extension/
-/// loader-bridge` bindings drive. Borrows the resident provider's optional
-/// `Host` handle; the `loader_bridge::Host` impl lives in `lib.rs` (where the
-/// `Host` internals it forwards to — `load_extension_from_bytes` / `components`
-/// — are reachable), and reports "not wired" when `host` is `None` (off the
-/// real `.load` path).
-pub struct ProviderLoaderBridgeWrap<'a> {
-    pub(crate) host: Option<&'a crate::Host>,
-}
-
 async fn wasm_component_invoke(
     method: &str,
     payload: &[u8],
@@ -1919,12 +1887,7 @@ async fn resident_wasm_component_invoke(
             // `:memory:` (the loader's per-extension default).
             spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
             spi_db_path: spi_db_path.to_string(),
-            cli: CliCapture::default(),
-            // #220 full-port: per-provider session registry (session-cli).
             session_handles: Arc::new(Mutex::new(HashMap::new())),
-            // #220 full-port: loader `Host` handle for loader-bridge
-            // (sqlink-meta-cli); None off the real .load path.
-            loader_host: loader_host.cloned(),
         };
         let mut store = Store::new(engine, state);
         store
@@ -2015,8 +1978,6 @@ pub type CliStateSnapshot = HashMap<String, String>;
 pub struct ProviderCliState {
     wasi: wasmtime_wasi::WasiCtx,
     resources: wasmtime_wasi::ResourceTable,
-    cli: CliCapture,
-    state: CliStateSnapshot,
     /// #220: the cli store's own spi connection, for a streaming-dotcmd ext
     /// that ALSO imports `sqlite:extension/spi` (`archive-cli`/`core-dotcmd`/
     /// `serialize-cli`). Lazy-opened like the resident `spi_conn` (empty
@@ -2027,12 +1988,6 @@ pub struct ProviderCliState {
     /// bundle-cli `.bundle build`: whether `spawn-build` was granted at load
     /// time. Gates the real cargo spawn in the `build::Host` impl below.
     spawn_build_granted: bool,
-    /// bundle-cli `.bundle install`: a cheap clone of the loader `Host`,
-    /// threaded so the CLI-provider path's `loader-bridge` can re-enter the
-    /// loader to load a bundle's member extensions (`load-extension-from-
-    /// bytes`) — the same handle the resident path carries. `None` off the
-    /// real `.load` path; the loader-bridge then reports "not wired".
-    loader_host: Option<crate::Host>,
 }
 
 /// #220: `HasData` marker to wire `sqlite:extension/spi` onto the cli store's
@@ -2325,14 +2280,13 @@ async fn wasm_component_invoke_cli(
         .get("db/path")
         .and_then(|j| crate::parse_json_text(j))
         .unwrap_or_default();
+    let _ = loader_host; // captured above via `install_loader_bridge_imports`.
+    let _ = state; // captured above via `CliBundleHandles::new`.
     let st = ProviderCliState {
         wasi: wasi.build(),
         resources: wasmtime_wasi::ResourceTable::new(),
-        cli: CliCapture::default(),
-        state,
         spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
         spi_db_path,
-        loader_host,
         spawn_build_granted,
     };
     let mut store = Store::new(engine, st);
