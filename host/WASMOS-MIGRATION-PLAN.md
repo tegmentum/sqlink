@@ -254,6 +254,18 @@ migrating live trait-impl clusters or coupling to the two
   under `~/git/` with a `[patch]` table in the workspace root pinning
   each to the local checkout.
 
+## Phase A groundwork (commit `17c82fe6`)
+
+New module `host/src/wasmos_cli_imports.rs` — untyped `HostCall`
+handlers for `sqlite:extension/{cli-stdout, cli-stderr, cli-state}`
+with a `CliDispatchState` consumer-state pattern. Ready for
+consumption by the `wasm_component_invoke_cli` migration.
+
+Remaining Phase A dispatch-fn rewrites still need HostImports for
+`spi`, `dispatch-bridge-cas`, `build`, `loader-bridge`
+(conditional; not all guests import them). Same untyped-`HostCall`
+recipe applies.
+
 ## Sync-wrap breakthrough (2026-09-22, commits `6ddf13fa`+ `d9f8537e`)
 
 Earlier scope estimates assumed changing
