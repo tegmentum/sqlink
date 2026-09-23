@@ -547,22 +547,6 @@ pub struct ProviderState {
     /// `spi_db_path` opens an isolated `:memory:` db (matches the loader).
     spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
     spi_db_path: String,
-    /// #220: capability policies for the `sqlite:extension/{http,dns}` host
-    /// surfaces, present when the resident provider wraps an http/dns-importing
-    /// extension. `None` = deny-by-default (matches `check_http_policy` /
-    /// `check_dns_policy`: an ext not granted a policy at load time is refused
-    /// at CALL time — the provider still instantiates). Threading the manifest-
-    /// granted policy into resident registration is a follow-up; the deny
-    /// default is the safe first cut.
-    pub(crate) http_policy: Option<crate::HttpPolicy>,
-    pub(crate) dns_policy: Option<crate::DnsPolicy>,
-    /// #106/#220: whether the resident provider's extension was granted the
-    /// `s3-base` capability. `false` = deny-by-default (same fail-closed shape
-    /// as `http_policy`/`dns_policy`): the `s3_base::Host` impl refuses at CALL
-    /// time until granted, forwarding to the resident `s3-endpoint` provider
-    /// (`crate::s3_resident`) only when true. Threading the manifest-granted
-    /// value into resident registration is the shared http/dns/s3 follow-up.
-    pub(crate) s3_granted: bool,
     /// #220: streamed-output capture for a resident provider that imports
     /// the cli surface (`cli-stdout`/`cli-stderr`) — the streaming-dotcmd
     /// exts (`archive-cli`/`core-dotcmd`/`serialize-cli`/`sqlite-utils-maint`).
@@ -1645,10 +1629,6 @@ async fn wasm_component_invoke(
         // resident-only concern, task #220); an unused empty slot.
         spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
         spi_db_path: String::new(),
-        // Fresh-store path carries no http/dns surface (resident-only, #220).
-        http_policy: None,
-        dns_policy: None,
-        s3_granted: false,
         cli: CliCapture::default(),
         // Session is a resident-only surface (#220); empty slot here.
         session_handles: Arc::new(Mutex::new(HashMap::new())),
@@ -1846,14 +1826,6 @@ async fn resident_wasm_component_invoke(
             // `:memory:` (the loader's per-extension default).
             spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
             spi_db_path: spi_db_path.to_string(),
-            // #106/#220 grant-threading: the ext's manifest-granted http/dns/s3
-            // surfaces, threaded from `load_extension`'s policy. Calls are still
-            // gated at call time by check_http_policy/check_dns_policy (and the
-            // s3_base impl's s3_granted check); a non-granted ext gets
-            // None/None/false = deny-by-default.
-            http_policy,
-            dns_policy,
-            s3_granted,
             cli: CliCapture::default(),
             // #220 full-port: per-provider session registry (session-cli).
             session_handles: Arc::new(Mutex::new(HashMap::new())),
