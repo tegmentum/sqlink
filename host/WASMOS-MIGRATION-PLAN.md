@@ -332,6 +332,63 @@ Landed 2026-09-23 (commit `b2dcd692`). Refactored
 `TabularMutating` bindgen'd World structs are no longer
 instantiated anywhere.
 
+## Phase 4 breakthrough: `with:` import-remap works — IN PROGRESS
+
+Landed 2026-09-23 in three commits on `main` (`6957214f`,
+`a99350d8`, `735d2f52`).
+
+**The finding:** `wasmtime::component::bindgen!`'s `with:` clause
+on IMPORT interfaces IS honored, contradicting the earlier
+[[bindgen-with-export-dead-end]] read (which was true only for
+exports). The catch is that the target module must supply the
+scaffolding the macro expands into:
+
+- `pub trait Host {}` (with method sigs, if the interface has
+  any host-implementable functions)
+- `pub trait HostWithStore<T>: wasmtime::component::HasData {}`
+- `pub fn add_to_linker<T, D>(...) -> wasmtime::Result<()>`
+- `pub fn add_to_linker_instance<T, D>(...) -> wasmtime::Result<()>`
+
+**For types-only interfaces** (no host functions), all four are
+trivial: empty traits + no-op `add_to_linker` that just calls
+`linker.instance(iface_name)` and returns Ok. About 30 lines of
+scaffolding per module. The three remaps that landed:
+
+- `sqlite:extension/types@1.0.0` → `wasmos_extension_types`.
+  127+ consumer sites unified. Collapses
+  `convert_sql_value_{to,from}_loaded` to identity aliases.
+- `sqlite:extension/vtab@1.0.0` → `wasmos_vtab_types`. ~18 sites.
+  Deletes the 15-arm `convert_constraint_op_to_loaded_tabular`
+  match wholesale.
+- `sqlite:extension/policy@1.0.0` → `wasmos_extension_types`.
+  ~14 sites. Added HttpPolicy, DnsPolicy, FsPolicy, LoadOptions
+  records + PolicyError variant.
+
+**For interfaces with real host-implemented functions** (spi,
+spi_loader, prepared, session on the `HostWrap` side, plus
+sqlink::wasm's extension_loader / dispatch / opfs_host), the
+`with:` shortcut doesn't apply — the target module would have to
+duplicate the full trait signatures, and the whole point of
+retirement is to move implementations to `#[host_iface]` handlers.
+Those retire via the Phase 3 pattern.
+
+**Metadata NOT remapped:** `sqlite:extension/metadata@1.0.0` has
+one host-side function (`describe`) that nobody actually
+implements in this crate (extensions export it; the host is the
+importer but never provides its own impl). A Host-trait stub is
+possible in principle but the async-fn signature is fussy;
+skipped for now since it's only 1 lib.rs consumer site.
+
+**Net effect:** the `bindings` bindgen block still exists, but
+every WIT `types` / `vtab` / `policy` reference through it
+resolves to the hand-rolled Rust types. The two type universes
+(bindings-generated vs hand-rolled) are now UNIFIED for those
+three interfaces — a huge simplification.
+
+**`bindgen!` count unchanged at 1** — the block itself stays
+until the 7 remaining Host trait impls migrate to
+`#[host_iface]` handlers.
+
 ## Phase 3 COMPLETE: `loaded` bindgen retired — DONE
 
 Landed 2026-09-23 in commits `16f87513`, `4c26958f`, `9acb0d75`
