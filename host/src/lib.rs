@@ -86,6 +86,11 @@ pub mod wasmos_loader_bridge_imports;
 /// `MutatingBridgeInstance`, letting the `loaded_tabular_mutating`
 /// bindgen retire.
 pub mod wasmos_mutating_dispatch;
+/// Phase 3 groundwork: hand-rolled `sqlite:extension/vtab@1.0.0`
+/// record/enum types with `#[derive(ComponentType, Lift, Lower)]`
+/// — the last remaining consumers of the `loaded_tabular` bindgen
+/// migrated to these definitions, retiring the block entirely.
+pub mod wasmos_vtab_types;
 /// Phase 1 completion: generic `HostImports` handlers for cli-*
 /// interfaces, parameterised on the wasmtime store data type via
 /// the `CliStreamState` trait. Enables retirement of
@@ -154,33 +159,6 @@ pub mod loaded {
         world: "minimal",
         imports: { default: async },
         exports: { default: async },
-    });
-}
-
-/// Used when a loaded extension declares virtual-table modules in
-/// its manifest (`manifest.vtabs` non-empty). The `tabular` world
-/// exports `vtab.*` on top of the minimal-shape metadata. Shares
-/// `loaded`'s types via `with:` for ABI compat across the boundary.
-pub mod loaded_tabular {
-    wasmtime::component::bindgen!({
-        path: "../sqlite-wit/wit/sqlite-extension",
-        world: "tabular",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
-            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
-            "sqlite:extension/session": super::loaded::sqlite::extension::session,
-            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
-            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
-            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
-            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
-            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
-            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
-            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
-        },
     });
 }
 
@@ -6593,7 +6571,7 @@ impl Host {
     ) -> Option<
         Result<
             std::result::Result<
-                Vec<loaded_tabular::exports::sqlite::extension::vtab::VtabRow>,
+                Vec<wasmos_vtab_types::VtabRow>,
                 String,
             >,
         >,
@@ -7936,7 +7914,7 @@ impl Host {
         cursor_id: u64,
         max_rows: u32,
     ) -> Result<
-        std::result::Result<Vec<loaded_tabular::exports::sqlite::extension::vtab::VtabRow>, String>,
+        std::result::Result<Vec<wasmos_vtab_types::VtabRow>, String>,
     > {
         if let Some(r) = self
             .try_bridge_vtab_fetch_batch(ext_name, vtab_id, cursor_id, max_rows)
@@ -7957,7 +7935,7 @@ impl Host {
                     Ok(rows) => Ok(rows
                         .into_iter()
                         .map(|(rowid, cols)| {
-                            loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
+                            wasmos_vtab_types::VtabRow {
                                 rowid,
                                 columns: cols
                                     .into_iter()
@@ -9179,10 +9157,10 @@ fn convert_sql_value_from_loaded(
 }
 
 // Vtab type conversion between the host's dispatch-side bindgen
-// (`bindings::sqlite::extension::vtab`) and the loaded extension's
-// `tabular`-world bindgen (`loaded_tabular::exports::sqlite::extension::vtab`).
+// (`bindings::sqlite::extension::vtab`) and the hand-rolled
+// `wasmos_vtab_types` records the bridge TypedFuncs lift against.
 // Same shape on both sides — these converters exist to bridge
-// distinct-but-equivalent Rust types the two bindgen calls emit.
+// distinct-but-equivalent Rust types.
 
 /// Task #227: the constraint-op WIT discriminant name, for the woco
 /// `VtabBestIndexReq.constraints[].op` field (the resident provider parses
@@ -12344,21 +12322,21 @@ pub async fn run_cli_capture(
 }
 
 // ---------------------------------------------------------------------------
-// Vtab type converters — dispatch-side <-> loaded_tabular::exports
+// Vtab type converters — bindings::…::vtab <-> wasmos_vtab_types
 // ---------------------------------------------------------------------------
-// The `tabular` world's vtab interface produces its own copy of the
-// ConstraintOp/Constraint/OrderBy/IndexInfo/ConstraintUsage/IndexPlan
-// records because the `with:` clause only remaps IMPORT-side types.
-// These converters fold shape-identical records between the
-// dispatch-side (`bindings::sqlite::extension::vtab`) and the loaded
-// bindings so try_bridge_vtab_* signatures don't leak the tabular
-// world through the outer dispatch_vtab_* API.
+// Fold shape-identical records between the dispatch-side
+// (`bindings::sqlite::extension::vtab`) and the hand-rolled
+// `wasmos_vtab_types` records the bridge TypedFuncs lift against.
+// The two shapes carry the same WIT layout — the converters exist
+// only so the outer `dispatch_vtab_*` API keeps a stable
+// `bindings::` signature independent of which module owns the
+// bridge's Rust types.
 
 fn convert_constraint_op_to_loaded_tabular(
     op: bindings::sqlite::extension::vtab::ConstraintOp,
-) -> loaded_tabular::exports::sqlite::extension::vtab::ConstraintOp {
+) -> wasmos_vtab_types::ConstraintOp {
     use bindings::sqlite::extension::vtab::ConstraintOp as From;
-    use loaded_tabular::exports::sqlite::extension::vtab::ConstraintOp as To;
+    use wasmos_vtab_types::ConstraintOp as To;
     match op {
         From::Eq => To::Eq,
         From::Gt => To::Gt,
@@ -12380,35 +12358,31 @@ fn convert_constraint_op_to_loaded_tabular(
 
 fn convert_index_info_to_loaded_tabular(
     info: &bindings::sqlite::extension::vtab::IndexInfo,
-) -> loaded_tabular::exports::sqlite::extension::vtab::IndexInfo {
-    loaded_tabular::exports::sqlite::extension::vtab::IndexInfo {
+) -> wasmos_vtab_types::IndexInfo {
+    wasmos_vtab_types::IndexInfo {
         constraints: info
             .constraints
             .iter()
-            .map(
-                |c| loaded_tabular::exports::sqlite::extension::vtab::Constraint {
-                    column: c.column,
-                    op: convert_constraint_op_to_loaded_tabular(c.op),
-                    usable: c.usable,
-                },
-            )
+            .map(|c| wasmos_vtab_types::Constraint {
+                column: c.column,
+                op: convert_constraint_op_to_loaded_tabular(c.op),
+                usable: c.usable,
+            })
             .collect(),
         orderbys: info
             .orderbys
             .iter()
-            .map(
-                |o| loaded_tabular::exports::sqlite::extension::vtab::Orderby {
-                    column: o.column,
-                    desc: o.desc,
-                },
-            )
+            .map(|o| wasmos_vtab_types::Orderby {
+                column: o.column,
+                desc: o.desc,
+            })
             .collect(),
         col_used: info.col_used,
     }
 }
 
 fn convert_index_plan_from_loaded_tabular(
-    plan: loaded_tabular::exports::sqlite::extension::vtab::IndexPlan,
+    plan: wasmos_vtab_types::IndexPlan,
 ) -> bindings::sqlite::extension::vtab::IndexPlan {
     bindings::sqlite::extension::vtab::IndexPlan {
         constraint_usage: plan
@@ -12426,13 +12400,3 @@ fn convert_index_plan_from_loaded_tabular(
         orderby_consumed: plan.orderby_consumed,
     }
 }
-
-// The `_mut` converter cluster that previously bridged the
-// `tabular-mutating` world's per-export `IndexInfo` / `IndexPlan` /
-// `ConstraintOp` / `VtabRow` types is gone. The mutating bridge's
-// dispatch now goes through cached TypedFuncs in
-// `wasmos_mutating_dispatch` that reuse `loaded_tabular`'s vtab
-// export types (structurally identical, same WIT source). The
-// non-mut `convert_index_info_to_loaded_tabular` +
-// `convert_index_plan_from_loaded_tabular` converters cover both
-// paths.

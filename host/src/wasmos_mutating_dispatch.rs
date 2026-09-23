@@ -7,9 +7,9 @@
 //!   `sqlite:extension/vtab@1.0.0` interface (11 handles). Both
 //!   `BridgeInstance` (read-only) and `MutatingBridgeInstance`
 //!   embed it. The type identities (`IndexInfo`, `IndexPlan`,
-//!   `VtabRow`, etc.) live in `loaded_tabular::exports::...::vtab`;
-//!   `TypedFunc::typed` matches on structural component-type
-//!   layout, so both bridges use the same Rust types.
+//!   `VtabRow`, etc.) come from the hand-rolled
+//!   [`wasmos_vtab_types`](crate::wasmos_vtab_types) module — the
+//!   last consumer of `loaded_tabular`'s bindgen'd export types.
 //! - [`VtabUpdateDispatch`] caches one `TypedFunc` per method of
 //!   `sqlite:extension/vtab-update@1.0.0` (11 handles). Only
 //!   `MutatingBridgeInstance` embeds it (via
@@ -27,9 +27,7 @@ use wasmtime::Store;
 use crate::compose_provider::BridgeState;
 use crate::loaded::sqlite::extension::types::SqlValue;
 use crate::loaded::exports::sqlite::extension::metadata::Manifest;
-use crate::loaded_tabular::exports::sqlite::extension::vtab::{
-    IndexInfo, IndexPlan, VtabRow,
-};
+use crate::wasmos_vtab_types::{IndexInfo, IndexPlan, VtabRow};
 
 /// One cached typed export handle.
 type TF<P, R> = TypedFunc<P, (R,)>;
