@@ -303,7 +303,7 @@ impl ProviderHandle {
             } => sqlite_runtime_invoke(method, payload, conn, stmts, next_stmt_id).await,
             ProviderKind::WasmComponent {
                 runtime, component, ..
-            } => wasm_component_invoke(method, payload, runtime, wt_component(component)).await,
+            } => wasm_component_invoke(method, payload, runtime, component).await,
             ProviderKind::ResidentWasmComponent {
                 runtime,
                 component,
@@ -1664,45 +1664,71 @@ async fn wasm_component_invoke(
     method: &str,
     payload: &[u8],
     runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>,
-    component: &Component,
+    component: &WasmosCompiledComponent,
 ) -> Result<Vec<u8>, String> {
-    let engine = runtime.engine();
-    let mut linker: Linker<ProviderState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| format!("wasi linker: {e}"))?;
-    let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
-    wasi.inherit_stdio();
-    let state = ProviderState {
-        wasi: wasi.build(),
-        resources: wasmtime_wasi::ResourceTable::new(),
-        // Fresh-store (non-resident) path: no reentrancy bridge — a
-        // fresh-store provider is used only for the stateless declarative
-        // tiers; reentrant SPI is a resident-only concern (task #228).
-        dynlink_bridge: None,
-        // Fresh-store providers don't carry the spi surface (spi is a
-        // resident-only concern, task #220); an unused empty slot.
-        spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
-        spi_db_path: String::new(),
-        cli: CliCapture::default(),
-        // Session is a resident-only surface (#220); empty slot here.
-        session_handles: Arc::new(Mutex::new(HashMap::new())),
-        // loader-bridge is a resident-only surface (#220); none here.
-        loader_host: None,
-    };
-    let mut store = Store::new(engine, state);
-    store
-        .set_fuel(u64::MAX / 2)
-        .map_err(|e| format!("set_fuel: {e}"))?;
-    store.set_epoch_deadline(1_000_000_000_000);
-    let instance =
-        crate::dynlink_provider::DynlinkProvider::instantiate_async(&mut store, component, &linker)
-            .await
-            .map_err(|e| format!("instantiate provider: {e}"))?;
-    let result = instance
-        .compose_dynlink_endpoint()
-        .call_handle(&mut store, method, payload)
+    use wasmos_runtime_api::{ExecutionContext, Runtime, Value, WasiEnvironment};
+    // The `dynlink-provider` world imports nothing (implicit WASI
+    // only) and exports `compose:dynlink/endpoint`. Fresh-store
+    // dispatch: build a minimal ExecutionContext with WASI +
+    // fuel + epoch and route through wasmos's untyped call_export.
+    let ctx = ExecutionContext::new()
+        .with_wasi(WasiEnvironment::inherit_stdio())
+        .with_fuel(u64::MAX / 2)
+        .with_deadline(std::time::Duration::from_millis(1_000_000_000_000));
+    let mut instance = runtime
+        .instantiate(component, ctx)
         .await
-        .map_err(|e| format!("call_handle: {e}"))?;
-    result.map_err(|e| format!("provider {method}: {}", e.message))
+        .map_err(|e| format!("instantiate provider: {e:?}"))?;
+    let ret = instance
+        .call_export(
+            "compose:dynlink/endpoint@0.1.0#handle",
+            &[
+                Value::String(method.to_string()),
+                Value::Bytes(payload.to_vec().into()),
+            ],
+        )
+        .await
+        .map_err(|e| format!("call_handle: {e:?}"))?;
+    lift_endpoint_result(ret, method)
+}
+
+/// Lift `result<list<u8>, error>` from an `endpoint.handle` return
+/// (or any compose:dynlink endpoint-shape) into
+/// `Result<Vec<u8>, String>`. Extracts the `message` field from the
+/// error record; other fields (code, context) are dropped.
+fn lift_endpoint_result(
+    ret: Vec<wasmos_runtime_api::Value>,
+    method: &str,
+) -> Result<Vec<u8>, String> {
+    use wasmos_runtime_api::Value;
+    match ret.into_iter().next() {
+        Some(Value::Result(Ok(Some(v)))) => match *v {
+            Value::Bytes(b) => Ok(b.to_vec()),
+            Value::List(items) => Ok(items
+                .into_iter()
+                .filter_map(|v| if let Value::U8(b) = v { Some(b) } else { None })
+                .collect()),
+            other => Err(format!("call_handle ok payload not bytes: {:?}", other)),
+        },
+        Some(Value::Result(Err(Some(v)))) => match *v {
+            Value::Record(fields) => {
+                let msg = fields
+                    .into_iter()
+                    .find(|(k, _)| k == "message")
+                    .and_then(|(_, v)| {
+                        if let Value::String(s) = v {
+                            Some(s)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_default();
+                Err(format!("provider {method}: {msg}"))
+            }
+            other => Err(format!("call_handle err payload not record: {:?}", other)),
+        },
+        other => Err(format!("call_handle returned unexpected shape: {:?}", other)),
+    }
 }
 
 /// Task #227: drive a WARM-ONCE RESIDENT wasm-component provider. The
