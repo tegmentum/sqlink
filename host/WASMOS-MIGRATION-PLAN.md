@@ -254,7 +254,20 @@ migrating live trait-impl clusters or coupling to the two
   under `~/git/` with a `[patch]` table in the workspace root pinning
   each to the local checkout.
 
-## Phase A / B partial (commits `17c82fe6`, `cc549e3d`)
+## Phase A / B progress (commits `17c82fe6`, `cc549e3d`, `ba9b28b6`)
+
+**Landed in this stretch:**
+- `loaded_bundle_cli` bindgen retired via wasmos-native
+  `BundleCliCasHost` handler.
+- `loaded_dotcmd_aware` bindgen retired via wasmos-native
+  `LoaderBridgeHost` handler (holds `Option<Host>` for the
+  reentrant loader callback surface).
+- 3 new HostImports modules: `wasmos_cli_imports.rs`,
+  `wasmos_bundle_cli_imports.rs`, `wasmos_loader_bridge_imports.rs`.
+
+**`bindgen!` count: 8 → 6.**
+
+## Phase A / B earlier (commits `17c82fe6`, `cc549e3d`)
 
 **Landed:**
 - `wasmos_cli_imports.rs` — cli-stdout/stderr/state untyped
