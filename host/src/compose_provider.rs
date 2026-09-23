@@ -2423,16 +2423,37 @@ async fn wasm_component_invoke_cli(
         .set_fuel(u64::MAX / 2)
         .map_err(|e| format!("set_fuel: {e}"))?;
     store.set_epoch_deadline(1_000_000_000_000);
-    let instance = crate::dynlink_provider_cli::DynlinkProviderCli::instantiate_async(
-        &mut store, component, &linker,
-    )
-    .await
-    .map_err(|e| format!("instantiate cli provider: {e}"))?;
-    let result = instance
-        .compose_dynlink_endpoint()
-        .call_handle(&mut store, method, payload)
+    let instance = linker
+        .instantiate_async(&mut store, component)
+        .await
+        .map_err(|e| format!("instantiate cli provider: {e}"))?;
+    // Bindgen-free dispatch via wasmtime's ComponentExportIndex API
+    // (mirrors the resident-provider TypedFunc pattern).
+    let handle_fn = {
+        let (_, iface_idx) = instance
+            .get_export(&mut store, None, "compose:dynlink/endpoint@0.1.0")
+            .ok_or_else(|| {
+                "cli provider: missing compose:dynlink/endpoint@0.1.0 export".to_string()
+            })?;
+        let (_, handle_idx) = instance
+            .get_export(&mut store, Some(&iface_idx), "handle")
+            .ok_or_else(|| "cli provider: missing endpoint.handle export".to_string())?;
+        let func = instance
+            .get_func(&mut store, &handle_idx)
+            .ok_or_else(|| "cli provider: get_func for handle returned None".to_string())?;
+        func.typed::<(String, Vec<u8>), (
+            std::result::Result<Vec<u8>, crate::compose::sys::compose::types::Error>,
+        )>(&store)
+            .map_err(|e| format!("cli provider: typed handle func: {e}"))?
+    };
+    let (result,) = handle_fn
+        .call_async(&mut store, (method.to_string(), payload.to_vec()))
         .await
         .map_err(|e| format!("call_handle: {e}"))?;
+    handle_fn
+        .post_return_async(&mut store)
+        .await
+        .map_err(|e| format!("post_return: {e}"))?;
     let bytes = result.map_err(|e| format!("provider {method}: {}", e.message))?;
     let cli = std::mem::take(&mut store.data_mut().cli);
     Ok((bytes, cli))
