@@ -181,34 +181,6 @@ pub mod loaded_minimal_dns {
     });
 }
 
-/// Used when a loaded extension declares aggregate functions in its
-/// manifest. The `stateful` world adds `state` + `cache` imports and
-/// the `aggregate-function` export on top of `minimal`. The `with:`
-/// clause shares the already-generated type and trait modules from
-/// `loaded` so we don't pay the duplicate-bindings cost.
-pub mod loaded_stateful {
-    wasmtime::component::bindgen!({
-        path: "../sqlite-wit/wit/sqlite-extension",
-        world: "stateful",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
-            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
-            "sqlite:extension/session": super::loaded::sqlite::extension::session,
-            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
-            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
-            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
-            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
-            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
-            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
-            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
-        },
-    });
-}
-
 /// Used when a loaded extension declares one or more dot commands
 /// in its manifest. The `dotcmd-aware` world adds `cli-stdout`,
 /// `cli-stderr`, `cli-state` host imports and the `dot-command`
@@ -271,33 +243,6 @@ pub mod loaded_bundle_cli {
     });
 }
 
-/// Used when a loaded extension declares custom collations. The
-/// `collating` world is minimal + `collation` export — same import
-/// surface as `loaded`, plus the `compare` callback. Shares types
-/// with `loaded` via `with:` to keep one copy of every record.
-pub mod loaded_collating {
-    wasmtime::component::bindgen!({
-        path: "../sqlite-wit/wit/sqlite-extension",
-        world: "collating",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
-            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
-            "sqlite:extension/session": super::loaded::sqlite::extension::session,
-            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
-            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
-            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
-            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
-            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
-            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
-            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
-        },
-    });
-}
-
 /// Used when a loaded extension declares virtual-table modules in
 /// its manifest (`manifest.vtabs` non-empty). The `tabular` world
 /// exports `vtab.*` on top of the minimal-shape metadata. Shares
@@ -342,32 +287,6 @@ pub mod loaded_tabular_mutating {
     wasmtime::component::bindgen!({
         path: "../sqlite-wit/wit/sqlite-extension",
         world: "tabular-mutating",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
-            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
-            "sqlite:extension/session": super::loaded::sqlite::extension::session,
-            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
-            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
-            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
-            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
-            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
-            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
-            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
-        },
-    });
-}
-
-/// Used when a loaded extension declares `has-authorizer` in its
-/// manifest. The `authorizing` world exports `authorizer.authorize`
-/// in addition to the minimal-shape metadata.
-pub mod loaded_authorizing {
-    wasmtime::component::bindgen!({
-        path: "../sqlite-wit/wit/sqlite-extension",
-        world: "authorizing",
         imports: { default: async },
         exports: { default: async },
         with: {
@@ -1532,70 +1451,6 @@ impl<'a> compose::compose::dynlink::linker::HostInstance for HostWrap<'a> {
         }
         Ok(())
     }
-}
-
-/// Bindgen for resolver-shape extensions. The `resolving` world
-/// exports `resolver.resolve(uri) -> result<list<u8>, string>`
-/// on top of the minimal metadata + scalar-function bootstrap.
-/// Used by Host::resolve_uri after a `.load <uri>` lookup picks
-/// the matching scheme's resolver.
-pub mod loaded_resolving {
-    wasmtime::component::bindgen!({
-        path: "../sqlite-wit/wit/sqlite-extension",
-        world: "resolving",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
-            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
-            "sqlite:extension/session": super::loaded::sqlite::extension::session,
-            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
-            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
-            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
-            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
-            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
-            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
-            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
-        },
-    });
-}
-
-/// Used when a loaded extension declares `has-update-hook` and/or
-/// `has-commit-hook`. The `hooked` world exports `update-hook` and
-/// `commit-hook` together; we use one bindgen for both since SQLite's
-/// hook API treats them as orthogonal concerns within one db.
-///
-/// Also covers the `wal-aware` world (introduced for #423 wal-archive):
-/// `wal-aware` has the same metadata + scalar-function + update-hook +
-/// commit-hook + wal-hook export set as `hooked` (it differs only in
-/// widening the import surface, which the host satisfies uniformly).
-/// wasmtime instantiation only checks export-shape compatibility, so
-/// the `loaded_hooked::Hooked` bindgen — and the matching `CachedHooked`
-/// store — services wal-aware components too. No separate bindgen /
-/// cache slot is needed in the host.
-pub mod loaded_hooked {
-    wasmtime::component::bindgen!({
-        path: "../sqlite-wit/wit/sqlite-extension",
-        world: "hooked",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
-            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
-            "sqlite:extension/session": super::loaded::sqlite::extension::session,
-            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
-            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
-            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
-            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
-            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
-            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
-            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
-        },
-    });
 }
 
 use bindings::sqlink::wasm::extension_loader::{LoaderError, Manifest};
