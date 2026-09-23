@@ -349,16 +349,38 @@ Landed 2026-09-24 in two commits on `main` (`f31e1fcf`,
   lib.rs `run_cli_capture`). ~80 lines of `impl` block +
   `opfs_unsupported()` helper deleted.
 
-**5 of the 7 original `bindings` Host trait impls retired**
-(RunLoaderStub dead-code, opfs_host trap-stub, plus Phase 3's
-build + session on their respective store data types).
-Remaining 5 on `HostWrap` (all with real host business logic,
-not trivial stubs): `spi`, `spi_loader`, `session`, `dispatch`
-(the big one — scalar/aggregate/collation/authorize/hooks/vtab
-mediation between guest and loaded extensions),
-`extension_loader`. Each is a multi-hour retirement in isolation;
-they DON'T fit the `with:` shortcut because their target Host
-traits carry real host-implemented function signatures.
+- **`99e91ad4`** — deleted dead `session::Host for HostWrap`
+  (137-line impl + `lookup_session()` + `session_err()` helpers
+  + `session_handles` field on `Host`). Same shape as
+  RunLoaderStub: defined but never wired (only the resident-
+  provider session path, retired in Phase 3 via
+  `wasmos_session_imports::SessionHost`, is actually used at
+  runtime).
+
+**Audit finding:** the `prepared` interface has no `Host` impl
+at all — bindgen generates the empty scaffolding but nothing
+references it. Nothing to retire.
+
+**4 remaining `bindings` Host trait impls on HostWrap**
+(all with real host business logic, no trivial stubs left):
+- `spi::Host` — 18 methods, ~250 lines (sqlite3 handles, SQL
+  execution, serialization, backup/restore).
+- `spi_loader::Host` — 12 methods, ~720 lines (loader-side spi
+  surface; larger per method than spi).
+- `dispatch::Host` — 35 methods, ~600 lines (scalar / aggregate
+  / collation / authorize / hooks / vtab mediation between
+  guest and loaded extensions; the mediator).
+- `extension_loader::Host` — 36 methods, ~740 lines (the full
+  `.load /path/to/ext.wasm` surface plus resolver / cache /
+  runtime registration).
+
+They DON'T fit the `with:` shortcut — target Host traits carry
+real host-implemented function signatures, and duplicating them
+in a hand-rolled target defeats the wasmos-native abstraction
+line. Each retires via Phase 3 pattern:
+`#[host_iface]` handler capturing `Arc<Host>` at install time,
+swap `bindings::…::add_to_linker` for
+`async_bridge::install_host_imports`.
 
 ## Phase 4 breakthrough: `with:` import-remap works — IN PROGRESS
 
