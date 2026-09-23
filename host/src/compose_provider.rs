@@ -155,7 +155,17 @@ pub enum ProviderKind {
 /// The persisted store + instance for a [`ProviderKind::ResidentWasmComponent`].
 pub struct ResidentProvider {
     pub store: Store<ProviderState>,
-    pub instance: crate::dynlink_provider::DynlinkProvider,
+    /// The raw wasmtime instance handle. `dynlink_provider` bindgen
+    /// retired — dispatch happens through the typed `handle_fn`
+    /// below (looked up once at instantiate time).
+    pub instance: wasmtime::component::Instance,
+    /// Typed handle for the guest's `compose:dynlink/endpoint@0.1.0#handle`
+    /// export. Cached at instantiate time so per-invoke dispatch skips
+    /// the export-lookup dance.
+    pub handle_fn: wasmtime::component::TypedFunc<
+        (String, Vec<u8>),
+        (std::result::Result<Vec<u8>, crate::compose::sys::compose::types::Error>,),
+    >,
 }
 
 /// One prepared statement stashed by the sqlite-runtime provider for
@@ -1921,12 +1931,41 @@ async fn resident_wasm_component_invoke(
             .set_fuel(u64::MAX / 2)
             .map_err(|e| format!("set_fuel: {e}"))?;
         store.set_epoch_deadline(1_000_000_000_000);
-        let instance = crate::dynlink_provider::DynlinkProvider::instantiate_async(
-            &mut store, component, &linker,
-        )
-        .await
-        .map_err(|e| format!("instantiate resident provider: {e}"))?;
-        *guard = Some(ResidentProvider { store, instance });
+        let instance = linker
+            .instantiate_async(&mut store, component)
+            .await
+            .map_err(|e| format!("instantiate resident provider: {e}"))?;
+        // Look up `compose:dynlink/endpoint@0.1.0#handle` directly
+        // through wasmtime's ComponentExportIndex API rather than
+        // through the retired `dynlink_provider` bindgen'd World
+        // struct.
+        let handle_fn = {
+            let (_, iface_idx) = instance
+                .get_export(&mut store, None, "compose:dynlink/endpoint@0.1.0")
+                .ok_or_else(|| {
+                    "resident provider: missing compose:dynlink/endpoint@0.1.0 export"
+                        .to_string()
+                })?;
+            let (_, handle_idx) = instance
+                .get_export(&mut store, Some(&iface_idx), "handle")
+                .ok_or_else(|| {
+                    "resident provider: missing endpoint.handle export".to_string()
+                })?;
+            let func = instance
+                .get_func(&mut store, &handle_idx)
+                .ok_or_else(|| {
+                    "resident provider: get_func for handle returned None".to_string()
+                })?;
+            func.typed::<(String, Vec<u8>), (
+                std::result::Result<Vec<u8>, crate::compose::sys::compose::types::Error>,
+            )>(&store)
+                .map_err(|e| format!("resident provider: typed handle func: {e}"))?
+        };
+        *guard = Some(ResidentProvider {
+            store,
+            instance,
+            handle_fn,
+        });
     }
     let resident = guard.as_mut().unwrap();
     // Refresh the per-call budget so a long-lived resident store does not
@@ -1936,12 +1975,17 @@ async fn resident_wasm_component_invoke(
         .store
         .set_fuel(u64::MAX / 2)
         .map_err(|e| format!("refresh fuel: {e}"))?;
-    let ResidentProvider { store, instance } = resident;
-    let result = instance
-        .compose_dynlink_endpoint()
-        .call_handle(&mut *store, method, payload)
+    let ResidentProvider {
+        store, handle_fn, ..
+    } = resident;
+    let (result,) = handle_fn
+        .call_async(&mut *store, (method.to_string(), payload.to_vec()))
         .await
         .map_err(|e| format!("call_handle: {e}"))?;
+    handle_fn
+        .post_return_async(&mut *store)
+        .await
+        .map_err(|e| format!("post_return: {e}"))?;
     result.map_err(|e| format!("provider {method}: {}", e.message))
 }
 

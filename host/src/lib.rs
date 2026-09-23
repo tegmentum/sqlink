@@ -229,21 +229,6 @@ pub mod compose {
     pub use datalink_dynlink::async_bindings::sys;
 }
 
-/// Bindgen for wasm-component providers — components that export
-/// `compose:dynlink/endpoint`. ProviderKind::WasmComponent uses
-/// this to call endpoint.handle on the instantiated provider.
-pub mod dynlink_provider {
-    wasmtime::component::bindgen!({
-        path: "../wit",
-        world: "compose:dynlink/dynlink-provider@0.1.0",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sys:compose/types": super::compose::sys::compose::types,
-        },
-    });
-}
-
 /// Bindgen for the STREAMING dynlink provider world (task #226). Same
 /// `endpoint` export as `dynlink-provider`, plus the cli streaming
 /// imports (`cli-stdout`/`cli-stderr`/`cli-state`) that a streaming
