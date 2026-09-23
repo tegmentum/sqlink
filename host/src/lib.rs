@@ -72,6 +72,11 @@ pub mod wasmos_run_stubs;
 /// for runnable-shape guests (WASI + tvm + compose:dynlink +
 /// extension-loader stub, plus fuel/epoch policy).
 pub mod wasmos_run_context;
+/// Phase A groundwork of the S2 wasmos migration: `HostImports`
+/// handlers for the streaming-dotcmd (CLI-shape) interfaces
+/// (`cli-stdout`, `cli-stderr`, `cli-state`) with consumer-state
+/// dispatch.
+pub mod wasmos_cli_imports;
 /// Resident `http-endpoint` compose:dynlink/endpoint provider routing — the
 /// default HTTP path. #106.
 #[cfg(not(feature = "native-http"))]
