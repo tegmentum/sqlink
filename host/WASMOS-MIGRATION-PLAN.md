@@ -286,6 +286,44 @@ hit against `!Sync` `WasiCtx` inside `ProviderState`/`ProviderCliState`).
 Remaining: `bindings`, `loaded`, `loaded_tabular`,
 `loaded_tabular_mutating`.
 
+## Empirical retirement pace
+
+Session 2026-09-22..23 delivered:
+- Sync-wrap breakthrough (`wrap_wasmtime_component` +
+  `wt_component`)
+- 4 bindgen retirements: `loaded_bundle_cli`,
+  `loaded_dotcmd_aware`, `dynlink_provider`,
+  `dynlink_provider_cli`
+- 4 new HostImports modules (`wasmos_cli_imports`,
+  `wasmos_bundle_cli_imports`, `wasmos_loader_bridge_imports`,
+  `wasmos_provider_cli_bridge`)
+- Fresh-store + resident + CLI dispatch all bindgen-free
+
+Pace: ~4 bindgens / session with async-bridge coexistence +
+TypedFunc dispatch patterns proven. At this pace, remaining 4
+bindgens fit ~1 more focused session — but Phase 2 (vtab
+dispatch's 30+ call sites) and Phase 3 (`bindings` with 236 type
+consumer sites) each concentrate more code per bindgen than the
+Phase 1 wins, so realistic estimate remains ~3-4 more sessions.
+
+## Phase 2 pickup notes
+
+`loaded_tabular` + `loaded_tabular_mutating` retirement requires:
+1. Change `BridgeInstance.instance` from `loaded_tabular::Tabular`
+   to `wasmtime::component::Instance` + cached `TypedFunc`s per
+   vtab method (14+ methods).
+2. Same for `MutatingBridgeInstance` (10 more methods).
+3. Rewrite ~30 dispatch call sites in `lib.rs`. Each uses
+   `bridge.instance.sqlite_extension_XYZ().call_Method(...)` —
+   replace with cached `TypedFunc.call_async` + `post_return_async`.
+4. Return types (`Manifest`, `IndexInfo`, `VtabRow`, `ConstraintOp`,
+   `SqlValue`, etc.) come from `loaded::sqlite::extension::*` for
+   typed_func's return-type identity. This works while `loaded`
+   is still around — the Phase 4 retirement of `loaded` handles
+   the final type-consumer migration.
+
+**Type-identity gotcha:** `loaded_tabular::exports::sqlite::extension::vtab::IndexInfo` and `loaded_tabular_mutating::exports::sqlite::extension::vtab::IndexInfo` are DIFFERENT Rust types (separate bindgen expansions from separate `bindgen!` blocks). Migrating both means picking ONE source of these types — either `loaded` (shared via `with:`) or a fresh manual definition.
+
 ## Old Phase 1 note (kept for reference)
 
 **Old note:** `dynlink_provider_cli` retirement is HALFWAY done:
