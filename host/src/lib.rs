@@ -1183,22 +1183,6 @@ pub mod provider_envelope {
     }
 }
 
-/// Bindgen for runnable wasm components — components targeting
-/// our `runnable` world. The host uses this to instantiate and
-/// invoke run() when `.run /path/to/foo.wasm` is called.
-pub mod run {
-    wasmtime::component::bindgen!({
-        path: "../wit",
-        world: "runnable",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "compose:dynlink/linker": super::compose::compose::dynlink::linker,
-            "sys:compose/types": super::compose::sys::compose::types,
-        },
-    });
-}
-
 /// Bindgen for language-runtime plugins — wasm components that
 /// embed an interpreter (CPython, MicroPython, JVM, R, etc.) and
 /// export `sqlink:wasm/runtime.execute(source-name, source) ->
@@ -9261,34 +9245,52 @@ impl Host {
         tenant: &str,
     ) -> Result<String> {
         let bytes = std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))?;
-        // Trust-tier run: engine_run has fuel disabled, so the
-        // compiled output skips the per-backedge decrement that the
-        // extension engine has to emit. set_fuel is a no-op (and
-        // would actually error) on this engine; just set the epoch
-        // deadline.
-        let component = self
-            .compile_via_runtime_run(&bytes, &format!("run_wasm:{}", path.display()))
-            .await?;
-        let linker = make_run_linker(&self.runtime_run, &component)?;
-        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
-        builder.inherit_stdio();
-        let state = RunState {
-            wasi: builder.build(),
-            resources: wasmtime_wasi::ResourceTable::new(),
-            dynlink_bridge: self.run_dynlink_bridge(tenant),
-            tvm: tvm_wasmtime::TvmHost::new(),
-        };
-        let mut store = Store::new(self.runtime_run.engine(), state);
-        store.set_epoch_deadline(1_000_000_000_000);
-        let instance = run::Runnable::instantiate_async(&mut store, &component, &linker)
+        // Trust-tier run: runtime_run has consume_fuel(false), so
+        // no per-instance fuel budget applies; only the epoch
+        // deadline gates runtime. Dispatched via wasmos untyped
+        // `call_export` on the `sqlink:wasm/run@0.1.0` interface —
+        // no bindgen'd World::instantiate_async in play.
+        let compiled = self
+            .runtime_run
+            .compile_component(
+                ComponentSource::Bytes {
+                    bytes: bytes.into(),
+                    name: Some(format!("run_wasm:{}", path.display())),
+                },
+                CompileOptions::default(),
+            )
             .await
-            .map_err(|e| anyhow!("instantiate wasm component: {e}"))?;
-        let r = instance
-            .sqlink_wasm_run()
-            .call_run(&mut store)
+            .map_err(|e| anyhow!("compile run_wasm:{}: {e:?}", path.display()))?;
+        let backend = std::sync::Arc::new(compose_provider::RunBackend {
+            compose_providers: self.compose_providers.clone(),
+            active_tenant: tenant.to_string(),
+        });
+        let context = crate::wasmos_run_context::make_run_execution_context(
+            backend,
+            None,
+            Some(1_000_000_000_000),
+        );
+        let mut instance = self
+            .runtime_run
+            .instantiate(&compiled, context)
             .await
-            .map_err(|e| anyhow!("fiji.run trap: {e}"))?;
-        r.map_err(|e| anyhow!("fiji.run returned error: {e}"))
+            .map_err(|e| anyhow!("instantiate wasm component: {e:?}"))?;
+        let ret = instance
+            .call_export("sqlink:wasm/run@0.1.0#run", &[])
+            .await
+            .map_err(|e| anyhow!("run.run: {e:?}"))?;
+        // `run: func() -> result<string, string>`
+        match ret.into_iter().next() {
+            Some(WasmosValue::Result(Ok(Some(v)))) => match *v {
+                WasmosValue::String(s) => Ok(s),
+                other => bail!("run.run ok payload not string: {:?}", other),
+            },
+            Some(WasmosValue::Result(Err(Some(v)))) => match *v {
+                WasmosValue::String(s) => Err(anyhow!("fiji.run returned error: {s}")),
+                other => bail!("run.run err payload not string: {:?}", other),
+            },
+            other => bail!("run.run returned unexpected shape: {:?}", other),
+        }
     }
 
     /// PLAN-wit-value-extension.md Phase B (B3 decode path).
