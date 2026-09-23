@@ -1186,7 +1186,7 @@ pub struct ProviderSpiWrap<'a> {
 fn provider_spi_ensure_open(
     conn: &Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
     db_path: &str,
-) -> std::result::Result<(), crate::bindings::sqlite::extension::types::SqliteError> {
+) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
     let g = conn.lock();
     if g.borrow().is_some() {
         return Ok(());
@@ -1222,10 +1222,10 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
     async fn execute(
         &mut self,
         sql: String,
-        params: Vec<crate::bindings::sqlite::extension::types::SqlValue>,
+        params: Vec<crate::wasmos_extension_types::SqlValue>,
     ) -> std::result::Result<
-        crate::bindings::sqlite::extension::types::QueryResult,
-        crate::bindings::sqlite::extension::types::SqliteError,
+        crate::wasmos_extension_types::QueryResult,
+        crate::wasmos_extension_types::SqliteError,
     > {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let g = self.conn.lock();
@@ -1237,11 +1237,11 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
         stmt.bind_all(&bound).map_err(crate::db_err_to_bindings)?;
         let rows = stmt.collect_rows().map_err(crate::db_err_to_bindings)?;
         drop(stmt);
-        let out_rows: Vec<Vec<crate::bindings::sqlite::extension::types::SqlValue>> = rows
+        let out_rows: Vec<Vec<crate::wasmos_extension_types::SqlValue>> = rows
             .into_iter()
             .map(|r| r.into_iter().map(crate::db_value_to_bindings).collect())
             .collect();
-        Ok(crate::bindings::sqlite::extension::types::QueryResult {
+        Ok(crate::wasmos_extension_types::QueryResult {
             columns,
             rows: out_rows,
             changes: conn.changes(),
@@ -1252,10 +1252,10 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
     async fn execute_scalar(
         &mut self,
         sql: String,
-        params: Vec<crate::bindings::sqlite::extension::types::SqlValue>,
+        params: Vec<crate::wasmos_extension_types::SqlValue>,
     ) -> std::result::Result<
-        crate::bindings::sqlite::extension::types::SqlValue,
-        crate::bindings::sqlite::extension::types::SqliteError,
+        crate::wasmos_extension_types::SqlValue,
+        crate::wasmos_extension_types::SqliteError,
     > {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let g = self.conn.lock();
@@ -1269,7 +1269,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
             .into_iter()
             .next()
             .and_then(|r| r.into_iter().next())
-            .ok_or_else(|| crate::bindings::sqlite::extension::types::SqliteError {
+            .ok_or_else(|| crate::wasmos_extension_types::SqliteError {
                 code: 1,
                 extended_code: 1,
                 message: "execute_scalar: no rows".to_string(),
@@ -1280,7 +1280,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
     async fn execute_batch(
         &mut self,
         sql: String,
-    ) -> std::result::Result<i64, crate::bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<i64, crate::wasmos_extension_types::SqliteError> {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let g = self.conn.lock();
         let r = g.borrow();
@@ -1296,7 +1296,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
     async fn vfs_name(
         &mut self,
         db_name: String,
-    ) -> std::result::Result<String, crate::bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<String, crate::wasmos_extension_types::SqliteError> {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let g = self.conn.lock();
         let r = g.borrow();
@@ -1307,7 +1307,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
     async fn serialize_db(
         &mut self,
         db_name: String,
-    ) -> std::result::Result<Vec<u8>, crate::bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<Vec<u8>, crate::wasmos_extension_types::SqliteError> {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let g = self.conn.lock();
         let r = g.borrow();
@@ -1345,7 +1345,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
         src_db: String,
         dst_path: String,
         dst_db: String,
-    ) -> std::result::Result<(), crate::bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let g = self.conn.lock();
         let r = g.borrow();
@@ -1361,7 +1361,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
         src_path: String,
         src_db: String,
         dst_db: String,
-    ) -> std::result::Result<(), crate::bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let src = db::Connection::open(&src_path, db::OpenFlags::READONLY)
             .map_err(crate::db_err_to_bindings)?;
@@ -1375,7 +1375,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
     async fn set_busy_timeout(
         &mut self,
         ms: i32,
-    ) -> std::result::Result<(), crate::bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let g = self.conn.lock();
         let r = g.borrow();
@@ -1395,7 +1395,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
         op: i32,
         set: bool,
         value: bool,
-    ) -> std::result::Result<bool, crate::bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<bool, crate::wasmos_extension_types::SqliteError> {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let g = self.conn.lock();
         let r = g.borrow();
@@ -1412,7 +1412,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
         &mut self,
         db_name: String,
         bytes: Vec<u8>,
-    ) -> std::result::Result<(), crate::bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let g = self.conn.lock();
         let r = g.borrow();
@@ -1426,8 +1426,8 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
         sql: String,
         named_params: Vec<crate::bindings::sqlite::extension::spi::NamedParam>,
     ) -> std::result::Result<
-        Vec<crate::bindings::sqlite::extension::types::QueryResult>,
-        crate::bindings::sqlite::extension::types::SqliteError,
+        Vec<crate::wasmos_extension_types::QueryResult>,
+        crate::wasmos_extension_types::SqliteError,
     > {
         provider_spi_ensure_open(self.conn, self.db_path)?;
         let g = self.conn.lock();
@@ -1439,7 +1439,7 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
     async fn open_db(
         &mut self,
         path: String,
-    ) -> std::result::Result<(), crate::bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
         // Task #220 first cut: swap this provider's isolated spi
         // connection to `path`. Unlike the loader's `open_db` we do not
         // touch a cli-wide db_path / user_conn (the resident provider owns

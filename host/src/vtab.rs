@@ -26,8 +26,8 @@ use std::sync::{Mutex, OnceLock};
 
 use libsqlite3_sys as ffi;
 
-use crate::bindings::sqlite::extension::types::SqlValue as WitSqlValue;
-use crate::bindings::sqlite::extension::vtab as wv;
+use crate::wasmos_extension_types::SqlValue as WitSqlValue;
+use crate::wasmos_vtab_types as wv;
 use crate::Host;
 
 // ─────────── Host handle ───────────

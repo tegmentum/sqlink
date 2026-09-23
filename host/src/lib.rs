@@ -207,7 +207,7 @@ pub mod compose {
 pub mod provider_envelope {
     use ciborium::value::Value as Cbor;
 
-    use crate::bindings::sqlite::extension::types::SqlValue;
+    use crate::wasmos_extension_types::SqlValue;
 
     /// The provider manifest, reduced to what the host's safety gate +
     /// provider-backing registry + the WIT-manifest rebuild need.
@@ -1261,7 +1261,7 @@ impl<'a> compose::compose::dynlink::linker::HostInstance for HostWrap<'a> {
 }
 
 use bindings::sqlink::wasm::extension_loader::{LoaderError, Manifest};
-use bindings::sqlite::extension::policy::Capability as WitCapability;
+use wasmos_extension_types::Capability as WitCapability;
 
 /// Convert one WIT capability to the host's Rust enum.
 fn from_wit_cap(c: &WitCapability) -> Capability {
@@ -1419,7 +1419,7 @@ mod default_operator_policy_tests {
 /// Translate the WIT `load-options` record into the host's
 /// `Policy`. Mirrors `sqlink-extension`'s `Policy::from_wit` so
 /// values port directly across deployment modes.
-fn policy_from_load_options(opts: &bindings::sqlite::extension::policy::LoadOptions) -> Policy {
+fn policy_from_load_options(opts: &wasmos_extension_types::LoadOptions) -> Policy {
     let mut policy = Policy::deny_all();
     policy = policy.with_grants(opts.grant.iter().map(from_wit_cap));
     if let Some(http) = &opts.http_policy {
@@ -1465,7 +1465,7 @@ fn manifest_for_provider(
     use bindings::sqlite::extension::metadata::{
         AggregateFunctionSpec, CollationSpec, DotCommandSpec, ScalarFunctionSpec, VtabSpec,
     };
-    use bindings::sqlite::extension::types::FunctionFlags;
+    use wasmos_extension_types::FunctionFlags;
     Manifest {
         name: m.name.clone(),
         version: m.version.clone(),
@@ -2032,15 +2032,14 @@ fn type_id_from_wit(v: &[u8]) -> [u8; 32] {
     out
 }
 
-/// PLAN-cli-shared-conn.md Stage 3 helpers: same conversions as
-/// `spi_value_to_db` / `db_value_to_spi` / `db_err_to_spi` but
-/// against the host's `bindings::sqlite::extension::types`. The
-/// cli's spi imports live on that side; the bespoke loader's impls
-/// stay on the `loaded` side.
+/// PLAN-cli-shared-conn.md Stage 3 helpers: conversions between
+/// wasmos-side `wasmos_extension_types::{SqlValue, SqliteError}` and
+/// the sqlite-component-core `db::Value` / `db::Error` types the
+/// SQLite backend speaks.
 fn bindings_value_to_db(
-    v: bindings::sqlite::extension::types::SqlValue,
+    v: wasmos_extension_types::SqlValue,
 ) -> sqlite_component_core::db::Value {
-    use bindings::sqlite::extension::types::SqlValue as V;
+    use wasmos_extension_types::SqlValue as V;
     use sqlite_component_core::db;
     match v {
         V::Null => db::Value::Null,
@@ -2059,8 +2058,8 @@ fn bindings_value_to_db(
 
 fn db_value_to_bindings(
     v: sqlite_component_core::db::Value,
-) -> bindings::sqlite::extension::types::SqlValue {
-    use bindings::sqlite::extension::types::SqlValue as V;
+) -> wasmos_extension_types::SqlValue {
+    use wasmos_extension_types::SqlValue as V;
     use sqlite_component_core::db;
     match v {
         db::Value::Null => V::Null,
@@ -2069,7 +2068,7 @@ fn db_value_to_bindings(
         db::Value::Text(s) => V::Text(s),
         db::Value::Blob(b) => V::Blob(b),
         // Phase B: structural pass-through. See `db_value_to_spi`.
-        db::Value::WitValue(p) => V::WitValue(bindings::sqlite::extension::types::WitValuePayload {
+        db::Value::WitValue(p) => V::WitValue(wasmos_extension_types::WitValuePayload {
             type_id: p.type_id.to_vec(),
             bytes: p.bytes,
             symbolic_name: p.symbolic_name,
@@ -2079,8 +2078,8 @@ fn db_value_to_bindings(
 
 fn db_err_to_bindings(
     e: sqlite_component_core::db::Error,
-) -> bindings::sqlite::extension::types::SqliteError {
-    bindings::sqlite::extension::types::SqliteError {
+) -> wasmos_extension_types::SqliteError {
+    wasmos_extension_types::SqliteError {
         code: e.code,
         extended_code: e.extended_code,
         message: e.message,
@@ -2122,7 +2121,7 @@ fn strip_provider_call_prefix(msg: String) -> String {
 /// what the `:memory:` test fixtures expect.
 fn shared_spi_ensure_open(
     host: &Host,
-) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
     use sqlite_component_core::db;
     let path = host.db_path.read().clone();
     let g = host.shared_spi_conn.lock();
@@ -2288,8 +2287,8 @@ fn sync_dispatch_scalar(
     host: &Host,
     ext_name: &str,
     func_id: u64,
-    args: Vec<bindings::sqlite::extension::types::SqlValue>,
-) -> anyhow::Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+    args: Vec<wasmos_extension_types::SqlValue>,
+) -> anyhow::Result<std::result::Result<wasmos_extension_types::SqlValue, String>> {
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current().block_on(host.dispatch_scalar(ext_name, func_id, args))
     })
@@ -2300,8 +2299,8 @@ fn sync_dispatch_scalar(
 /// db_value_to_bindings, but starts from a raw sqlite3_value*.
 unsafe fn sqlite3_value_to_bindings(
     v: *mut libsqlite3_sys::sqlite3_value,
-) -> bindings::sqlite::extension::types::SqlValue {
-    use bindings::sqlite::extension::types::SqlValue as V;
+) -> wasmos_extension_types::SqlValue {
+    use wasmos_extension_types::SqlValue as V;
     let kind = libsqlite3_sys::sqlite3_value_type(v);
     match kind {
         x if x == libsqlite3_sys::SQLITE_NULL => V::Null,
@@ -2337,9 +2336,9 @@ unsafe fn sqlite3_value_to_bindings(
 /// function's result.
 unsafe fn bindings_to_sqlite3_result(
     ctx: *mut libsqlite3_sys::sqlite3_context,
-    v: bindings::sqlite::extension::types::SqlValue,
+    v: wasmos_extension_types::SqlValue,
 ) {
-    use bindings::sqlite::extension::types::SqlValue as V;
+    use wasmos_extension_types::SqlValue as V;
     use std::os::raw::{c_char, c_int};
     match v {
         V::Null => libsqlite3_sys::sqlite3_result_null(ctx),
@@ -2595,7 +2594,7 @@ fn sync_dispatch_aggregate_step(
     ext_name: &str,
     func_id: u64,
     context_id: u64,
-    args: Vec<bindings::sqlite::extension::types::SqlValue>,
+    args: Vec<wasmos_extension_types::SqlValue>,
 ) -> anyhow::Result<std::result::Result<(), String>> {
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current()
@@ -2608,7 +2607,7 @@ fn sync_dispatch_aggregate_finalize(
     ext_name: &str,
     func_id: u64,
     context_id: u64,
-) -> anyhow::Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+) -> anyhow::Result<std::result::Result<wasmos_extension_types::SqlValue, String>> {
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current()
             .block_on(host.dispatch_aggregate_finalize(ext_name, func_id, context_id))
@@ -2620,7 +2619,7 @@ fn sync_dispatch_aggregate_value(
     ext_name: &str,
     func_id: u64,
     context_id: u64,
-) -> anyhow::Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+) -> anyhow::Result<std::result::Result<wasmos_extension_types::SqlValue, String>> {
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current()
             .block_on(host.dispatch_aggregate_value(ext_name, func_id, context_id))
@@ -2632,7 +2631,7 @@ fn sync_dispatch_aggregate_inverse(
     ext_name: &str,
     func_id: u64,
     context_id: u64,
-    args: Vec<bindings::sqlite::extension::types::SqlValue>,
+    args: Vec<wasmos_extension_types::SqlValue>,
 ) -> anyhow::Result<std::result::Result<(), String>> {
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current()
@@ -2644,8 +2643,8 @@ fn sync_dispatch_aggregate_inverse(
 /// dispatch_aggregate_*. Mirrors db_to_wit on the cli side.
 fn db_value_to_bindings_sql(
     v: sqlite_component_core::db::Value,
-) -> bindings::sqlite::extension::types::SqlValue {
-    use bindings::sqlite::extension::types::SqlValue as V;
+) -> wasmos_extension_types::SqlValue {
+    use wasmos_extension_types::SqlValue as V;
     use sqlite_component_core::db;
     match v {
         db::Value::Null => V::Null,
@@ -2654,7 +2653,7 @@ fn db_value_to_bindings_sql(
         db::Value::Text(s) => V::Text(s),
         db::Value::Blob(b) => V::Blob(b),
         // Phase B: structural pass-through. See `db_value_to_spi`.
-        db::Value::WitValue(p) => V::WitValue(bindings::sqlite::extension::types::WitValuePayload {
+        db::Value::WitValue(p) => V::WitValue(wasmos_extension_types::WitValuePayload {
             type_id: p.type_id.to_vec(),
             bytes: p.bytes,
             symbolic_name: p.symbolic_name,
@@ -2663,9 +2662,9 @@ fn db_value_to_bindings_sql(
 }
 
 fn bindings_sql_to_db_value(
-    v: bindings::sqlite::extension::types::SqlValue,
+    v: wasmos_extension_types::SqlValue,
 ) -> sqlite_component_core::db::Value {
-    use bindings::sqlite::extension::types::SqlValue as V;
+    use wasmos_extension_types::SqlValue as V;
     use sqlite_component_core::db;
     match v {
         V::Null => db::Value::Null,
@@ -2795,8 +2794,8 @@ impl sqlite_component_core::db::WindowAggregate<u64> for HostLoadedAggregate {
 /// Stage 5e.10: bridge a sync sqlite3 authorizer callback into
 /// dispatch_authorize. Map sqlite3's i32 action codes to the WIT
 /// AuthAction enum here (the cli used to do this on its side).
-fn sqlite_code_to_auth_action(op: i32) -> bindings::sqlite::extension::types::AuthAction {
-    use bindings::sqlite::extension::types::AuthAction as A;
+fn sqlite_code_to_auth_action(op: i32) -> wasmos_extension_types::AuthAction {
+    use wasmos_extension_types::AuthAction as A;
     use libsqlite3_sys as ffi;
     match op {
         ffi::SQLITE_CREATE_INDEX => A::CreateIndex,
@@ -2839,12 +2838,12 @@ fn sqlite_code_to_auth_action(op: i32) -> bindings::sqlite::extension::types::Au
 fn sync_dispatch_authorize(
     host: &Host,
     ext_name: &str,
-    action: bindings::sqlite::extension::types::AuthAction,
+    action: wasmos_extension_types::AuthAction,
     a1: Option<String>,
     a2: Option<String>,
     a3: Option<String>,
     a4: Option<String>,
-) -> anyhow::Result<bindings::sqlite::extension::types::AuthResult> {
+) -> anyhow::Result<wasmos_extension_types::AuthResult> {
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current()
             .block_on(host.dispatch_authorize(ext_name, action, a1, a2, a3, a4))
@@ -2854,7 +2853,7 @@ fn sync_dispatch_authorize(
 fn sync_dispatch_on_update(
     host: &Host,
     ext_name: &str,
-    op: bindings::sqlite::extension::types::UpdateOperation,
+    op: wasmos_extension_types::UpdateOperation,
     db: &str,
     table: &str,
     rowid: i64,
@@ -5987,7 +5986,7 @@ impl Host {
     ///   * `Err(_)`        — a parser claimed the statement but
     ///     reported it malformed (a clean parse error to surface).
     pub async fn dispatch_parse(&self, query: &str) -> Result<Option<String>> {
-        use bindings::sqlite::extension::types::SqlValue;
+        use wasmos_extension_types::SqlValue;
         // Snapshot the (ext-name, func-id) of every loaded extension
         // that declares the parser entrypoint scalar. Done under a
         // short read lock so the async dispatch below doesn't hold it.
@@ -6270,8 +6269,8 @@ impl Host {
         &self,
         ext_name: &str,
         func_id: u64,
-        args: &[bindings::sqlite::extension::types::SqlValue],
-    ) -> Option<Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>>>
+        args: &[wasmos_extension_types::SqlValue],
+    ) -> Option<Result<std::result::Result<wasmos_extension_types::SqlValue, String>>>
     {
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
         // Convert bindings::SqlValue → wasmos_extension_types::SqlValue
@@ -6409,8 +6408,8 @@ impl Host {
         ext_name: &str,
         vtab_id: u64,
         instance_id: u64,
-        info: bindings::sqlite::extension::vtab::IndexInfo,
-    ) -> Option<Result<std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>>>
+        info: wasmos_vtab_types::IndexInfo,
+    ) -> Option<Result<std::result::Result<wasmos_vtab_types::IndexPlan, String>>>
     {
         let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
         if let Some(m_arc) = m_opt {
@@ -6526,7 +6525,7 @@ impl Host {
         cursor_id: u64,
         idx_num: i32,
         idx_str: Option<String>,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+        args: Vec<wasmos_extension_types::SqlValue>,
     ) -> Option<Result<std::result::Result<(), String>>> {
         let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
         if let Some(m_arc) = m_opt {
@@ -6703,7 +6702,7 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
         col: i32,
-    ) -> Option<Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>>>
+    ) -> Option<Result<std::result::Result<wasmos_extension_types::SqlValue, String>>>
     {
         let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
         if let Some(m_arc) = m_opt {
@@ -6800,7 +6799,7 @@ impl Host {
         ext_name: &str,
         vtab_id: u64,
         instance_id: u64,
-        args: &[bindings::sqlite::extension::types::SqlValue],
+        args: &[wasmos_extension_types::SqlValue],
     ) -> Option<Result<std::result::Result<i64, String>>> {
         let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
         let loaded_args: Vec<wasmos_extension_types::SqlValue> = args
@@ -7232,8 +7231,8 @@ impl Host {
         &self,
         ext_name: &str,
         func_id: u64,
-        args: &[bindings::sqlite::extension::types::SqlValue],
-    ) -> Option<Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>>>
+        args: &[wasmos_extension_types::SqlValue],
+    ) -> Option<Result<std::result::Result<wasmos_extension_types::SqlValue, String>>>
     {
         let provider_id = {
             let g = self.provider_backed.read();
@@ -7310,7 +7309,7 @@ impl Host {
         ext_name: &str,
         func_id: u64,
         context_id: u64,
-        args: &[bindings::sqlite::extension::types::SqlValue],
+        args: &[wasmos_extension_types::SqlValue],
     ) -> Option<Result<std::result::Result<(), String>>> {
         let handle = self.resident_provider_handle(ext_name)?;
         let payload = match provider_envelope::encode_agg_step(func_id, context_id, args) {
@@ -7329,7 +7328,7 @@ impl Host {
         ext_name: &str,
         func_id: u64,
         context_id: u64,
-        args: &[bindings::sqlite::extension::types::SqlValue],
+        args: &[wasmos_extension_types::SqlValue],
     ) -> Option<Result<std::result::Result<(), String>>> {
         let handle = self.resident_provider_handle(ext_name)?;
         let payload = match provider_envelope::encode_agg_step(func_id, context_id, args) {
@@ -7351,7 +7350,7 @@ impl Host {
         method: &str,
         func_id: u64,
         context_id: u64,
-    ) -> Option<Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>>>
+    ) -> Option<Result<std::result::Result<wasmos_extension_types::SqlValue, String>>>
     {
         let handle = self.resident_provider_handle(ext_name)?;
         let payload = match provider_envelope::encode_agg_ctx(func_id, context_id) {
@@ -7391,8 +7390,8 @@ impl Host {
         &self,
         ext_name: &str,
         func_id: u64,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
-    ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+        args: Vec<wasmos_extension_types::SqlValue>,
+    ) -> Result<std::result::Result<wasmos_extension_types::SqlValue, String>> {
         // Phase 9.3: dynlink-bridge dispatch. If the extension was loaded
         // as a compose:dynlink bridge (sqlink-shim-codegen --dynlink
         // shape), drive the scalar through its warm resident Store's
@@ -7428,7 +7427,7 @@ impl Host {
         ext_name: &str,
         func_id: u64,
         context_id: u64,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+        args: Vec<wasmos_extension_types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
         // Task #227: resident-provider aggregate accumulation. The
         // provider's per-context_id accumulator lives in its warm store, so
@@ -7449,7 +7448,7 @@ impl Host {
         ext_name: &str,
         func_id: u64,
         context_id: u64,
-    ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+    ) -> Result<std::result::Result<wasmos_extension_types::SqlValue, String>> {
         // Task #227: resident provider — finalize over the warm store's
         // accumulator and release the context_id-keyed state.
         if let Some(r) = self
@@ -7473,7 +7472,7 @@ impl Host {
         ext_name: &str,
         func_id: u64,
         context_id: u64,
-    ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+    ) -> Result<std::result::Result<wasmos_extension_types::SqlValue, String>> {
         // Task #227: window xValue — produce the intermediate aggregate
         // WITHOUT releasing the context (the resident store keeps it).
         if let Some(r) = self
@@ -7495,7 +7494,7 @@ impl Host {
         ext_name: &str,
         func_id: u64,
         context_id: u64,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+        args: Vec<wasmos_extension_types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
         // Task #227: window xInverse — undo one row's contribution against
         // the resident store's context_id-keyed accumulator.
@@ -7689,8 +7688,8 @@ impl Host {
         ext_name: &str,
         vtab_id: u64,
         instance_id: u64,
-        info: bindings::sqlite::extension::vtab::IndexInfo,
-    ) -> Result<std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>> {
+        info: wasmos_vtab_types::IndexInfo,
+    ) -> Result<std::result::Result<wasmos_vtab_types::IndexPlan, String>> {
         if let Some(r) = self
             .try_bridge_vtab_best_index(ext_name, vtab_id, instance_id, info.clone())
             .await
@@ -7784,7 +7783,7 @@ impl Host {
         cursor_id: u64,
         idx_num: i32,
         idx_str: Option<String>,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+        args: Vec<wasmos_extension_types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
         if let Some(r) = self
             .try_bridge_vtab_filter(
@@ -7869,7 +7868,7 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
         col: i32,
-    ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+    ) -> Result<std::result::Result<wasmos_extension_types::SqlValue, String>> {
         if let Some(r) = self
             .try_bridge_vtab_column(ext_name, vtab_id, cursor_id, col)
             .await
@@ -7986,7 +7985,7 @@ impl Host {
         ext_name: &str,
         vtab_id: u64,
         instance_id: u64,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+        args: Vec<wasmos_extension_types::SqlValue>,
     ) -> Result<std::result::Result<i64, String>> {
         if let Some(r) = self
             .try_bridge_vtab_update(ext_name, vtab_id, instance_id, &args)
@@ -8301,12 +8300,12 @@ impl Host {
     pub async fn dispatch_authorize(
         &self,
         ext_name: &str,
-        action: bindings::sqlite::extension::types::AuthAction,
+        action: wasmos_extension_types::AuthAction,
         arg1: Option<String>,
         arg2: Option<String>,
         database: Option<String>,
         trigger: Option<String>,
-    ) -> Result<bindings::sqlite::extension::types::AuthResult> {
+    ) -> Result<wasmos_extension_types::AuthResult> {
         // Task #228: resident provider — route the authorizer hook through
         // the warm store (the hook tier's #227 routing missed this one;
         // without it a provider-backed authorizer fell through to the
@@ -8335,7 +8334,7 @@ impl Host {
         // via the resident provider above; a fall-through means no authorizer
         // is served for this extension, so allow (OK) by default.
         let _ = (arg1, arg2, database, trigger);
-        Ok(bindings::sqlite::extension::types::AuthResult::Ok)
+        Ok(wasmos_extension_types::AuthResult::Ok)
     }
 
     /// Route a row-level update hook to the loaded extension's
@@ -8343,7 +8342,7 @@ impl Host {
     pub async fn dispatch_on_update(
         &self,
         ext_name: &str,
-        operation: bindings::sqlite::extension::types::UpdateOperation,
+        operation: wasmos_extension_types::UpdateOperation,
         database: &str,
         table: &str,
         rowid: i64,
@@ -8848,17 +8847,16 @@ pub struct HostWrap<'a> {
 }
 
 
-// Vtab type conversion between the host's dispatch-side bindgen
-// (`bindings::sqlite::extension::vtab`) and the hand-rolled
-// `wasmos_vtab_types` records the bridge TypedFuncs lift against.
-// Same shape on both sides — these converters exist to bridge
-// distinct-but-equivalent Rust types.
+// Vtab discriminant → WIT-name helper (used by the resident-
+// provider envelope builder to serialize `ConstraintOp` for wire
+// transport). Since Phase 4's `with:` remap unified vtab types onto
+// `wasmos_vtab_types`, no cross-universe conversion needed.
 
 /// Task #227: the constraint-op WIT discriminant name, for the woco
 /// `VtabBestIndexReq.constraints[].op` field (the resident provider parses
 /// it back with the inverse mapping).
-fn constraint_op_name(op: bindings::sqlite::extension::vtab::ConstraintOp) -> &'static str {
-    use bindings::sqlite::extension::vtab::ConstraintOp as Op;
+fn constraint_op_name(op: wasmos_vtab_types::ConstraintOp) -> &'static str {
+    use wasmos_vtab_types::ConstraintOp as Op;
     match op {
         Op::Eq => "eq",
         Op::Gt => "gt",
@@ -8880,8 +8878,8 @@ fn constraint_op_name(op: bindings::sqlite::extension::vtab::ConstraintOp) -> &'
 
 /// Task #227: the update-operation WIT discriminant name for the woco
 /// `UpdateHookReq.operation` field (insert/update/delete).
-fn update_op_name(op: bindings::sqlite::extension::types::UpdateOperation) -> &'static str {
-    use bindings::sqlite::extension::types::UpdateOperation as Op;
+fn update_op_name(op: wasmos_extension_types::UpdateOperation) -> &'static str {
+    use wasmos_extension_types::UpdateOperation as Op;
     match op {
         Op::Insert => "insert",
         Op::Update => "update",
@@ -8892,8 +8890,8 @@ fn update_op_name(op: bindings::sqlite::extension::types::UpdateOperation) -> &'
 /// Auth-action WIT discriminant name, matching the provider's
 /// `parse_action` spelling (kebab-case). Used to route the authorizer
 /// hook through the resident provider envelope.
-fn auth_action_name(a: bindings::sqlite::extension::types::AuthAction) -> &'static str {
-    use bindings::sqlite::extension::types::AuthAction as A;
+fn auth_action_name(a: wasmos_extension_types::AuthAction) -> &'static str {
+    use wasmos_extension_types::AuthAction as A;
     match a {
         A::CreateIndex => "create-index",
         A::CreateTable => "create-table",
@@ -8932,8 +8930,8 @@ fn auth_action_name(a: bindings::sqlite::extension::types::AuthAction) -> &'stat
 }
 
 /// Parse the provider's auth-result name back to the bindings enum.
-fn auth_result_from_name(s: &str) -> bindings::sqlite::extension::types::AuthResult {
-    use bindings::sqlite::extension::types::AuthResult as R;
+fn auth_result_from_name(s: &str) -> wasmos_extension_types::AuthResult {
+    use wasmos_extension_types::AuthResult as R;
     match s {
         "deny" => R::Deny,
         "ignore" => R::Ignore,
@@ -8946,8 +8944,8 @@ fn auth_result_from_name(s: &str) -> bindings::sqlite::extension::types::AuthRes
 /// Task #227: build a wire-side `IndexPlan` from decoded woco parts.
 fn index_plan_from_parts(
     parts: (Vec<(i32, bool)>, i32, Option<String>, f64, i64, bool),
-) -> bindings::sqlite::extension::vtab::IndexPlan {
-    use bindings::sqlite::extension::vtab::{ConstraintUsage, IndexPlan};
+) -> wasmos_vtab_types::IndexPlan {
+    use wasmos_vtab_types::{ConstraintUsage, IndexPlan};
     let (usage, idx_num, idx_str, estimated_cost, estimated_rows, orderby_consumed) = parts;
     IndexPlan {
         constraint_usage: usage
@@ -8981,10 +8979,10 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     async fn execute(
         &mut self,
         sql: String,
-        params: Vec<bindings::sqlite::extension::types::SqlValue>,
+        params: Vec<wasmos_extension_types::SqlValue>,
     ) -> std::result::Result<
-        bindings::sqlite::extension::types::QueryResult,
-        bindings::sqlite::extension::types::SqliteError,
+        wasmos_extension_types::QueryResult,
+        wasmos_extension_types::SqliteError,
     > {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
@@ -8996,11 +8994,11 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         stmt.bind_all(&bound).map_err(db_err_to_bindings)?;
         let rows = stmt.collect_rows().map_err(db_err_to_bindings)?;
         drop(stmt);
-        let out_rows: Vec<Vec<bindings::sqlite::extension::types::SqlValue>> = rows
+        let out_rows: Vec<Vec<wasmos_extension_types::SqlValue>> = rows
             .into_iter()
             .map(|r| r.into_iter().map(db_value_to_bindings).collect())
             .collect();
-        Ok(bindings::sqlite::extension::types::QueryResult {
+        Ok(wasmos_extension_types::QueryResult {
             columns,
             rows: out_rows,
             changes: conn.changes(),
@@ -9011,10 +9009,10 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     async fn execute_scalar(
         &mut self,
         sql: String,
-        params: Vec<bindings::sqlite::extension::types::SqlValue>,
+        params: Vec<wasmos_extension_types::SqlValue>,
     ) -> std::result::Result<
-        bindings::sqlite::extension::types::SqlValue,
-        bindings::sqlite::extension::types::SqliteError,
+        wasmos_extension_types::SqlValue,
+        wasmos_extension_types::SqliteError,
     > {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
@@ -9028,7 +9026,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
             .into_iter()
             .next()
             .and_then(|r| r.into_iter().next())
-            .ok_or_else(|| bindings::sqlite::extension::types::SqliteError {
+            .ok_or_else(|| wasmos_extension_types::SqliteError {
                 code: 1,
                 extended_code: 1,
                 message: "execute_scalar: no rows".to_string(),
@@ -9039,7 +9037,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     async fn execute_batch(
         &mut self,
         sql: String,
-    ) -> std::result::Result<i64, bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<i64, wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9055,7 +9053,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     async fn vfs_name(
         &mut self,
         db_name: String,
-    ) -> std::result::Result<String, bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<String, wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9066,7 +9064,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     async fn serialize_db(
         &mut self,
         db_name: String,
-    ) -> std::result::Result<Vec<u8>, bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<Vec<u8>, wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9104,7 +9102,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         src_db: String,
         dst_path: String,
         dst_db: String,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9123,7 +9121,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         src_path: String,
         src_db: String,
         dst_db: String,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let src = sqlite_component_core::db::Connection::open(
             &src_path,
@@ -9140,7 +9138,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     async fn set_busy_timeout(
         &mut self,
         ms: i32,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9160,7 +9158,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         op: i32,
         set: bool,
         value: bool,
-    ) -> std::result::Result<bool, bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<bool, wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9177,7 +9175,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         &mut self,
         db_name: String,
         bytes: Vec<u8>,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9191,8 +9189,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         sql: String,
         named_params: Vec<bindings::sqlite::extension::spi::NamedParam>,
     ) -> std::result::Result<
-        Vec<bindings::sqlite::extension::types::QueryResult>,
-        bindings::sqlite::extension::types::SqliteError,
+        Vec<wasmos_extension_types::QueryResult>,
+        wasmos_extension_types::SqliteError,
     > {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
@@ -9204,7 +9202,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     async fn open_db(
         &mut self,
         path: String,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         // Drop the existing shared connection and update the host's
         // db_path so the next spi call lazy-reopens against the new
         // target. Empty path is the cli convention for `:memory:`.
@@ -9258,7 +9256,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
     async fn set_auth_log(
         &mut self,
         on: bool,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9299,7 +9297,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         name: String,
         num_args: i32,
         func_id: u64,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         // Compute the create-function flag word from the extension's declared
         // per-scalar flags (carried in the provider manifest, keyed by
@@ -9372,7 +9370,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             (resolved.name, rc)
         };
         if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(bindings::sqlite::extension::types::SqliteError {
+            return Err(wasmos_extension_types::SqliteError {
                 code: rc,
                 extended_code: rc,
                 message: format!("register scalar {bare_name}/{num_args}: rc={rc}"),
@@ -9442,7 +9440,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         ext_name: String,
         name: String,
         coll_id: u64,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let rc = {
             let g = self.host.shared_spi_conn.lock();
@@ -9459,7 +9457,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             }
         };
         if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(bindings::sqlite::extension::types::SqliteError {
+            return Err(wasmos_extension_types::SqliteError {
                 code: rc,
                 extended_code: rc,
                 message: format!("register collation {name}: rc={rc}"),
@@ -9515,7 +9513,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         num_args: i32,
         func_id: u64,
         window: bool,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let result = {
             let g = self.host.shared_spi_conn.lock();
@@ -9545,7 +9543,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             }
         };
         if let Err(e) = result {
-            return Err(bindings::sqlite::extension::types::SqliteError {
+            return Err(wasmos_extension_types::SqliteError {
                 code: e.code,
                 extended_code: e.extended_code,
                 message: format!("register aggregate {name}/{num_args}: {}", e.message),
@@ -9615,7 +9613,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
     async fn register_authorizer(
         &mut self,
         ext_name: String,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9630,13 +9628,13 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
                   a4: Option<String>| {
                 let wit_action = sqlite_code_to_auth_action(action);
                 match sync_dispatch_authorize(&host, &ext_n, wit_action, a1, a2, a3, a4) {
-                    Ok(bindings::sqlite::extension::types::AuthResult::Ok) => {
+                    Ok(wasmos_extension_types::AuthResult::Ok) => {
                         sqlite_component_core::db::AuthResult::Allow
                     }
-                    Ok(bindings::sqlite::extension::types::AuthResult::Deny) => {
+                    Ok(wasmos_extension_types::AuthResult::Deny) => {
                         sqlite_component_core::db::AuthResult::Deny
                     }
-                    Ok(bindings::sqlite::extension::types::AuthResult::Ignore) => {
+                    Ok(wasmos_extension_types::AuthResult::Ignore) => {
                         sqlite_component_core::db::AuthResult::Ignore
                     }
                     Err(_) => sqlite_component_core::db::AuthResult::Allow,
@@ -9644,7 +9642,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             },
         ));
         if let Err(e) = result {
-            return Err(bindings::sqlite::extension::types::SqliteError {
+            return Err(wasmos_extension_types::SqliteError {
                 code: e.code,
                 extended_code: e.extended_code,
                 message: e.message,
@@ -9657,7 +9655,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
     async fn register_update_hook(
         &mut self,
         ext_name: String,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9669,7 +9667,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
                   db_name: &str,
                   table: &str,
                   rowid: i64| {
-                use bindings::sqlite::extension::types::UpdateOperation as Op;
+                use wasmos_extension_types::UpdateOperation as Op;
                 let op = match action {
                     sqlite_component_core::db::UpdateAction::Insert => Op::Insert,
                     sqlite_component_core::db::UpdateAction::Update => Op::Update,
@@ -9686,7 +9684,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
     async fn register_commit_hook(
         &mut self,
         ext_name: String,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9714,7 +9712,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         &mut self,
         ext_name: String,
         hook_id: u64,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
@@ -9748,7 +9746,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         eponymous: bool,
         mutable: bool,
         batched: bool,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let result = {
             let g = self.host.shared_spi_conn.lock();
@@ -9768,7 +9766,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             }
         };
         if let Err(e) = result {
-            return Err(bindings::sqlite::extension::types::SqliteError {
+            return Err(wasmos_extension_types::SqliteError {
                 code: 1,
                 extended_code: 1,
                 message: format!("register vtab {name}: {e}"),
@@ -9961,8 +9959,8 @@ fn execute_multi_impl_bindings(
     sql: &str,
     named_params: &[bindings::sqlite::extension::spi::NamedParam],
 ) -> std::result::Result<
-    Vec<bindings::sqlite::extension::types::QueryResult>,
-    bindings::sqlite::extension::types::SqliteError,
+    Vec<wasmos_extension_types::QueryResult>,
+    wasmos_extension_types::SqliteError,
 > {
     let mut results = Vec::new();
     let mut remaining: &str = sql;
@@ -10000,7 +9998,7 @@ fn execute_multi_impl_bindings(
             .into_iter()
             .map(|r| r.into_iter().map(db_value_to_bindings).collect())
             .collect();
-        results.push(bindings::sqlite::extension::types::QueryResult {
+        results.push(wasmos_extension_types::QueryResult {
             columns,
             rows: out_rows,
             changes: conn.changes(),
@@ -10019,8 +10017,8 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         &mut self,
         ext_name: String,
         func_id: u64,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
-    ) -> std::result::Result<bindings::sqlite::extension::types::SqlValue, String> {
+        args: Vec<wasmos_extension_types::SqlValue>,
+    ) -> std::result::Result<wasmos_extension_types::SqlValue, String> {
         match self.host.dispatch_scalar(&ext_name, func_id, args).await {
             Ok(inner) => inner,
             Err(e) => Err(e.to_string()),
@@ -10032,7 +10030,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         ext_name: String,
         func_id: u64,
         context_id: u64,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+        args: Vec<wasmos_extension_types::SqlValue>,
     ) -> std::result::Result<(), String> {
         match self
             .host
@@ -10049,7 +10047,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         ext_name: String,
         func_id: u64,
         context_id: u64,
-    ) -> std::result::Result<bindings::sqlite::extension::types::SqlValue, String> {
+    ) -> std::result::Result<wasmos_extension_types::SqlValue, String> {
         match self
             .host
             .dispatch_aggregate_finalize(&ext_name, func_id, context_id)
@@ -10065,7 +10063,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         ext_name: String,
         func_id: u64,
         context_id: u64,
-    ) -> std::result::Result<bindings::sqlite::extension::types::SqlValue, String> {
+    ) -> std::result::Result<wasmos_extension_types::SqlValue, String> {
         match self
             .host
             .dispatch_aggregate_value(&ext_name, func_id, context_id)
@@ -10081,7 +10079,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         ext_name: String,
         func_id: u64,
         context_id: u64,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+        args: Vec<wasmos_extension_types::SqlValue>,
     ) -> std::result::Result<(), String> {
         match self
             .host
@@ -10119,12 +10117,12 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
     async fn authorize(
         &mut self,
         ext_name: String,
-        action: bindings::sqlite::extension::types::AuthAction,
+        action: wasmos_extension_types::AuthAction,
         arg1: Option<String>,
         arg2: Option<String>,
         database: Option<String>,
         trigger: Option<String>,
-    ) -> bindings::sqlite::extension::types::AuthResult {
+    ) -> wasmos_extension_types::AuthResult {
         match self
             .host
             .dispatch_authorize(&ext_name, action, arg1, arg2, database, trigger)
@@ -10135,7 +10133,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
                 // On host error, fall back to Deny so an
                 // unauthorized action doesn't slip through silently.
                 tracing::error!("authorize {ext_name}: {e}");
-                bindings::sqlite::extension::types::AuthResult::Deny
+                wasmos_extension_types::AuthResult::Deny
             }
         }
     }
@@ -10143,7 +10141,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
     async fn on_update(
         &mut self,
         ext_name: String,
-        operation: bindings::sqlite::extension::types::UpdateOperation,
+        operation: wasmos_extension_types::UpdateOperation,
         database: String,
         table: String,
         rowid: i64,
@@ -10274,8 +10272,8 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         ext_name: String,
         vtab_id: u64,
         instance_id: u64,
-        info: bindings::sqlite::extension::vtab::IndexInfo,
-    ) -> std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String> {
+        info: wasmos_vtab_types::IndexInfo,
+    ) -> std::result::Result<wasmos_vtab_types::IndexPlan, String> {
         match self
             .host
             .dispatch_vtab_best_index(&ext_name, vtab_id, instance_id, info)
@@ -10326,7 +10324,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         cursor_id: u64,
         idx_num: i32,
         idx_str: Option<String>,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+        args: Vec<wasmos_extension_types::SqlValue>,
     ) -> std::result::Result<(), String> {
         match self
             .host
@@ -10376,7 +10374,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         cursor_id: u64,
         col: i32,
-    ) -> std::result::Result<bindings::sqlite::extension::types::SqlValue, String> {
+    ) -> std::result::Result<wasmos_extension_types::SqlValue, String> {
         match self
             .host
             .dispatch_vtab_column(&ext_name, vtab_id, cursor_id, col)
@@ -10438,7 +10436,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         ext_name: String,
         vtab_id: u64,
         instance_id: u64,
-        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+        args: Vec<wasmos_extension_types::SqlValue>,
     ) -> std::result::Result<i64, String> {
         match self
             .host
@@ -10634,7 +10632,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     async fn load_extension(
         &mut self,
         path: String,
-        options: bindings::sqlite::extension::policy::LoadOptions,
+        options: wasmos_extension_types::LoadOptions,
     ) -> std::result::Result<Manifest, LoaderError> {
         let policy = policy_from_load_options(&options);
         match self.host.load_extension(PathBuf::from(&path), policy).await {
@@ -10675,7 +10673,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         &mut self,
         name_hint: String,
         bytes: Vec<u8>,
-        options: bindings::sqlite::extension::policy::LoadOptions,
+        options: wasmos_extension_types::LoadOptions,
     ) -> std::result::Result<Manifest, LoaderError> {
         // #220 loader retirement: the cli's in-band `.load <bytes>` goes
         // provider-only. A provider-backed ext lives in `provider_manifests`
@@ -10881,7 +10879,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     async fn load_extension_from_uri(
         &mut self,
         uri: String,
-        options: bindings::sqlite::extension::policy::LoadOptions,
+        options: wasmos_extension_types::LoadOptions,
     ) -> std::result::Result<Manifest, LoaderError> {
         let policy = policy_from_load_options(&options);
         match self.host.load_extension_from_uri(&uri, policy).await {
@@ -10944,7 +10942,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         &mut self,
         scheme: String,
         path: String,
-        options: bindings::sqlite::extension::policy::LoadOptions,
+        options: wasmos_extension_types::LoadOptions,
     ) -> std::result::Result<String, LoaderError> {
         let policy = policy_from_load_options(&options);
         self.host
@@ -11225,7 +11223,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     async fn run_wasm(
         &mut self,
         path: String,
-        options: bindings::sqlite::extension::policy::LoadOptions,
+        options: wasmos_extension_types::LoadOptions,
     ) -> std::result::Result<String, LoaderError> {
         let policy = policy_from_load_options(&options);
         match self.host.run_wasm(PathBuf::from(&path), policy).await {
@@ -11319,7 +11317,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         ext: String,
         flavor: String,
         path: String,
-        options: bindings::sqlite::extension::policy::LoadOptions,
+        options: wasmos_extension_types::LoadOptions,
     ) -> std::result::Result<(), LoaderError> {
         let policy = policy_from_load_options(&options);
         match self
