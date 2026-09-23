@@ -136,33 +136,6 @@ pub mod loaded {
     });
 }
 
-/// Used when a loaded extension declares the dns capability. The
-/// `minimal-dns` world is `minimal` + `import dns`  scalars can
-/// call into the host's hickory-backed resolver (gated by
-/// dns-policy at the check_dns_policy boundary).
-pub mod loaded_minimal_dns {
-    wasmtime::component::bindgen!({
-        path: "../sqlite-wit/wit/sqlite-extension",
-        world: "minimal-dns",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
-            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
-            "sqlite:extension/session": super::loaded::sqlite::extension::session,
-            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
-            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
-            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
-            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
-            "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
-            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
-            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
-        },
-    });
-}
-
 /// Used when a loaded extension declares one or more dot commands
 /// in its manifest. The `dotcmd-aware` world adds `cli-stdout`,
 /// `cli-stderr`, `cli-state` host imports and the `dot-command`
@@ -2035,8 +2008,8 @@ pub(crate) async fn net_http_handle(
 fn check_dns_policy(
     policy: Option<&DnsPolicy>,
     name: &str,
-) -> std::result::Result<(), loaded_minimal_dns::sqlite::extension::dns::DnsError> {
-    use loaded_minimal_dns::sqlite::extension::dns::DnsError;
+) -> std::result::Result<(), crate::wasmos_imports::DnsError> {
+    use crate::wasmos_imports::DnsError;
     let policy = policy.ok_or_else(|| {
         DnsError::Refused(
             "dns policy denied: extension was not granted any dns policy at load time".to_string(),
@@ -2049,17 +2022,16 @@ fn check_dns_policy(
 }
 
 /// Task #220: the dns host surface for the resident provider, parameterized by
-/// policy. Same policy gate + hickory resolve as the the retired bespoke loader impl below.
-/// (Transitional duplication — same rationale as `net_http_handle`.)
+/// policy. Same policy gate + hickory resolve as the retired bespoke loader impl.
 pub(crate) async fn net_dns_resolve(
     dns_policy: Option<&DnsPolicy>,
     name: String,
-    record_type: loaded_minimal_dns::sqlite::extension::dns::RecordType,
-) -> std::result::Result<Vec<String>, loaded_minimal_dns::sqlite::extension::dns::DnsError> {
+    record_type: crate::wasmos_imports::RecordType,
+) -> std::result::Result<Vec<String>, crate::wasmos_imports::DnsError> {
+    use crate::wasmos_imports::{DnsError, RecordType};
     use hickory_resolver::config::{ResolverConfig, ResolverOpts};
     use hickory_resolver::proto::rr::RecordType as HRecordType;
     use hickory_resolver::TokioAsyncResolver;
-    use loaded_minimal_dns::sqlite::extension::dns::{DnsError, RecordType};
 
     check_dns_policy(dns_policy, &name)?;
 

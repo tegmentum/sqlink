@@ -162,29 +162,6 @@ pub enum RecordType {
     Other(String),
 }
 
-impl RecordType {
-    /// Convert to the wit-bindgen `RecordType` that
-    /// `crate::net_dns_resolve` accepts. Same variant order + names
-    /// as the WIT source, so the two representations are wire-
-    /// identical; this is a Rust-level type-adapter, not a wire
-    /// conversion.
-    fn to_bindgen(self) -> crate::loaded_minimal_dns::sqlite::extension::dns::RecordType {
-        use crate::loaded_minimal_dns::sqlite::extension::dns::RecordType as B;
-        match self {
-            RecordType::A => B::A,
-            RecordType::Aaaa => B::Aaaa,
-            RecordType::Cname => B::Cname,
-            RecordType::Mx => B::Mx,
-            RecordType::Ns => B::Ns,
-            RecordType::Txt => B::Txt,
-            RecordType::Ptr => B::Ptr,
-            RecordType::Soa => B::Soa,
-            RecordType::Srv => B::Srv,
-            RecordType::Other(name) => B::Other(name),
-        }
-    }
-}
-
 /// Wasmos-native mirror of the WIT `sqlite:extension/dns.dns-error`
 /// variant. Mixed unit + string-payload arms.
 #[derive(Debug, Clone, WitVariant)]
@@ -193,20 +170,6 @@ pub enum DnsError {
     TimedOut,
     Nxdomain,
     Other(String),
-}
-
-impl DnsError {
-    /// Convert from the wit-bindgen `DnsError` that
-    /// `crate::net_dns_resolve` returns.
-    fn from_bindgen(err: crate::loaded_minimal_dns::sqlite::extension::dns::DnsError) -> Self {
-        use crate::loaded_minimal_dns::sqlite::extension::dns::DnsError as B;
-        match err {
-            B::Refused(msg) => DnsError::Refused(msg),
-            B::TimedOut => DnsError::TimedOut,
-            B::Nxdomain => DnsError::Nxdomain,
-            B::Other(msg) => DnsError::Other(msg),
-        }
-    }
 }
 
 /// Host struct for the `sqlite:extension/dns` interface.
@@ -248,10 +211,7 @@ impl DnsHost {
         record_type: RecordType,
     ) -> RuntimeResult<Result<Vec<String>, DnsError>> {
         let policy_ref = self.dns_policy.as_ref().as_ref();
-        let bindgen_rtype = record_type.to_bindgen();
-        Ok(crate::net_dns_resolve(policy_ref, name, bindgen_rtype)
-            .await
-            .map_err(DnsError::from_bindgen))
+        Ok(crate::net_dns_resolve(policy_ref, name, record_type).await)
     }
 }
 
