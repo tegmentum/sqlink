@@ -77,6 +77,10 @@ pub mod wasmos_run_context;
 /// (`cli-stdout`, `cli-stderr`, `cli-state`) with consumer-state
 /// dispatch.
 pub mod wasmos_cli_imports;
+/// Phase B.3 of the S2 wasmos migration: stateless `HostImports`
+/// handler for `sqlite:extension/dispatch-bridge-cas` used by
+/// bundle-cli's CAS-cache SQL bridge.
+pub mod wasmos_bundle_cli_imports;
 /// Resident `http-endpoint` compose:dynlink/endpoint provider routing — the
 /// default HTTP path. #106.
 #[cfg(not(feature = "native-http"))]
@@ -164,41 +168,6 @@ pub mod loaded_dotcmd_aware {
             "sqlite:extension/compression": super::loaded::sqlite::extension::compression,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
             "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
-        },
-    });
-}
-
-/// Used when a loaded extension targets the purpose-built
-/// `bundle-cli` world. Same import set as `dotcmd-aware` minus
-/// `wal-frames` / `s3-base` (bundle-cli has no use for either)
-/// plus `dispatch-bridge-cas` — the single-method slice that
-/// gives bundle-cli direct SQL access to the CAS-cache
-/// connection without going through the typed `bundles::Host`
-/// surface.
-///
-/// `with:` shares the rest with `loaded` so we don't re-emit
-/// trait/type modules for interfaces every bindgen module already
-/// generates. The `dispatch-bridge-cas` interface is the new
-/// addition; its trait gets a fresh per-world impl below.
-pub mod loaded_bundle_cli {
-    wasmtime::component::bindgen!({
-        path: "../sqlite-wit/wit/sqlite-extension",
-        world: "bundle-cli",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "sqlite:extension/types":         super::loaded::sqlite::extension::types,
-            "sqlite:extension/spi":           super::loaded::sqlite::extension::spi,
-            "sqlite:extension/session":       super::loaded::sqlite::extension::session,
-            "sqlite:extension/logging":       super::loaded::sqlite::extension::logging,
-            "sqlite:extension/config":        super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":        super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":          super::loaded::sqlite::extension::http,
-            "sqlite:extension/build":         super::loaded::sqlite::extension::build,
-            "sqlite:extension/cli-stdout":    super::loaded_dotcmd_aware::sqlite::extension::cli_stdout,
-            "sqlite:extension/cli-stderr":    super::loaded_dotcmd_aware::sqlite::extension::cli_stderr,
-            "sqlite:extension/cli-state":     super::loaded_dotcmd_aware::sqlite::extension::cli_state,
-            "sqlite:extension/loader-bridge": super::loaded_dotcmd_aware::sqlite::extension::loader_bridge,
         },
     });
 }
@@ -2225,59 +2194,6 @@ fn strip_provider_call_prefix(msg: String) -> String {
     match msg.find(MARK) {
         Some(idx) => msg[idx + MARK.len()..].to_string(),
         None => msg,
-    }
-}
-
-// bundle-cli: `loaded`-world marshalling for the `dispatch-bridge-cas`
-// surface. The bundle-cli bindgen (`loaded_bundle_cli`) shares its `types`
-// module with `loaded`, so the CAS bridge's query-result flows through
-// `loaded::sqlite::extension::types` — a DISTINCT set of Rust types from the
-// `bindings` copies above. Mirror the three converters against them.
-pub(crate) fn loaded_value_to_db(
-    v: loaded::sqlite::extension::types::SqlValue,
-) -> sqlite_component_core::db::Value {
-    use loaded::sqlite::extension::types::SqlValue as V;
-    use sqlite_component_core::db;
-    match v {
-        V::Null => db::Value::Null,
-        V::Integer(i) => db::Value::Integer(i),
-        V::Real(r) => db::Value::Real(r),
-        V::Text(s) => db::Value::Text(s),
-        V::Blob(b) => db::Value::Blob(b),
-        V::WitValue(p) => db::Value::WitValue(db::WitValuePayload {
-            type_id: type_id_from_wit(&p.type_id),
-            bytes: p.bytes,
-            symbolic_name: p.symbolic_name,
-        }),
-    }
-}
-
-pub(crate) fn db_value_to_loaded(
-    v: sqlite_component_core::db::Value,
-) -> loaded::sqlite::extension::types::SqlValue {
-    use loaded::sqlite::extension::types::SqlValue as V;
-    use sqlite_component_core::db;
-    match v {
-        db::Value::Null => V::Null,
-        db::Value::Integer(i) => V::Integer(i),
-        db::Value::Real(r) => V::Real(r),
-        db::Value::Text(s) => V::Text(s),
-        db::Value::Blob(b) => V::Blob(b),
-        db::Value::WitValue(p) => V::WitValue(loaded::sqlite::extension::types::WitValuePayload {
-            type_id: p.type_id.to_vec(),
-            bytes: p.bytes,
-            symbolic_name: p.symbolic_name,
-        }),
-    }
-}
-
-pub(crate) fn db_err_to_loaded(
-    e: sqlite_component_core::db::Error,
-) -> loaded::sqlite::extension::types::SqliteError {
-    loaded::sqlite::extension::types::SqliteError {
-        code: e.code,
-        extended_code: e.extended_code,
-        message: e.message,
     }
 }
 

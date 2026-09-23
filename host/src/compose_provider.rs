@@ -2076,51 +2076,6 @@ impl cli_ext::cli_state::Host for ProviderCliState {
 // `loader-bridge` are stubbed here (`.bundle install`/`build` are deferred),
 // which still leaves the read-only `.bundle` commands fully working.
 
-/// bundle-cli: the CAS-cache SQL bridge. Opens the shared cas db
-/// (`~/.cache/sqlink/cas.sqlite`) via `Cache::open` — idempotently installing
-/// the `__cas_*` schema (including the `__cas_bundle*` tables `.bundle list`
-/// queries) — and runs the caller's `(sql, params)` against it, marshalling a
-/// `loaded`-typed query-result. Bodies are sync across the cache lock (no
-/// await), so the `parking_lot` guard never crosses a suspend point.
-impl crate::loaded_bundle_cli::sqlite::extension::dispatch_bridge_cas::Host for ProviderCliState {
-    async fn bridged_execute_cas(
-        &mut self,
-        sql: String,
-        params: Vec<crate::loaded::sqlite::extension::types::SqlValue>,
-    ) -> std::result::Result<
-        crate::loaded::sqlite::extension::types::QueryResult,
-        crate::loaded::sqlite::extension::types::SqliteError,
-    > {
-        let cas_err = |msg: String| crate::loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: msg,
-        };
-        let root = crate::cache::Cache::default_root(None)
-            .map_err(|e| cas_err(format!("cas root: {e}")))?;
-        let cache = crate::cache::Cache::open(root)
-            .map_err(|e| cas_err(format!("open cas: {e}")))?;
-        cache.with_bundles_conn(|conn| {
-            let mut stmt = conn.prepare(&sql).map_err(crate::db_err_to_loaded)?;
-            let columns: Vec<String> = stmt.column_names();
-            let bound: Vec<_> = params.into_iter().map(crate::loaded_value_to_db).collect();
-            stmt.bind_all(&bound).map_err(crate::db_err_to_loaded)?;
-            let rows = stmt.collect_rows().map_err(crate::db_err_to_loaded)?;
-            drop(stmt);
-            let out_rows: Vec<Vec<crate::loaded::sqlite::extension::types::SqlValue>> = rows
-                .into_iter()
-                .map(|r| r.into_iter().map(crate::db_value_to_loaded).collect())
-                .collect();
-            Ok(crate::loaded::sqlite::extension::types::QueryResult {
-                columns,
-                rows: out_rows,
-                changes: conn.changes(),
-                last_insert_rowid: conn.last_insert_rowid(),
-            })
-        })
-    }
-}
-
 /// bundle-cli `.bundle build`: the host build SPI. Spawns `cargo build
 /// --release` against the caller-supplied crate root (bundle-cli passes the
 /// sqlink source checkout + `embed-<ext>` features), capturing output and
@@ -2350,14 +2305,21 @@ async fn wasm_component_invoke_cli(
         )
         .map_err(|e| format!("cli sqlite:extension/spi linker: {e}"))?;
     }
-    // bundle-cli: its `dispatch-bridge-cas` (real CAS SQL) + `build` imports
-    // are satisfied directly on `ProviderCliState` via `ProviderCliHostData`
-    // + `|s| s`.
+    // bundle-cli: `dispatch-bridge-cas` (real CAS SQL) is satisfied
+    // by the wasmos-native handler installed through the wasmtime
+    // linker via `async_bridge::install_host_imports`. The `build`
+    // import stays on the wit-bindgen path (still lives on the
+    // `loaded` bindgen block).
     if imports_sqlite_dispatch_bridge_cas(component, runtime) {
-        crate::loaded_bundle_cli::sqlite::extension::dispatch_bridge_cas::add_to_linker::<
-            _,
-            ProviderCliHostData,
-        >(&mut linker, |s| s)
+        let cas_imports = crate::wasmos_bundle_cli_imports::install_bundle_cli_cas_imports(
+            wasmos_runtime_api::HostImports::new(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            engine,
+            &mut linker,
+            component,
+            &cas_imports,
+        )
         .map_err(|e| format!("cli sqlite:extension/dispatch-bridge-cas linker: {e}"))?;
     }
     if imports_sqlite_build(component, runtime) {
