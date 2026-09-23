@@ -332,6 +332,34 @@ Landed 2026-09-23 (commit `b2dcd692`). Refactored
 `TabularMutating` bindgen'd World structs are no longer
 instantiated anywhere.
 
+## Phase 4 Host trait retirements — IN PROGRESS
+
+Landed 2026-09-24 in two commits on `main` (`f31e1fcf`,
+`7b9d8c60`).
+
+- **`f31e1fcf`** — deleted `RunLoaderStub` dead code (278 lines).
+  The stub impl of `sqlink::wasm::extension_loader::Host` for a
+  never-instantiated type was defined but never wired into any
+  linker; audit-and-delete pattern.
+- **`7b9d8c60`** — retired `sqlink::wasm::opfs_host::Host` trap
+  stub via new `wasmos_opfs_imports.rs`. Untyped `HostCall::call`
+  handler (chosen over `#[host_iface]` because all 8 methods
+  return the same error record with no per-method logic).
+  Wiring swapped at both `add_to_linker` call sites (main.rs +
+  lib.rs `run_cli_capture`). ~80 lines of `impl` block +
+  `opfs_unsupported()` helper deleted.
+
+**5 of the 7 original `bindings` Host trait impls retired**
+(RunLoaderStub dead-code, opfs_host trap-stub, plus Phase 3's
+build + session on their respective store data types).
+Remaining 5 on `HostWrap` (all with real host business logic,
+not trivial stubs): `spi`, `spi_loader`, `session`, `dispatch`
+(the big one — scalar/aggregate/collation/authorize/hooks/vtab
+mediation between guest and loaded extensions),
+`extension_loader`. Each is a multi-hour retirement in isolation;
+they DON'T fit the `with:` shortcut because their target Host
+traits carry real host-implemented function signatures.
+
 ## Phase 4 breakthrough: `with:` import-remap works — IN PROGRESS
 
 Landed 2026-09-23 in three commits on `main` (`6957214f`,
