@@ -163,21 +163,6 @@ pub mod bindings {
     });
 }
 
-/// Bindgen against the canonical `sqlite:extension/minimal` world.
-/// Used to instantiate a dynamically-loaded extension component and
-/// call into its `metadata.describe` and `scalar-function.call`
-/// exports. The loaded extension's Store has a distinct state type
-/// (the retired bespoke loader) and gets the minimal world's `types/spi/logging/
-/// config` imports satisfied by the retired bespoke loader impls below.
-pub mod loaded {
-    wasmtime::component::bindgen!({
-        path: "../sqlite-wit/wit/sqlite-extension",
-        world: "minimal",
-        imports: { default: async },
-        exports: { default: async },
-    });
-}
-
 /// compose:dynlink linker bindings. Previously sqlink bindgen'd its own
 /// `compose-host-stub` world here and implemented the linker `Host`/`HostInstance`
 /// traits inline (HostWrap + RunHostWrap). The shared `datalink-dynlink` crate
