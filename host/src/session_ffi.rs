@@ -9,9 +9,11 @@
 //!
 //! Used by host/main.rs's changeset capture/apply path AND
 //! Stage 6 of PLAN-cli-stages-5-6.md: the cli's `.session`
-//! dot-command routes through `bindings::sqlite::extension::session`
-//! which calls into these symbols against the host's shared
-//! spi connection.
+//! dot-command routes through the wasmos-native
+//! `crate::wasmos_session_imports::SessionHost` (Phase 3
+//! retirement of the old `bindings::sqlite::extension::session`
+//! impl), which calls into these symbols against the resident
+//! provider's spi connection.
 
 use std::os::raw::{c_char, c_int, c_void};
 
