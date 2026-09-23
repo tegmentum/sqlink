@@ -332,6 +332,57 @@ Landed 2026-09-23 (commit `b2dcd692`). Refactored
 `TabularMutating` bindgen'd World structs are no longer
 instantiated anywhere.
 
+## Phase 3 COMPLETE: `loaded` bindgen retired — DONE
+
+Landed 2026-09-23 in commits `16f87513`, `4c26958f`, `9acb0d75`
+(Steps 2, 3, and the block deletion). `bindgen!` count in
+`host/src/`: **2 → 1** (only the `bindings` /
+`extension-loader-host` world remains). 65/65 unit tests pass;
+both `--features native-s3` and default builds clean.
+
+- **Step 2 (`16f87513`)** — new `wasmos_build_imports.rs` with a
+  `#[host_iface]` `BuildHost` handler for `sqlite:extension/
+  build@1.0.0` (single `spawn-build` method). Byte-identical to
+  the retired impl. `ProviderCliState.spawn_build_granted` field
+  drops (dead once the capability gate moves to the handler).
+  Landmine noted: `#[host_iface]` rejects `Vec<(String, String)>`
+  method args (only `Vec<primitive>` / `Vec<Value>` accepted);
+  the env-tuples arg lands as `Value` with a local
+  `decode_env_tuples` fn peeling it apart.
+- **Step 3 (`4c26958f`)** — new `wasmos_session_imports.rs` with
+  a `#[host_iface]` `SessionHost` handler for
+  `sqlite:extension/session@1.0.0` (9 methods over the
+  `sqlite3session_*` FFI). Handler captures `Arc<ReentrantMutex<
+  RefCell<Option<db::Connection>>>>` + `Arc<Mutex<HashMap<String,
+  usize>>>` + `String db_path` at install time; the sync bound
+  works because parking_lot's `ReentrantMutex<T>: Sync` requires
+  only `T: Send` (not `T: Sync`), so `RefCell<Option<db::Connection>>`
+  inside it Just Works. Wiring pre-creates the shared spi
+  connection Arc so both the still-bindgen'd `spi::add_to_linker`
+  wrapper and the wasmos SessionHost point at one underlying
+  sqlite3 handle. `ProviderState.session_handles` field drops;
+  `ProviderSessionWrap`, `ProviderSessionData`,
+  `provider_session_err` all delete with the impl block.
+- **Block deletion (`9acb0d75`)** — the 14-line `pub mod loaded
+  { bindgen!{…} }` in `host/src/lib.rs` goes.
+
+**Sync bound on `SessionHost`:** parking_lot's
+`ReentrantMutex<T>: Sync where T: Send` is more permissive than
+`std::sync::Mutex<T>: Sync where T: Send + Sync`. That's what
+lets the handler hold `RefCell<Option<db::Connection>>` without
+an `unsafe impl Sync`. Fresh finding for the pickup notes —
+worth remembering when future handlers need `!Sync` shared
+state.
+
+**Validation still deferred:** `cargo test --lib` doesn't fire
+`describe()`, `xBestIndex`, or `session_create` end-to-end.
+Manifest field order, Capability's 16-variant discriminants,
+FunctionFlags bit layout, and the SessionHost's per-method
+Value marshaling all rely on shape identity against the WIT
+alone. A first integration test firing a real
+`describe → xBestIndex → session_create` chain would catch any
+layout drift.
+
 ## Phase 3 Step 1: type-only migration off `loaded` — DONE
 
 Landed 2026-09-23 in four commits on `main`:
