@@ -25,8 +25,8 @@ use wasmtime::component::{Instance, TypedFunc};
 use wasmtime::Store;
 
 use crate::compose_provider::BridgeState;
-use crate::loaded::sqlite::extension::types::SqlValue;
 use crate::loaded::exports::sqlite::extension::metadata::Manifest;
+use crate::wasmos_extension_types::SqlValue;
 use crate::wasmos_vtab_types::{IndexInfo, IndexPlan, VtabRow};
 
 /// One cached typed export handle.

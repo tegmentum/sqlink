@@ -12,7 +12,7 @@
 
 use wasmtime::component::{ComponentType, Lift, Lower};
 
-use crate::loaded::sqlite::extension::types::SqlValue;
+use crate::wasmos_extension_types::SqlValue;
 
 #[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
 #[component(enum)]

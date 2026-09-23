@@ -90,6 +90,12 @@ pub mod wasmos_mutating_dispatch;
 /// — the last remaining consumers of the `loaded_tabular` bindgen
 /// migrated to these definitions, retiring the block entirely.
 pub mod wasmos_vtab_types;
+/// Phase 3 groundwork: hand-rolled `sqlite:extension/{types,http,
+/// s3-base,metadata,build}` record/variant/enum/flags types. Sibling
+/// of `wasmos_vtab_types`; consumers of the `loaded` bindgen
+/// migrate here one interface at a time until the block itself can
+/// be deleted.
+pub mod wasmos_extension_types;
 /// Phase 1 completion: generic `HostImports` handlers for cli-*
 /// interfaces, parameterised on the wasmtime store data type via
 /// the `CliStreamState` trait. Enables retirement of
@@ -6268,7 +6274,7 @@ impl Host {
         // Convert bindings::SqlValue → loaded::SqlValue (the same shape
         // ferried across the bridge world). Existing pass-through
         // converters used elsewhere on the dispatch path.
-        let loaded_args: Vec<loaded::sqlite::extension::types::SqlValue> = args
+        let loaded_args: Vec<wasmos_extension_types::SqlValue> = args
             .iter()
             .cloned()
             .map(convert_sql_value_to_loaded)
@@ -6521,7 +6527,7 @@ impl Host {
     ) -> Option<Result<std::result::Result<(), String>>> {
         let m_opt = self.mutating_bridges.read().get(ext_name).cloned();
         if let Some(m_arc) = m_opt {
-            let loaded_args: Vec<loaded::sqlite::extension::types::SqlValue> = args
+            let loaded_args: Vec<wasmos_extension_types::SqlValue> = args
                 .into_iter()
                 .map(convert_sql_value_to_loaded)
                 .collect();
@@ -6547,7 +6553,7 @@ impl Host {
             });
         }
         let bridge_arc = self.dynlink_bridges.read().get(ext_name).cloned()?;
-        let loaded_args: Vec<loaded::sqlite::extension::types::SqlValue> = args
+        let loaded_args: Vec<wasmos_extension_types::SqlValue> = args
             .into_iter()
             .map(convert_sql_value_to_loaded)
             .collect();
@@ -6794,7 +6800,7 @@ impl Host {
         args: &[bindings::sqlite::extension::types::SqlValue],
     ) -> Option<Result<std::result::Result<i64, String>>> {
         let bridge_arc = self.mutating_bridges.read().get(ext_name).cloned()?;
-        let loaded_args: Vec<loaded::sqlite::extension::types::SqlValue> = args
+        let loaded_args: Vec<wasmos_extension_types::SqlValue> = args
             .iter()
             .cloned()
             .map(convert_sql_value_to_loaded)
@@ -9117,14 +9123,15 @@ pub struct HostWrap<'a> {
 }
 
 /// Convert a SqlValue from the extension-loader-host bindgen's type
-/// universe to the loaded-extension bindgen's. The two are
-/// shape-identical variants; the function is the bridge code at
-/// the cross-component boundary.
+/// universe to the hand-rolled `wasmos_extension_types` universe
+/// (the shape the loaded-extension bridge's TypedFuncs lift
+/// against). The two are shape-identical variants; the function is
+/// the bridge code at the cross-component boundary.
 fn convert_sql_value_to_loaded(
     v: bindings::sqlite::extension::types::SqlValue,
-) -> loaded::sqlite::extension::types::SqlValue {
+) -> wasmos_extension_types::SqlValue {
     use bindings::sqlite::extension::types::SqlValue as From;
-    use loaded::sqlite::extension::types::SqlValue as To;
+    use wasmos_extension_types::SqlValue as To;
     match v {
         From::Null => To::Null,
         From::Integer(i) => To::Integer(i),
@@ -9132,11 +9139,11 @@ fn convert_sql_value_to_loaded(
         From::Text(s) => To::Text(s),
         From::Blob(b) => To::Blob(b),
         // PHASE A: wit-value-payload is shape-identical across the two
-        // bindgen universes; passes through field-by-field. Phase B's
-        // host marshaling work doesn't change this site  it'll still
-        // pass through. The decode/encode invocation happens at the
+        // universes; passes through field-by-field. Phase B's host
+        // marshaling work doesn't change this site — it'll still pass
+        // through. The decode/encode invocation happens at the
         // SQL-boundary sites (db_value_to_* / *_to_sqlite3_result).
-        From::WitValue(p) => To::WitValue(loaded::sqlite::extension::types::WitValuePayload {
+        From::WitValue(p) => To::WitValue(wasmos_extension_types::WitValuePayload {
             type_id: p.type_id,
             bytes: p.bytes,
             symbolic_name: p.symbolic_name,
@@ -9145,10 +9152,10 @@ fn convert_sql_value_to_loaded(
 }
 
 fn convert_sql_value_from_loaded(
-    v: loaded::sqlite::extension::types::SqlValue,
+    v: wasmos_extension_types::SqlValue,
 ) -> bindings::sqlite::extension::types::SqlValue {
     use bindings::sqlite::extension::types::SqlValue as To;
-    use loaded::sqlite::extension::types::SqlValue as From;
+    use wasmos_extension_types::SqlValue as From;
     match v {
         From::Null => To::Null,
         From::Integer(i) => To::Integer(i),
