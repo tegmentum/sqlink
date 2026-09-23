@@ -254,6 +254,28 @@ migrating live trait-impl clusters or coupling to the two
   under `~/git/` with a `[patch]` table in the workspace root pinning
   each to the local checkout.
 
+## Sync-wrap breakthrough (2026-09-22, commits `6ddf13fa`+ `d9f8537e`)
+
+Earlier scope estimates assumed changing
+`ProviderKind::{WasmComponent,ResidentWasmComponent}.component`
+from `Component` to `WasmosCompiledComponent` forced every
+constructor async (since wasmos's `compile_component` is async).
+That's **wrong**. `WasmtimeCompiledComponent` has public
+constructor fields (Phase 6.15b, since 2026-09-16); a sync
+`wrap_wasmtime_component(component, name, runtime)` helper builds
+the wasmos handle around a freshly-compiled `Component::from_binary`
+result without async.
+
+The field-type change is now landed. Downstream dispatch fns and
+inspection helpers keep their `&Component` signatures — the
+destructure sites call `wt_component(component)` at the boundary.
+
+**Fresh-store dispatch (`wasm_component_invoke`) is now
+wasmos-native** — uses `runtime.instantiate(component, ctx)` +
+`Instance::call_export("compose:dynlink/endpoint@0.1.0#handle",
+&[...])`. `dynlink_provider` bindgen still lives because the
+resident + cli variants use it; retirement is the next step.
+
 ## Empirical scope confirmation (from aborted attempts)
 
 Twice attempted to migrate `dynlink_provider` end-to-end by changing
