@@ -1,32 +1,31 @@
 # Wasmos migration plan — sqlink-host
 
 Living plan for finishing the sqlink → wasmos wasm-runtime migration.
-Snapshotted 2026-09-22 after 49 commits landed on `main`
-(**Phase 1 + Phase 2 complete**; extension-flavor Phase 3 next).
+Snapshotted 2026-09-22 after 54 commits landed on `main`
+(**Phase 1 + Phase 2 + partial Phase 4 done**).
 
 ## Current state
 
-- **S1 (engine/config/component ops)**: **DONE**. Every
-  `Component::from_binary`, `Component::deserialize`,
-  `Component::deserialize_file`, `Engine::new`, and `Config::new` in
-  `host/src/` is retired through the wasmos runtime facade.
+- **S1 (engine/config/component ops)**: **DONE**.
 
 - **S2 (bindgen retirement)**: **IN PROGRESS**.
   - Openssl `verify-only` block retired end-to-end.
-  - 5 dead extension-world blocks deleted (planned flavors whose
-    `impl Host` blocks were never written).
-  - **Phase 1** (infrastructure) done: `WasmosDynlinkAdapter` shim,
-    `ExtensionLoaderStub` `HostImports`, `make_run_execution_context`
-    helper.
-  - **Phase 2** (leaf export dispatchers) done: `run::Runnable` and
-    `language_runtime::LanguageRuntime` bindgen blocks retired.
-    Also deleted the now-dead `make_run_linker` +
-    `Host::run_dynlink_bridge` helpers.
+  - 5 dead extension-world blocks deleted (planned flavors).
+  - **Phase 1** (infrastructure) done.
+  - **Phase 2** (leaf export dispatchers) done — `run::Runnable`
+    + `language_runtime::LanguageRuntime` bindgens gone. Deleted
+    `make_run_linker` + `Host::run_dynlink_bridge`.
+  - **Phase 4 slice**: dropped the `wasmos-install-path` feature
+    (the wasmos install path is now the only path); retired
+    `loaded_minimal_http` + `loaded_minimal_dns` bindgens; deleted
+    5 orphaned `impl loaded::…::Host for ProviderState` blocks
+    plus `wal_perm_err`; deleted 3 unread `ProviderState` fields.
 
-- **`bindgen!` blocks remaining in `host/src/lib.rs`**: **10**
-  (down from 17 pre-session, 12 post-openssl-pilot). All live.
-  Next up: Phase 4 host-side imports (the `bindings::` + `loaded::`
-  block families), then Phase 3 extension-flavor export dispatchers.
+- **`bindgen!` blocks remaining in `host/src/lib.rs`**: **8**
+  (down from 17 pre-session, 12 post-openssl-pilot, 10 post-P2).
+  Remaining: `bindings`, `loaded`, `loaded_dotcmd_aware`,
+  `loaded_bundle_cli`, `loaded_tabular`, `loaded_tabular_mutating`,
+  `dynlink_provider`, `dynlink_provider_cli`.
 
 - **`sqlink-host` lib + `sqlink` bin + `sqlink-httpd` build clean;
   65/65 unit tests pass.**
@@ -219,18 +218,25 @@ cleanup at most.
 
 | Phase                | Effort               | Status |
 | -------------------- | -------------------- | ------ |
-| Phases 1 + 2         | ~2 sessions          | **DONE** (landed in ~1 focused stretch) |
-| Phase 3              | ~2-3 sessions        | pending (best after Phase 4) |
-| Phase 4              | ~4-6 sessions        | pending — the bulk of the rewrite |
-| Phases 5 + 6         | ~1 session combined  | pending |
-| **Total**            | **~9-12 sessions**   | ~6-10 remaining |
+| Phases 1 + 2         | ~2 sessions          | **DONE** |
+| Phase 4 (partial)    | ~4-6 sessions        | **partial**: 2 of ~8 blocks retired |
+| Phase 3              | ~2-3 sessions        | pending (best after Phase 4 completes) |
+| Phase 5              | ~0.5 session         | pending |
+| Phase 6              | ~0.5 session         | pending |
+| **Total**            | **~9-12 sessions**   | ~5-8 remaining |
 
-The Phase-1 + Phase-2 estimate turned out generous: the openssl
-pilot pattern generalised cleanly, and the `HostCall` trait's
-untyped shape let the extension-loader stub skip the type-derive
-overhead entirely. That said, Phase 4 is where the surface widens
-substantially — 11+ trait-impl clusters spanning `bindings::` and
-`loaded::` — and the estimate reflects real per-cluster effort.
+Phase 4 progress so far reflected in commits `7e4a9692`,
+`acac9b0e`, `40f3f5f2`, `853d217d` — the wasmos install path is
+now unconditional (was default-feature-gated), and the two
+minimal-variant bindgens (`loaded_minimal_http`,
+`loaded_minimal_dns`) retired because their host handlers were
+already mirrored in `wasmos_imports.rs`. The remaining 6
+bindgens (`bindings`, `loaded`, `loaded_dotcmd_aware`,
+`loaded_bundle_cli`, `loaded_tabular`, `loaded_tabular_mutating`,
+`dynlink_provider`, `dynlink_provider_cli`) all involve either
+migrating live trait-impl clusters or coupling to the two
+`compose_provider` dispatch fns
+(`wasm_component_invoke*` / `resident_wasm_component_invoke`).
 
 ## Reference
 
