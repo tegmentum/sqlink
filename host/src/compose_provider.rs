@@ -989,7 +989,7 @@ pub fn imports_sqlite_spi(component: &Component, runtime: &std::sync::Arc<wasmos
 /// stateless resident provider linker and so genuinely require the bespoke
 /// `loaded::*` loader — `sqlite:extension/{session, authorizer, loader-bridge}`.
 /// These are tied to the full `LoadedState` host state (the 38-way session
-/// FFI over `session_handles`, the whole-world `loaded_authorizing` bindgen,
+/// FFI over `session_handles`, the `authorizer` reentrant callback surface,
 /// and `loader_bridge` re-entering `host.load_extension_from_bytes`). Only the
 /// 3 meta/maintenance CLI tools (`session-cli`, `wal-archive`, `sqlink-meta-cli`)
 /// hit this; every data-extension tier runs provider-only. This gate makes the
