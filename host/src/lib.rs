@@ -7084,15 +7084,19 @@ impl Host {
         // needed by the compose:dynlink linker.instance methods; the
         // spi_loader::Host trait methods we call here never touch it.
         let mut host_mut = self.clone();
-        let mut wrap = HostWrap {
+        let wrap = HostWrap {
             host: &mut host_mut,
             resources: None,
         };
-        use bindings::sqlite::extension::spi_loader::Host as SpiLoaderHost;
         let mut s = 0u32;
         for spec in &manifest.scalar_functions {
-            match SpiLoaderHost::register_scalar(
-                &mut wrap,
+            // Phase 4 preparation: call the extracted free fn directly
+            // rather than routing through the trait method. The trait
+            // impl delegates to the same fn, so behavior is identical;
+            // this decouples install_provider_backed_bindings from the
+            // pending retirement of spi_loader::Host.
+            match register_scalar_impl(
+                wrap.host,
                 name.to_string(),
                 spec.name.clone(),
                 spec.num_args,
@@ -7112,8 +7116,8 @@ impl Host {
         }
         let mut c = 0u32;
         for spec in &manifest.collations {
-            match SpiLoaderHost::register_collation(
-                &mut wrap,
+            match register_collation_impl(
+                wrap.host,
                 name.to_string(),
                 spec.name.clone(),
                 spec.id,
@@ -7131,8 +7135,8 @@ impl Host {
         }
         let mut a = 0u32;
         for spec in &manifest.aggregate_functions {
-            match SpiLoaderHost::register_aggregate(
-                &mut wrap,
+            match register_aggregate_impl(
+                wrap.host,
                 name.to_string(),
                 spec.name.clone(),
                 spec.num_args,
@@ -7153,7 +7157,7 @@ impl Host {
         }
         let mut h = 0u32;
         if manifest.has_authorizer {
-            match SpiLoaderHost::register_authorizer(&mut wrap, name.to_string()).await {
+            match register_authorizer_impl(wrap.host, name.to_string()).await {
                 Ok(()) => h += 1,
                 Err(e) => tracing::warn!(
                     ext = %name,
@@ -7163,7 +7167,7 @@ impl Host {
             }
         }
         if manifest.has_update_hook {
-            match SpiLoaderHost::register_update_hook(&mut wrap, name.to_string()).await {
+            match register_update_hook_impl(wrap.host, name.to_string()).await {
                 Ok(()) => h += 1,
                 Err(e) => tracing::warn!(
                     ext = %name,
@@ -7173,7 +7177,7 @@ impl Host {
             }
         }
         if manifest.has_commit_hook {
-            match SpiLoaderHost::register_commit_hook(&mut wrap, name.to_string()).await {
+            match register_commit_hook_impl(wrap.host, name.to_string()).await {
                 Ok(()) => h += 1,
                 Err(e) => tracing::warn!(
                     ext = %name,
@@ -7183,8 +7187,8 @@ impl Host {
             }
         }
         if manifest.has_wal_hook {
-            match SpiLoaderHost::register_wal_hook(
-                &mut wrap,
+            match register_wal_hook_impl(
+                wrap.host,
                 name.to_string(),
                 manifest.wal_hook_id,
             )
@@ -7200,8 +7204,8 @@ impl Host {
         }
         let mut v = 0u32;
         for spec in &manifest.vtabs {
-            match SpiLoaderHost::register_vtab(
-                &mut wrap,
+            match register_vtab_impl(
+                wrap.host,
                 name.to_string(),
                 spec.name.clone(),
                 spec.id,
@@ -9298,141 +9302,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         num_args: i32,
         func_id: u64,
     ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        // Compute the create-function flag word from the extension's declared
-        // per-scalar flags (carried in the provider manifest, keyed by
-        // func-id). A nondeterministic scalar (e.g. `nanoid()`) must NOT get
-        // `SQLITE_DETERMINISTIC` — otherwise SQLite caches it within a query
-        // and 1000 calls collapse to a handful of distinct values. Absent a
-        // manifest entry, default to plain UTF8 (nondeterministic), the safe
-        // choice for an unknown scalar.
-        let create_flags = {
-            let f = self
-                .host
-                .provider_manifests
-                .read()
-                .get(&ext_name)
-                .and_then(|m| m.scalar_flags.get(&func_id).copied())
-                .unwrap_or_default();
-            let mut flags = libsqlite3_sys::SQLITE_UTF8;
-            if f.deterministic {
-                flags |= libsqlite3_sys::SQLITE_DETERMINISTIC;
-            }
-            if f.direct_only {
-                flags |= libsqlite3_sys::SQLITE_DIRECTONLY;
-            }
-            if f.innocuous {
-                flags |= libsqlite3_sys::SQLITE_INNOCUOUS;
-            }
-            flags
-        };
-        // Task #216: collision-safe bare registration. Resolve the
-        // effective name against the LIVE connection (PRAGMA
-        // function_list) so a loaded component never silently clobbers a
-        // SQLite builtin or a previously-loaded extension function.
-        let (bare_name, rc) = {
-            let g = self.host.shared_spi_conn.lock();
-            let r = g.borrow();
-            let conn = r.as_ref().expect("ensured open");
-            let resolved = prefix_registry::resolve_collision_free_name(
-                conn, &ext_name, &name, num_args,
-            )
-            .unwrap_or_else(|e| {
-                tracing::warn!(
-                    extension = %ext_name,
-                    func = %name,
-                    arity = num_args,
-                    err = %e,
-                    "collision-free name resolution failed; falling back to bare name"
-                );
-                prefix_registry::ResolvedName {
-                    name: name.clone(),
-                    remapped: false,
-                }
-            });
-            if resolved.remapped {
-                eprintln!(
-                    "[sqlink] {}.{}/{} collides with an existing function; registered as {}",
-                    ext_name, name, num_args, resolved.name
-                );
-            }
-            let rc = unsafe {
-                register_host_loaded_scalar(
-                    conn.raw_handle(),
-                    self.host.clone(),
-                    ext_name.clone(),
-                    &resolved.name,
-                    num_args,
-                    func_id,
-                    create_flags,
-                )
-            };
-            (resolved.name, rc)
-        };
-        if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(wasmos_extension_types::SqliteError {
-                code: rc,
-                extended_code: rc,
-                message: format!("register scalar {bare_name}/{num_args}: rc={rc}"),
-            });
-        }
-        self.host
-            .ext_scalar_registrations
-            .lock()
-            .entry(ext_name.clone())
-            .or_default()
-            .push((bare_name.clone(), num_args));
-        // PLAN-followups.md P1 live-prefer cache: needed by
-        // loader-bridge.apply-prefix-pin to re-register the bare-name
-        // SQLite trampoline against the pinned extension's impl in the
-        // current session. Last registration wins on duplicate
-        // (ext_name, name, num_args)  same shape as SQLite.
-        self.host
-            .ext_scalar_func_ids
-            .lock()
-            .insert((ext_name.clone(), name.clone(), num_args), func_id);
-        // PLAN-prefixes.md hot-path: record (expansion, name, n_args)
-        // in __sqlink_prefix_function and register the always-available
-        // `prefix__name` qualified form alongside the bare name. Best-
-        // effort  failures are logged but don't fail the registration.
-        if let Some(rec) = self
-            .host
-            .record_function_for_extension(&ext_name, &name, num_args)
-        {
-            let qualified = rec.qualified;
-            let rc_q = {
-                let g = self.host.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("ensured open");
-                unsafe {
-                    register_host_loaded_scalar(
-                        conn.raw_handle(),
-                        self.host.clone(),
-                        ext_name.clone(),
-                        &qualified,
-                        num_args,
-                        func_id,
-                        create_flags,
-                    )
-                }
-            };
-            if rc_q == libsqlite3_sys::SQLITE_OK {
-                self.host
-                    .ext_scalar_registrations
-                    .lock()
-                    .entry(ext_name)
-                    .or_default()
-                    .push((qualified, num_args));
-            } else {
-                tracing::warn!(
-                    func = %qualified,
-                    arity = num_args,
-                    rc = rc_q,
-                    "register_scalar (qualified) failed; bare registration succeeded"
-                );
-            }
-        }
-        Ok(())
+        register_scalar_impl(self.host, ext_name, name, num_args, func_id).await
     }
 
     async fn register_collation(
@@ -9441,69 +9311,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         name: String,
         coll_id: u64,
     ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        let rc = {
-            let g = self.host.shared_spi_conn.lock();
-            let r = g.borrow();
-            let conn = r.as_ref().expect("ensured open");
-            unsafe {
-                register_host_loaded_collation(
-                    conn.raw_handle(),
-                    self.host.clone(),
-                    ext_name.clone(),
-                    &name,
-                    coll_id,
-                )
-            }
-        };
-        if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(wasmos_extension_types::SqliteError {
-                code: rc,
-                extended_code: rc,
-                message: format!("register collation {name}: rc={rc}"),
-            });
-        }
-        self.host
-            .ext_collation_registrations
-            .lock()
-            .entry(ext_name.clone())
-            .or_default()
-            .push(name.clone());
-        // PLAN-prefixes.md hot-path: collations don't have arity in
-        // the scalar/aggregate sense  use 0 as the sentinel
-        // (matches install_loaded_extension's convention).
-        if let Some(rec) = self.host.record_function_for_extension(&ext_name, &name, 0) {
-            let qualified = rec.qualified;
-            let rc_q = {
-                let g = self.host.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("ensured open");
-                unsafe {
-                    register_host_loaded_collation(
-                        conn.raw_handle(),
-                        self.host.clone(),
-                        ext_name.clone(),
-                        &qualified,
-                        coll_id,
-                    )
-                }
-            };
-            if rc_q == libsqlite3_sys::SQLITE_OK {
-                self.host
-                    .ext_collation_registrations
-                    .lock()
-                    .entry(ext_name)
-                    .or_default()
-                    .push(qualified);
-            } else {
-                tracing::warn!(
-                    coll = %qualified,
-                    rc = rc_q,
-                    "register_collation (qualified) failed; bare registration succeeded"
-                );
-            }
-        }
-        Ok(())
+        register_collation_impl(self.host, ext_name, name, coll_id).await
     }
 
     async fn register_aggregate(
@@ -9514,198 +9322,28 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         func_id: u64,
         window: bool,
     ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        let result = {
-            let g = self.host.shared_spi_conn.lock();
-            let r = g.borrow();
-            let conn = r.as_ref().expect("ensured open");
-            let agg = HostLoadedAggregate {
-                host: self.host.clone(),
-                ext_name: ext_name.clone(),
-                func_id,
-            };
-            if window {
-                conn.create_window_function(
-                    &name,
-                    num_args,
-                    sqlite_component_core::db::FunctionFlags::UTF8
-                        | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                    agg,
-                )
-            } else {
-                conn.create_aggregate_function(
-                    &name,
-                    num_args,
-                    sqlite_component_core::db::FunctionFlags::UTF8
-                        | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                    agg,
-                )
-            }
-        };
-        if let Err(e) = result {
-            return Err(wasmos_extension_types::SqliteError {
-                code: e.code,
-                extended_code: e.extended_code,
-                message: format!("register aggregate {name}/{num_args}: {}", e.message),
-            });
-        }
-        self.host
-            .ext_aggregate_registrations
-            .lock()
-            .entry(ext_name.clone())
-            .or_default()
-            .push((name.clone(), num_args));
-        // PLAN-prefixes.md hot-path: record + register the qualified form.
-        if let Some(rec) = self
-            .host
-            .record_function_for_extension(&ext_name, &name, num_args)
-        {
-            let qualified = rec.qualified;
-            let res_q = {
-                let g = self.host.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("ensured open");
-                let agg_q = HostLoadedAggregate {
-                    host: self.host.clone(),
-                    ext_name: ext_name.clone(),
-                    func_id,
-                };
-                if window {
-                    conn.create_window_function(
-                        &qualified,
-                        num_args,
-                        sqlite_component_core::db::FunctionFlags::UTF8
-                            | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                        agg_q,
-                    )
-                } else {
-                    conn.create_aggregate_function(
-                        &qualified,
-                        num_args,
-                        sqlite_component_core::db::FunctionFlags::UTF8
-                            | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                        agg_q,
-                    )
-                }
-            };
-            match res_q {
-                Ok(()) => {
-                    self.host
-                        .ext_aggregate_registrations
-                        .lock()
-                        .entry(ext_name)
-                        .or_default()
-                        .push((qualified, num_args));
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        func = %qualified,
-                        arity = num_args,
-                        err = %e.message,
-                        "register_aggregate (qualified) failed; bare registration succeeded"
-                    );
-                }
-            }
-        }
-        Ok(())
+        register_aggregate_impl(self.host, ext_name, name, num_args, func_id, window).await
     }
 
     async fn register_authorizer(
         &mut self,
         ext_name: String,
     ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        let g = self.host.shared_spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        let host = self.host.clone();
-        let ext_n = ext_name.clone();
-        let result = conn.set_authorizer(Some(
-            move |action: i32,
-                  a1: Option<String>,
-                  a2: Option<String>,
-                  a3: Option<String>,
-                  a4: Option<String>| {
-                let wit_action = sqlite_code_to_auth_action(action);
-                match sync_dispatch_authorize(&host, &ext_n, wit_action, a1, a2, a3, a4) {
-                    Ok(wasmos_extension_types::AuthResult::Ok) => {
-                        sqlite_component_core::db::AuthResult::Allow
-                    }
-                    Ok(wasmos_extension_types::AuthResult::Deny) => {
-                        sqlite_component_core::db::AuthResult::Deny
-                    }
-                    Ok(wasmos_extension_types::AuthResult::Ignore) => {
-                        sqlite_component_core::db::AuthResult::Ignore
-                    }
-                    Err(_) => sqlite_component_core::db::AuthResult::Allow,
-                }
-            },
-        ));
-        if let Err(e) = result {
-            return Err(wasmos_extension_types::SqliteError {
-                code: e.code,
-                extended_code: e.extended_code,
-                message: e.message,
-            });
-        }
-        *self.host.ext_authorizer_owner.lock() = Some(ext_name);
-        Ok(())
+        register_authorizer_impl(self.host, ext_name).await
     }
 
     async fn register_update_hook(
         &mut self,
         ext_name: String,
     ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        let g = self.host.shared_spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        let host = self.host.clone();
-        let ext_n = ext_name.clone();
-        conn.update_hook(Some(
-            move |action: sqlite_component_core::db::UpdateAction,
-                  db_name: &str,
-                  table: &str,
-                  rowid: i64| {
-                use wasmos_extension_types::UpdateOperation as Op;
-                let op = match action {
-                    sqlite_component_core::db::UpdateAction::Insert => Op::Insert,
-                    sqlite_component_core::db::UpdateAction::Update => Op::Update,
-                    sqlite_component_core::db::UpdateAction::Delete => Op::Delete,
-                    sqlite_component_core::db::UpdateAction::Unknown => return,
-                };
-                let _ = sync_dispatch_on_update(&host, &ext_n, op, db_name, table, rowid);
-            },
-        ));
-        *self.host.ext_update_hook_owner.lock() = Some(ext_name);
-        Ok(())
+        register_update_hook_impl(self.host, ext_name).await
     }
 
     async fn register_commit_hook(
         &mut self,
         ext_name: String,
     ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        let g = self.host.shared_spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        let host_c = self.host.clone();
-        let ext_c = ext_name.clone();
-        // sqlite commit_hook: return non-zero  abort. WIT on_commit:
-        // return true  proceed. Invert.
-        conn.commit_hook(Some(move || {
-            match sync_dispatch_on_commit(&host_c, &ext_c) {
-                Ok(proceed) => !proceed,
-                Err(_) => false,
-            }
-        }));
-        let host_r = self.host.clone();
-        let ext_r = ext_name.clone();
-        conn.rollback_hook(Some(move || {
-            let _ = sync_dispatch_on_rollback(&host_r, &ext_r);
-        }));
-        *self.host.ext_commit_hook_owner.lock() = Some(ext_name);
-        Ok(())
+        register_commit_hook_impl(self.host, ext_name).await
     }
 
     async fn register_wal_hook(
@@ -9713,29 +9351,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         ext_name: String,
         hook_id: u64,
     ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        let g = self.host.shared_spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        // SQLite installs an internal wal-hook for the
-        // auto-checkpoint machinery by default; clear it before
-        // wiring our own so db::Connection::wal_hook doesn't try to
-        // Box::from_raw SQLite's opaque internal pointer (segfault).
-        unsafe { clear_default_wal_autocheckpoint(conn.raw_handle()) };
-        let host_c = self.host.clone();
-        let ext_c = ext_name.clone();
-        // sqlite's wal_hook takes (db_name: &str, n_frames: i32) ->
-        // i32. The WIT on-wal-hook signature widens n_frames to u32
-        // (SQLite never returns negative frame counts). Errors from
-        // the dispatch tunnel become SQLITE_OK on the C side — the
-        // alternative would be to abort the calling statement on
-        // tunnel hiccups, which is worse than a missed event.
-        conn.wal_hook(Some(move |db_name: &str, n_frames: i32| {
-            let n = if n_frames < 0 { 0u32 } else { n_frames as u32 };
-            sync_dispatch_on_wal_hook(&host_c, &ext_c, hook_id, db_name, n).unwrap_or_default()
-        }));
-        *self.host.ext_wal_hook_owner.lock() = Some((ext_name, hook_id));
-        Ok(())
+        register_wal_hook_impl(self.host, ext_name, hook_id).await
     }
 
     async fn register_vtab(
@@ -9747,78 +9363,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         mutable: bool,
         batched: bool,
     ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        let result = {
-            let g = self.host.shared_spi_conn.lock();
-            let r = g.borrow();
-            let conn = r.as_ref().expect("ensured open");
-            unsafe {
-                crate::vtab::register_vtab_module(
-                    conn.raw_handle(),
-                    self.host.clone(),
-                    &name,
-                    &ext_name,
-                    vtab_id,
-                    eponymous,
-                    mutable,
-                    batched,
-                )
-            }
-        };
-        if let Err(e) = result {
-            return Err(wasmos_extension_types::SqliteError {
-                code: 1,
-                extended_code: 1,
-                message: format!("register vtab {name}: {e}"),
-            });
-        }
-        self.host
-            .ext_vtab_registrations
-            .lock()
-            .entry(ext_name.clone())
-            .or_default()
-            .push(name.clone());
-        // PLAN-prefixes.md hot-path: record + register the qualified
-        // USING module name. Vtabs have no arity in the scalar sense
-        //  use 0 (matches install_loaded_extension's convention).
-        if let Some(rec) = self.host.record_function_for_extension(&ext_name, &name, 0) {
-            let qualified = rec.qualified;
-            let res_q = {
-                let g = self.host.shared_spi_conn.lock();
-                let r = g.borrow();
-                let conn = r.as_ref().expect("ensured open");
-                unsafe {
-                    crate::vtab::register_vtab_module(
-                        conn.raw_handle(),
-                        self.host.clone(),
-                        &qualified,
-                        &ext_name,
-                        vtab_id,
-                        eponymous,
-                        mutable,
-                        batched,
-                    )
-                }
-            };
-            match res_q {
-                Ok(()) => {
-                    self.host
-                        .ext_vtab_registrations
-                        .lock()
-                        .entry(ext_name)
-                        .or_default()
-                        .push(qualified);
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        vtab = %qualified,
-                        err = %e,
-                        "register_vtab (qualified) failed; bare registration succeeded"
-                    );
-                }
-            }
-        }
-        Ok(())
+        register_vtab_impl(self.host, ext_name, name, vtab_id, eponymous, mutable, batched).await
     }
 
     async fn unregister_extension(&mut self, ext_name: String) {
@@ -9953,6 +9498,512 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
     }
 }
 
+
+// Phase 4 preparation: extracted bodies from the
+// `spi_loader::Host for HostWrap` trait impl. Both the trait
+// impl AND `install_provider_backed_bindings` (which calls
+// register-* on the trait via a direct trait-method-path
+// invocation) delegate to these free fns. Once every remaining
+// register-* body is extracted the same way, the trait impl can
+// be retired in a follow-up commit without breaking
+// `install_provider_backed_bindings`.
+
+pub(crate) async fn register_scalar_impl(
+    host: &Host,
+    ext_name: String,
+    name: String,
+    num_args: i32,
+    func_id: u64,
+) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
+    shared_spi_ensure_open(host)?;
+    // Compute the create-function flag word from the extension's declared
+    // per-scalar flags (carried in the provider manifest, keyed by
+    // func-id). A nondeterministic scalar (e.g. `nanoid()`) must NOT get
+    // `SQLITE_DETERMINISTIC` — otherwise SQLite caches it within a query
+    // and 1000 calls collapse to a handful of distinct values. Absent a
+    // manifest entry, default to plain UTF8 (nondeterministic), the safe
+    // choice for an unknown scalar.
+    let create_flags = {
+        let f = host
+            .provider_manifests
+            .read()
+            .get(&ext_name)
+            .and_then(|m| m.scalar_flags.get(&func_id).copied())
+            .unwrap_or_default();
+        let mut flags = libsqlite3_sys::SQLITE_UTF8;
+        if f.deterministic {
+            flags |= libsqlite3_sys::SQLITE_DETERMINISTIC;
+        }
+        if f.direct_only {
+            flags |= libsqlite3_sys::SQLITE_DIRECTONLY;
+        }
+        if f.innocuous {
+            flags |= libsqlite3_sys::SQLITE_INNOCUOUS;
+        }
+        flags
+    };
+    // Task #216: collision-safe bare registration. Resolve the
+    // effective name against the LIVE connection (PRAGMA
+    // function_list) so a loaded component never silently clobbers a
+    // SQLite builtin or a previously-loaded extension function.
+    let (bare_name, rc) = {
+        let g = host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        let resolved =
+            prefix_registry::resolve_collision_free_name(conn, &ext_name, &name, num_args)
+                .unwrap_or_else(|e| {
+                    tracing::warn!(
+                        extension = %ext_name,
+                        func = %name,
+                        arity = num_args,
+                        err = %e,
+                        "collision-free name resolution failed; falling back to bare name"
+                    );
+                    prefix_registry::ResolvedName {
+                        name: name.clone(),
+                        remapped: false,
+                    }
+                });
+        if resolved.remapped {
+            eprintln!(
+                "[sqlink] {}.{}/{} collides with an existing function; registered as {}",
+                ext_name, name, num_args, resolved.name
+            );
+        }
+        let rc = unsafe {
+            register_host_loaded_scalar(
+                conn.raw_handle(),
+                host.clone(),
+                ext_name.clone(),
+                &resolved.name,
+                num_args,
+                func_id,
+                create_flags,
+            )
+        };
+        (resolved.name, rc)
+    };
+    if rc != libsqlite3_sys::SQLITE_OK {
+        return Err(wasmos_extension_types::SqliteError {
+            code: rc,
+            extended_code: rc,
+            message: format!("register scalar {bare_name}/{num_args}: rc={rc}"),
+        });
+    }
+    host.ext_scalar_registrations
+        .lock()
+        .entry(ext_name.clone())
+        .or_default()
+        .push((bare_name.clone(), num_args));
+    // PLAN-followups.md P1 live-prefer cache: needed by
+    // loader-bridge.apply-prefix-pin to re-register the bare-name
+    // SQLite trampoline against the pinned extension's impl in the
+    // current session. Last registration wins on duplicate
+    // (ext_name, name, num_args) — same shape as SQLite.
+    host.ext_scalar_func_ids
+        .lock()
+        .insert((ext_name.clone(), name.clone(), num_args), func_id);
+    // PLAN-prefixes.md hot-path: record (expansion, name, n_args)
+    // in __sqlink_prefix_function and register the always-available
+    // `prefix__name` qualified form alongside the bare name. Best-
+    // effort — failures are logged but don't fail the registration.
+    if let Some(rec) = host.record_function_for_extension(&ext_name, &name, num_args) {
+        let qualified = rec.qualified;
+        let rc_q = {
+            let g = host.shared_spi_conn.lock();
+            let r = g.borrow();
+            let conn = r.as_ref().expect("ensured open");
+            unsafe {
+                register_host_loaded_scalar(
+                    conn.raw_handle(),
+                    host.clone(),
+                    ext_name.clone(),
+                    &qualified,
+                    num_args,
+                    func_id,
+                    create_flags,
+                )
+            }
+        };
+        if rc_q == libsqlite3_sys::SQLITE_OK {
+            host.ext_scalar_registrations
+                .lock()
+                .entry(ext_name)
+                .or_default()
+                .push((qualified, num_args));
+        } else {
+            tracing::warn!(
+                func = %qualified,
+                arity = num_args,
+                rc = rc_q,
+                "register_scalar (qualified) failed; bare registration succeeded"
+            );
+        }
+    }
+    Ok(())
+}
+
+pub(crate) async fn register_collation_impl(
+    host: &Host,
+    ext_name: String,
+    name: String,
+    coll_id: u64,
+) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
+    shared_spi_ensure_open(host)?;
+    let rc = {
+        let g = host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        unsafe {
+            register_host_loaded_collation(
+                conn.raw_handle(),
+                host.clone(),
+                ext_name.clone(),
+                &name,
+                coll_id,
+            )
+        }
+    };
+    if rc != libsqlite3_sys::SQLITE_OK {
+        return Err(wasmos_extension_types::SqliteError {
+            code: rc,
+            extended_code: rc,
+            message: format!("register collation {name}: rc={rc}"),
+        });
+    }
+    host.ext_collation_registrations
+        .lock()
+        .entry(ext_name.clone())
+        .or_default()
+        .push(name.clone());
+    // PLAN-prefixes.md hot-path: collations don't have arity in
+    // the scalar/aggregate sense — use 0 as the sentinel
+    // (matches install_loaded_extension's convention).
+    if let Some(rec) = host.record_function_for_extension(&ext_name, &name, 0) {
+        let qualified = rec.qualified;
+        let rc_q = {
+            let g = host.shared_spi_conn.lock();
+            let r = g.borrow();
+            let conn = r.as_ref().expect("ensured open");
+            unsafe {
+                register_host_loaded_collation(
+                    conn.raw_handle(),
+                    host.clone(),
+                    ext_name.clone(),
+                    &qualified,
+                    coll_id,
+                )
+            }
+        };
+        if rc_q == libsqlite3_sys::SQLITE_OK {
+            host.ext_collation_registrations
+                .lock()
+                .entry(ext_name)
+                .or_default()
+                .push(qualified);
+        } else {
+            tracing::warn!(
+                coll = %qualified,
+                rc = rc_q,
+                "register_collation (qualified) failed; bare registration succeeded"
+            );
+        }
+    }
+    Ok(())
+}
+
+pub(crate) async fn register_aggregate_impl(
+    host: &Host,
+    ext_name: String,
+    name: String,
+    num_args: i32,
+    func_id: u64,
+    window: bool,
+) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
+    shared_spi_ensure_open(host)?;
+    let result = {
+        let g = host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        let agg = HostLoadedAggregate {
+            host: host.clone(),
+            ext_name: ext_name.clone(),
+            func_id,
+        };
+        if window {
+            conn.create_window_function(
+                &name,
+                num_args,
+                sqlite_component_core::db::FunctionFlags::UTF8
+                    | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
+                agg,
+            )
+        } else {
+            conn.create_aggregate_function(
+                &name,
+                num_args,
+                sqlite_component_core::db::FunctionFlags::UTF8
+                    | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
+                agg,
+            )
+        }
+    };
+    if let Err(e) = result {
+        return Err(wasmos_extension_types::SqliteError {
+            code: e.code,
+            extended_code: e.extended_code,
+            message: format!("register aggregate {name}/{num_args}: {}", e.message),
+        });
+    }
+    host.ext_aggregate_registrations
+        .lock()
+        .entry(ext_name.clone())
+        .or_default()
+        .push((name.clone(), num_args));
+    if let Some(rec) = host.record_function_for_extension(&ext_name, &name, num_args) {
+        let qualified = rec.qualified;
+        let res_q = {
+            let g = host.shared_spi_conn.lock();
+            let r = g.borrow();
+            let conn = r.as_ref().expect("ensured open");
+            let agg_q = HostLoadedAggregate {
+                host: host.clone(),
+                ext_name: ext_name.clone(),
+                func_id,
+            };
+            if window {
+                conn.create_window_function(
+                    &qualified,
+                    num_args,
+                    sqlite_component_core::db::FunctionFlags::UTF8
+                        | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
+                    agg_q,
+                )
+            } else {
+                conn.create_aggregate_function(
+                    &qualified,
+                    num_args,
+                    sqlite_component_core::db::FunctionFlags::UTF8
+                        | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
+                    agg_q,
+                )
+            }
+        };
+        match res_q {
+            Ok(()) => {
+                host.ext_aggregate_registrations
+                    .lock()
+                    .entry(ext_name)
+                    .or_default()
+                    .push((qualified, num_args));
+            }
+            Err(e) => {
+                tracing::warn!(
+                    func = %qualified,
+                    arity = num_args,
+                    err = %e.message,
+                    "register_aggregate (qualified) failed; bare registration succeeded"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(crate) async fn register_authorizer_impl(
+    host: &Host,
+    ext_name: String,
+) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
+    shared_spi_ensure_open(host)?;
+    let g = host.shared_spi_conn.lock();
+    let r = g.borrow();
+    let conn = r.as_ref().expect("ensured open");
+    let host_c = host.clone();
+    let ext_n = ext_name.clone();
+    let result = conn.set_authorizer(Some(
+        move |action: i32,
+              a1: Option<String>,
+              a2: Option<String>,
+              a3: Option<String>,
+              a4: Option<String>| {
+            let wit_action = sqlite_code_to_auth_action(action);
+            match sync_dispatch_authorize(&host_c, &ext_n, wit_action, a1, a2, a3, a4) {
+                Ok(wasmos_extension_types::AuthResult::Ok) => {
+                    sqlite_component_core::db::AuthResult::Allow
+                }
+                Ok(wasmos_extension_types::AuthResult::Deny) => {
+                    sqlite_component_core::db::AuthResult::Deny
+                }
+                Ok(wasmos_extension_types::AuthResult::Ignore) => {
+                    sqlite_component_core::db::AuthResult::Ignore
+                }
+                Err(_) => sqlite_component_core::db::AuthResult::Allow,
+            }
+        },
+    ));
+    if let Err(e) = result {
+        return Err(wasmos_extension_types::SqliteError {
+            code: e.code,
+            extended_code: e.extended_code,
+            message: e.message,
+        });
+    }
+    *host.ext_authorizer_owner.lock() = Some(ext_name);
+    Ok(())
+}
+
+pub(crate) async fn register_update_hook_impl(
+    host: &Host,
+    ext_name: String,
+) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
+    shared_spi_ensure_open(host)?;
+    let g = host.shared_spi_conn.lock();
+    let r = g.borrow();
+    let conn = r.as_ref().expect("ensured open");
+    let host_c = host.clone();
+    let ext_n = ext_name.clone();
+    conn.update_hook(Some(
+        move |action: sqlite_component_core::db::UpdateAction,
+              db_name: &str,
+              table: &str,
+              rowid: i64| {
+            use wasmos_extension_types::UpdateOperation as Op;
+            let op = match action {
+                sqlite_component_core::db::UpdateAction::Insert => Op::Insert,
+                sqlite_component_core::db::UpdateAction::Update => Op::Update,
+                sqlite_component_core::db::UpdateAction::Delete => Op::Delete,
+                sqlite_component_core::db::UpdateAction::Unknown => return,
+            };
+            let _ = sync_dispatch_on_update(&host_c, &ext_n, op, db_name, table, rowid);
+        },
+    ));
+    *host.ext_update_hook_owner.lock() = Some(ext_name);
+    Ok(())
+}
+
+pub(crate) async fn register_commit_hook_impl(
+    host: &Host,
+    ext_name: String,
+) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
+    shared_spi_ensure_open(host)?;
+    let g = host.shared_spi_conn.lock();
+    let r = g.borrow();
+    let conn = r.as_ref().expect("ensured open");
+    let host_c = host.clone();
+    let ext_c = ext_name.clone();
+    conn.commit_hook(Some(move || {
+        match sync_dispatch_on_commit(&host_c, &ext_c) {
+            Ok(proceed) => !proceed,
+            Err(_) => false,
+        }
+    }));
+    let host_r = host.clone();
+    let ext_r = ext_name.clone();
+    conn.rollback_hook(Some(move || {
+        let _ = sync_dispatch_on_rollback(&host_r, &ext_r);
+    }));
+    *host.ext_commit_hook_owner.lock() = Some(ext_name);
+    Ok(())
+}
+
+pub(crate) async fn register_wal_hook_impl(
+    host: &Host,
+    ext_name: String,
+    hook_id: u64,
+) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
+    shared_spi_ensure_open(host)?;
+    let g = host.shared_spi_conn.lock();
+    let r = g.borrow();
+    let conn = r.as_ref().expect("ensured open");
+    unsafe { clear_default_wal_autocheckpoint(conn.raw_handle()) };
+    let host_c = host.clone();
+    let ext_c = ext_name.clone();
+    conn.wal_hook(Some(move |db_name: &str, n_frames: i32| {
+        let n = if n_frames < 0 { 0u32 } else { n_frames as u32 };
+        sync_dispatch_on_wal_hook(&host_c, &ext_c, hook_id, db_name, n).unwrap_or_default()
+    }));
+    *host.ext_wal_hook_owner.lock() = Some((ext_name, hook_id));
+    Ok(())
+}
+
+pub(crate) async fn register_vtab_impl(
+    host: &Host,
+    ext_name: String,
+    name: String,
+    vtab_id: u64,
+    eponymous: bool,
+    mutable: bool,
+    batched: bool,
+) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
+    shared_spi_ensure_open(host)?;
+    let result = {
+        let g = host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        unsafe {
+            crate::vtab::register_vtab_module(
+                conn.raw_handle(),
+                host.clone(),
+                &name,
+                &ext_name,
+                vtab_id,
+                eponymous,
+                mutable,
+                batched,
+            )
+        }
+    };
+    if let Err(e) = result {
+        return Err(wasmos_extension_types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: format!("register vtab {name}: {e}"),
+        });
+    }
+    host.ext_vtab_registrations
+        .lock()
+        .entry(ext_name.clone())
+        .or_default()
+        .push(name.clone());
+    if let Some(rec) = host.record_function_for_extension(&ext_name, &name, 0) {
+        let qualified = rec.qualified;
+        let res_q = {
+            let g = host.shared_spi_conn.lock();
+            let r = g.borrow();
+            let conn = r.as_ref().expect("ensured open");
+            unsafe {
+                crate::vtab::register_vtab_module(
+                    conn.raw_handle(),
+                    host.clone(),
+                    &qualified,
+                    &ext_name,
+                    vtab_id,
+                    eponymous,
+                    mutable,
+                    batched,
+                )
+            }
+        };
+        match res_q {
+            Ok(()) => {
+                host.ext_vtab_registrations
+                    .lock()
+                    .entry(ext_name)
+                    .or_default()
+                    .push(qualified);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    vtab = %qualified,
+                    err = %e,
+                    "register_vtab (qualified) failed; bare registration succeeded"
+                );
+            }
+        }
+    }
+    Ok(())
+}
 
 fn execute_multi_impl_bindings(
     conn: &sqlite_component_core::db::Connection,
