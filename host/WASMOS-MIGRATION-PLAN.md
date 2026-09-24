@@ -1,31 +1,38 @@
 # Wasmos migration plan — sqlink-host
 
 Living plan for finishing the sqlink → wasmos wasm-runtime migration.
-Snapshotted 2026-09-22 after 54 commits landed on `main`
-(**Phase 1 + Phase 2 + partial Phase 4 done**).
+Snapshotted 2026-09-23 — **MIGRATION COMPLETE.**
 
 ## Current state
 
 - **S1 (engine/config/component ops)**: **DONE**.
 
-- **S2 (bindgen retirement)**: **IN PROGRESS**.
+- **S2 (bindgen retirement)**: **DONE**.
   - Openssl `verify-only` block retired end-to-end.
   - 5 dead extension-world blocks deleted (planned flavors).
   - **Phase 1** (infrastructure) done.
   - **Phase 2** (leaf export dispatchers) done — `run::Runnable`
     + `language_runtime::LanguageRuntime` bindgens gone. Deleted
     `make_run_linker` + `Host::run_dynlink_bridge`.
-  - **Phase 4 slice**: dropped the `wasmos-install-path` feature
-    (the wasmos install path is now the only path); retired
-    `loaded_minimal_http` + `loaded_minimal_dns` bindgens; deleted
-    5 orphaned `impl loaded::…::Host for ProviderState` blocks
-    plus `wal_perm_err`; deleted 3 unread `ProviderState` fields.
+  - **Phase 3** groundwork: hand-rolled `wasmos_extension_types` /
+    `wasmos_vtab_types` modules with dual `ComponentType + WitRecord`
+    derives; hand-written `FunctionFlags` `WitBridge` impl.
+  - **Phase 4** (final): all Host trait impls retired to wasmos-
+    native `#[host_iface]` handlers — spi (HostWrap + ProviderSpiWrap),
+    session, build, dispatch, spi-loader, dispatch-bridge-cas,
+    extension-loader, plus opfs / bundle-cli / loader-bridge /
+    cli-* untyped stubs. `ProviderSpiWrap<'a>` + its 245-line trait
+    impl + the `ProviderSpiData` / `ProviderCliSpiData` markers
+    deleted. `spi_conn` + `spi_db_path` fields dropped from
+    `ProviderState` + `ProviderCliState` — the wasmos handlers
+    capture the Arc + path directly at install time.
+  - **`bindings` bindgen block** (extension-loader-host world)
+    **deleted**. Compat shell of hand-rolled type re-exports left
+    behind so `sqlink_host::bindings::sqlite::extension::types::…`
+    keeps compiling for downstream tests.
 
-- **`bindgen!` blocks remaining in `host/src/lib.rs`**: **8**
-  (down from 17 pre-session, 12 post-openssl-pilot, 10 post-P2).
-  Remaining: `bindings`, `loaded`, `loaded_dotcmd_aware`,
-  `loaded_bundle_cli`, `loaded_tabular`, `loaded_tabular_mutating`,
-  `dynlink_provider`, `dynlink_provider_cli`.
+- **`bindgen!` blocks remaining in `host/src/lib.rs`**: **0**
+  (down from 17 pre-session).
 
 - **`sqlink-host` lib + `sqlink` bin + `sqlink-httpd` build clean;
   65/65 unit tests pass.**
@@ -33,7 +40,7 @@ Snapshotted 2026-09-22 after 54 commits landed on `main`
 - **Blocking constraint from the user**: no `wasmtime::` symbols in
   sqlink outside what's internal to wasmos. Public re-exports of
   wasmtime types are not an option — the abstraction line is the
-  point.
+  point. **SATISFIED.**
 
 ## Retirement recipe (proven in openssl pilot, commit `a19bae7f`)
 

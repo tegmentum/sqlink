@@ -27,9 +27,9 @@ use std::sync::Arc;
 use wasmos_runtime_api::{host_iface, HostCall, HostCallContext, HostImports, RuntimeResult, Value};
 
 use crate::wasmos_extension_types::{
-    self as wet, CacheMergeStats, CacheStats, Capability as WitCapability,
-    ComponentCacheStatsSnapshot, DescribedResult, DotCommandResult, LoadOptions, LoaderError,
-    Manifest, StateDelta, UriCacheEntry,
+    CacheMergeStats, CacheStats, Capability as WitCapability, ComponentCacheStatsSnapshot,
+    DescribedResult, DotCommandResult, LoadOptions, LoaderError, Manifest, StateDelta,
+    UriCacheEntry,
 };
 use crate::Host;
 
@@ -37,102 +37,6 @@ fn loader_err(code: i32, message: impl Into<String>) -> LoaderError {
     LoaderError {
         code,
         message: message.into(),
-    }
-}
-
-/// Convert the wasmtime-bindgen `Manifest` (from
-/// `bindings::sqlink::wasm::extension_loader::Manifest`, which
-/// via WIT `use metadata.{manifest}` is the metadata Manifest)
-/// to the hand-rolled `wasmos_extension_types::Manifest`. Both
-/// have the same WIT shape but distinct Rust types — the wasmos
-/// side has WitRecord for the `#[host_iface]` boundary, the
-/// wasmtime side is what lib.rs's manifest_for_provider produces.
-fn bindings_manifest_to_wasmos(
-    m: crate::bindings::sqlink::wasm::extension_loader::Manifest,
-) -> Manifest {
-    Manifest {
-        name: m.name,
-        version: m.version,
-        scalar_functions: m
-            .scalar_functions
-            .into_iter()
-            .map(|s| wet::ScalarFunctionSpec {
-                id: s.id,
-                name: s.name,
-                num_args: s.num_args,
-                func_flags: s.func_flags,
-            })
-            .collect(),
-        aggregate_functions: m
-            .aggregate_functions
-            .into_iter()
-            .map(|a| wet::AggregateFunctionSpec {
-                id: a.id,
-                name: a.name,
-                num_args: a.num_args,
-                func_flags: a.func_flags,
-                is_window: a.is_window,
-            })
-            .collect(),
-        collations: m
-            .collations
-            .into_iter()
-            .map(|c| wet::CollationSpec { id: c.id, name: c.name })
-            .collect(),
-        vtabs: m
-            .vtabs
-            .into_iter()
-            .map(|v| wet::VtabSpec {
-                id: v.id,
-                name: v.name,
-                eponymous: v.eponymous,
-                mutable: v.mutable,
-                batched: v.batched,
-            })
-            .collect(),
-        dot_commands: m
-            .dot_commands
-            .into_iter()
-            .map(|d| wet::DotCommandSpec {
-                id: d.id,
-                name: d.name,
-                version: d.version,
-                summary: d.summary,
-                usage: d.usage,
-                help: d.help,
-                examples: d
-                    .examples
-                    .into_iter()
-                    .map(|e| wet::DotCommandExample {
-                        description: e.description,
-                        command: e.command,
-                    })
-                    .collect(),
-                requires_write: d.requires_write,
-                no_args: d.no_args,
-            })
-            .collect(),
-        has_authorizer: m.has_authorizer,
-        has_update_hook: m.has_update_hook,
-        has_commit_hook: m.has_commit_hook,
-        has_wal_hook: m.has_wal_hook,
-        wal_hook_id: m.wal_hook_id,
-        // Capability is already the same type via the `with:` remap of
-        // `sqlite:extension/policy@1.0.0`.
-        declared_capabilities: m.declared_capabilities,
-        optional_capabilities: m.optional_capabilities,
-        preferred_prefix: m.preferred_prefix,
-        prefix_expansion: m.prefix_expansion,
-        typed_values: m
-            .typed_values
-            .into_iter()
-            .map(|t| wet::TypedValueBinding {
-                type_id: t.type_id,
-                symbolic_name: t.symbolic_name,
-                decoder_import: t.decoder_import,
-                encoder_import: t.encoder_import,
-            })
-            .collect(),
     }
 }
 
@@ -211,7 +115,7 @@ impl ExtensionLoaderHost {
         let policy = crate::policy_from_load_options(&options);
         Ok(match self.host.load_extension(PathBuf::from(&path), policy).await {
             Ok(name) => {
-                if let Some(m) = self.host.provider_backed_bindings_manifest(&name).map(bindings_manifest_to_wasmos) {
+                if let Some(m) = self.host.provider_backed_bindings_manifest(&name) {
                     Ok(m)
                 } else {
                     Err(loader_err(
@@ -260,7 +164,6 @@ impl ExtensionLoaderHost {
                 Ok(name) => self
                     .host
                     .provider_backed_bindings_manifest(&name)
-                    .map(bindings_manifest_to_wasmos)
                     .ok_or_else(|| {
                         loader_err(
                             1,
@@ -406,7 +309,7 @@ impl ExtensionLoaderHost {
             .host
             .list()
             .iter()
-            .filter_map(|n| self.host.provider_backed_bindings_manifest(n).map(bindings_manifest_to_wasmos))
+            .filter_map(|n| self.host.provider_backed_bindings_manifest(n))
             .collect())
     }
 
@@ -429,7 +332,6 @@ impl ExtensionLoaderHost {
             Ok(name) => self
                 .host
                 .provider_backed_bindings_manifest(&name)
-                .map(bindings_manifest_to_wasmos)
                 .ok_or_else(|| {
                     loader_err(
                         1,
@@ -844,7 +746,7 @@ impl ExtensionLoaderHost {
                 Ok(m) => {
                     let g = self.host.shared_spi_conn.lock();
                     let r = g.borrow();
-                    Ok(bindings_manifest_to_wasmos(crate::manifest_for_provider(&m, r.as_ref())))
+                    Ok(crate::manifest_for_provider(&m, r.as_ref()))
                 }
                 Err(e) => Err(loader_err_from(1, e)),
             },

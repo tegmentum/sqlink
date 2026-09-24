@@ -14,7 +14,7 @@ use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{ResourceTable, WasiCtxBuilder};
 
-use sqlink_host::{bindings as host_bindings, Host, HostWrap, LoaderData};
+use sqlink_host::Host;
 
 wasmtime::component::bindgen!({
     path: "../wit",
@@ -26,6 +26,9 @@ wasmtime::component::bindgen!({
 struct State {
     wasi: wasmtime_wasi::WasiCtx,
     resources: ResourceTable,
+    /// Kept for lifetime only — wasmos handlers hold their own
+    /// `Arc`-backed clones.
+    #[allow(dead_code)]
     host: Host,
 }
 

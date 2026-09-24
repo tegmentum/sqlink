@@ -598,18 +598,6 @@ pub struct ProviderState {
     /// resource table for each `linker.resolve-by-id` / `instance.invoke`
     /// the resident guest makes.
     dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
-    /// Task #220: the resident store's own `core::db::Connection` for the
-    /// `sqlite:extension/spi` host surface, present when the resident
-    /// provider wraps an spi-importing extension (e.g. `define`/`eval`/
-    /// `closure`). Lazy-opened by `provider_spi_ensure_open` on the first
-    /// spi call — an isolated connection with the same open semantics as
-    /// the bespoke `loaded::*` loader's per-extension `spi_conn` (parity),
-    /// so an extension composed onto a plain provider shape can satisfy its
-    /// static `sqlite:extension/spi` import via the host linker (the ext↔
-    /// shape spi cycle is not statically composable — see #220). Empty
-    /// `spi_db_path` opens an isolated `:memory:` db (matches the loader).
-    spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
-    spi_db_path: String,
 }
 
 impl wasmtime_wasi::WasiView for ProviderState {
@@ -1013,7 +1001,7 @@ pub fn is_dynlink_bridge(component: &Component, runtime: &std::sync::Arc<wasmos_
 /// into SQLite. Its static spi import cannot be satisfied by composition
 /// (the ext↔shape spi cycle is not wac-composable), so the host wires the
 /// spi surface onto the resident linker and forwards to an isolated
-/// connection (`ProviderSpiWrap`), at parity with the bespoke loader.
+/// connection (`ProviderSpiHost`), at parity with the bespoke loader.
 pub fn imports_sqlite_spi(component: &Component, runtime: &std::sync::Arc<wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime>) -> bool {
     component
         .component_type()
@@ -1157,25 +1145,6 @@ impl HasData for ProviderNetData {
     type Data<'a> = &'a mut ProviderState;
 }
 
-/// Task #220: `HasData` marker for wiring `sqlite:extension/spi` onto a
-/// resident `ProviderState`'s linker. `Data<'a>` is the per-call
-/// `ProviderSpiWrap` view the generated `spi::add_to_linker` builds from
-/// the store state.
-pub struct ProviderSpiData;
-impl HasData for ProviderSpiData {
-    type Data<'a> = ProviderSpiWrap<'a>;
-}
-
-/// Task #220: the per-call view the generated `sqlite:extension/spi`
-/// bindings drive. Borrows the resident provider's isolated spi
-/// connection + db path; the `spi::Host` impl below forwards every call
-/// to that connection (mirroring the bespoke loader's `LoadedState` spi
-/// surface, redirected to this provider's own `spi_conn`).
-pub struct ProviderSpiWrap<'a> {
-    conn: &'a Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
-    db_path: &'a str,
-}
-
 /// Lazily open the resident provider's isolated spi connection. Same open
 /// semantics as the loader's per-extension `spi_ensure_open`: empty /
 /// `:memory:` path opens an isolated in-memory db; otherwise a file db.
@@ -1183,7 +1152,7 @@ pub struct ProviderSpiWrap<'a> {
 /// (e.g. prefix-cli) see the `__sqlink_prefix*` tables, matching the
 /// loader path. Reentrant lock + a fast already-open check so a re-entrant
 /// spi call while an outer borrow is alive does not `borrow_mut`-panic.
-fn provider_spi_ensure_open(
+pub(crate) fn provider_spi_ensure_open(
     conn: &Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
     db_path: &str,
 ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
@@ -1211,259 +1180,6 @@ fn provider_spi_ensure_open(
     Ok(())
 }
 
-/// Task #220: the host-side `sqlite:extension/spi` surface for a resident
-/// provider wrapping an spi-importing extension. Ports the bespoke
-/// loader's `spi::Host` (host/src/lib.rs `HostWrap`) but forwards to this
-/// provider's own isolated `spi_conn` instead of the cli's shared one —
-/// giving parity for extensions moved onto the compose:dynlink provider
-/// path. Bodies are sync (no await across the connection lock), matching
-/// the loader impl so the `ReentrantMutex` guard never crosses a suspend.
-impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
-    async fn execute(
-        &mut self,
-        sql: String,
-        params: Vec<crate::wasmos_extension_types::SqlValue>,
-    ) -> std::result::Result<
-        crate::wasmos_extension_types::QueryResult,
-        crate::wasmos_extension_types::SqliteError,
-    > {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        let mut stmt = conn.prepare(&sql).map_err(crate::db_err_to_bindings)?;
-        let columns: Vec<String> = stmt.column_names();
-        let bound: Vec<_> = params.into_iter().map(crate::bindings_value_to_db).collect();
-        stmt.bind_all(&bound).map_err(crate::db_err_to_bindings)?;
-        let rows = stmt.collect_rows().map_err(crate::db_err_to_bindings)?;
-        drop(stmt);
-        let out_rows: Vec<Vec<crate::wasmos_extension_types::SqlValue>> = rows
-            .into_iter()
-            .map(|r| r.into_iter().map(crate::db_value_to_bindings).collect())
-            .collect();
-        Ok(crate::wasmos_extension_types::QueryResult {
-            columns,
-            rows: out_rows,
-            changes: conn.changes(),
-            last_insert_rowid: conn.last_insert_rowid(),
-        })
-    }
-
-    async fn execute_scalar(
-        &mut self,
-        sql: String,
-        params: Vec<crate::wasmos_extension_types::SqlValue>,
-    ) -> std::result::Result<
-        crate::wasmos_extension_types::SqlValue,
-        crate::wasmos_extension_types::SqliteError,
-    > {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        let mut stmt = conn.prepare(&sql).map_err(crate::db_err_to_bindings)?;
-        let bound: Vec<_> = params.into_iter().map(crate::bindings_value_to_db).collect();
-        stmt.bind_all(&bound).map_err(crate::db_err_to_bindings)?;
-        let rows = stmt.collect_rows().map_err(crate::db_err_to_bindings)?;
-        let v = rows
-            .into_iter()
-            .next()
-            .and_then(|r| r.into_iter().next())
-            .ok_or_else(|| crate::wasmos_extension_types::SqliteError {
-                code: 1,
-                extended_code: 1,
-                message: "execute_scalar: no rows".to_string(),
-            })?;
-        Ok(crate::db_value_to_bindings(v))
-    }
-
-    async fn execute_batch(
-        &mut self,
-        sql: String,
-    ) -> std::result::Result<i64, crate::wasmos_extension_types::SqliteError> {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        conn.execute_batch(&sql).map_err(crate::db_err_to_bindings)?;
-        Ok(conn.changes())
-    }
-
-    async fn list_vfs(&mut self) -> Vec<String> {
-        db::Connection::list_vfses()
-    }
-
-    async fn vfs_name(
-        &mut self,
-        db_name: String,
-    ) -> std::result::Result<String, crate::wasmos_extension_types::SqliteError> {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        conn.vfs_name(&db_name).map_err(crate::db_err_to_bindings)
-    }
-
-    async fn serialize_db(
-        &mut self,
-        db_name: String,
-    ) -> std::result::Result<Vec<u8>, crate::wasmos_extension_types::SqliteError> {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        conn.serialize_db(&db_name).map_err(crate::db_err_to_bindings)
-    }
-
-    async fn changes(&mut self) -> i64 {
-        let _ = provider_spi_ensure_open(self.conn, self.db_path);
-        let g = self.conn.lock();
-        let r = g.borrow();
-        r.as_ref().map(|c| c.changes()).unwrap_or(0)
-    }
-
-    async fn total_changes(&mut self) -> i64 {
-        let _ = provider_spi_ensure_open(self.conn, self.db_path);
-        let g = self.conn.lock();
-        let r = g.borrow();
-        r.as_ref().map(|c| c.total_changes()).unwrap_or(0)
-    }
-
-    async fn last_insert_rowid(&mut self) -> i64 {
-        let _ = provider_spi_ensure_open(self.conn, self.db_path);
-        let g = self.conn.lock();
-        let r = g.borrow();
-        r.as_ref().map(|c| c.last_insert_rowid()).unwrap_or(0)
-    }
-
-    async fn current_memory_used(&mut self) -> i64 {
-        db::Connection::current_memory_used()
-    }
-
-    async fn backup_into(
-        &mut self,
-        src_db: String,
-        dst_path: String,
-        dst_db: String,
-    ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let src = r.as_ref().expect("ensured open");
-        let dst = db::Connection::open(&dst_path, db::OpenFlags::DEFAULT)
-            .map_err(crate::db_err_to_bindings)?;
-        src.backup_into(&src_db, &dst, &dst_db)
-            .map_err(crate::db_err_to_bindings)
-    }
-
-    async fn restore_from(
-        &mut self,
-        src_path: String,
-        src_db: String,
-        dst_db: String,
-    ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let src = db::Connection::open(&src_path, db::OpenFlags::READONLY)
-            .map_err(crate::db_err_to_bindings)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let dst = r.as_ref().expect("ensured open");
-        src.backup_into(&src_db, dst, &dst_db)
-            .map_err(crate::db_err_to_bindings)
-    }
-
-    async fn set_busy_timeout(
-        &mut self,
-        ms: i32,
-    ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        conn.busy_timeout(ms).map_err(crate::db_err_to_bindings)
-    }
-
-    async fn limit(&mut self, category: i32, value: i32) -> i32 {
-        let _ = provider_spi_ensure_open(self.conn, self.db_path);
-        let g = self.conn.lock();
-        let r = g.borrow();
-        r.as_ref().map(|c| c.limit(category, value)).unwrap_or(-1)
-    }
-
-    async fn db_config_bool(
-        &mut self,
-        op: i32,
-        set: bool,
-        value: bool,
-    ) -> std::result::Result<bool, crate::wasmos_extension_types::SqliteError> {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        if set {
-            conn.db_config_set_bool(op, value)
-                .map_err(crate::db_err_to_bindings)
-        } else {
-            conn.db_config_get_bool(op).map_err(crate::db_err_to_bindings)
-        }
-    }
-
-    async fn deserialize_db(
-        &mut self,
-        db_name: String,
-        bytes: Vec<u8>,
-    ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        conn.deserialize_db(&db_name, &bytes)
-            .map_err(crate::db_err_to_bindings)
-    }
-
-    async fn execute_multi(
-        &mut self,
-        sql: String,
-        named_params: Vec<crate::bindings::sqlite::extension::spi::NamedParam>,
-    ) -> std::result::Result<
-        Vec<crate::wasmos_extension_types::QueryResult>,
-        crate::wasmos_extension_types::SqliteError,
-    > {
-        provider_spi_ensure_open(self.conn, self.db_path)?;
-        let g = self.conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        crate::execute_multi_impl_bindings(conn, &sql, &named_params)
-    }
-
-    async fn open_db(
-        &mut self,
-        path: String,
-    ) -> std::result::Result<(), crate::wasmos_extension_types::SqliteError> {
-        // Task #220 first cut: swap this provider's isolated spi
-        // connection to `path`. Unlike the loader's `open_db` we do not
-        // touch a cli-wide db_path / user_conn (the resident provider owns
-        // only its own connection); we reopen directly. Empty / `:memory:`
-        // opens an isolated in-memory db.
-        let new_path = if path.is_empty() || path == ":memory:" {
-            ":memory:".to_string()
-        } else {
-            path
-        };
-        let c = if new_path == ":memory:" {
-            db::Connection::open_in_memory().map_err(crate::db_err_to_bindings)?
-        } else {
-            db::Connection::open(&new_path, db::OpenFlags::DEFAULT)
-                .map_err(crate::db_err_to_bindings)?
-        };
-        if let Err(e) = crate::prefix_registry::install_schema(&c) {
-            tracing::warn!(err = %e, "provider open_db: prefix schema install failed; continuing");
-        }
-        let g = self.conn.lock();
-        *g.borrow_mut() = Some(c);
-        Ok(())
-    }
-}
 
 // #220 full-port: the `sqlite:extension/session` host surface moved
 // to `crate::wasmos_session_imports::SessionHost` (Phase 3 Step 3).
@@ -1632,13 +1348,24 @@ async fn resident_wasm_component_invoke(
             )
             .map_err(|e| format!("resident compose:dynlink linker: {e}"))?;
         }
+        // Pre-create the spi connection Arc so both the state and the
+        // wasmos `ProviderSpiHost` handler (installed below when the
+        // component imports `spi`) reference the same sqlite3 handle.
+        // (This is the same Arc also shared with the wasmos SessionHost
+        // handler further down — see `shared_spi_conn` below.)
+        let shared_spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>> =
+            Arc::new(ReentrantMutex::new(RefCell::new(None)));
         if imports_spi {
-            crate::bindings::sqlite::extension::spi::add_to_linker::<_, ProviderSpiData>(
+            let spi_imports = crate::wasmos_provider_spi_imports::install_provider_spi_imports(
+                wasmos_runtime_api::HostImports::new(),
+                shared_spi_conn.clone(),
+                spi_db_path.to_string(),
+            );
+            wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+                engine,
                 &mut linker,
-                |state: &mut ProviderState| ProviderSpiWrap {
-                    conn: &state.spi_conn,
-                    db_path: &state.spi_db_path,
-                },
+                component,
+                &spi_imports,
             )
             .map_err(|e| format!("resident sqlite:extension/spi linker: {e}"))?;
         }
@@ -1694,14 +1421,10 @@ async fn resident_wasm_component_invoke(
             )
             .map_err(|e| format!("resident sqlite:extension/loader-bridge linker: {e}"))?;
         }
-        // Pre-create the spi connection Arc so both the state (used by
-        // the still-bindgen'd `spi::add_to_linker` wrapper above) and
-        // the wasmos `SessionHost` (registered next) reference the same
-        // sqlite3 handle. Task #220: `session_create` records changes on
-        // the SAME db `spi.execute` mutates, so the Arcs must point at
-        // one underlying connection.
-        let shared_spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>> =
-            Arc::new(ReentrantMutex::new(RefCell::new(None)));
+        // (Reused from above.) Task #220: `session_create` records
+        // changes on the SAME db `spi.execute` mutates, so the wasmos
+        // SessionHost handler shares the same Arc as ProviderSpiHost
+        // + ProviderState.spi_conn.
         if imports_session {
             let session_imports = crate::wasmos_session_imports::install_session_imports(
                 wasmos_runtime_api::HostImports::new(),
@@ -1727,14 +1450,6 @@ async fn resident_wasm_component_invoke(
             } else {
                 None
             },
-            // Task #220: the spi connection for spi-importing exts, lazily
-            // opened by `provider_spi_ensure_open` on the first spi call.
-            // `spi_db_path` is the cli's `--db` (threaded from registration),
-            // so `spi.execute` sees the SAME database the cli uses; empty =>
-            // `:memory:` (the loader's per-extension default). Also shared
-            // (via Arc clone above) with the wasmos SessionHost handler.
-            spi_conn: shared_spi_conn,
-            spi_db_path: spi_db_path.to_string(),
         };
         let mut store = Store::new(engine, state);
         store
@@ -1825,20 +1540,6 @@ pub type CliStateSnapshot = HashMap<String, String>;
 pub struct ProviderCliState {
     wasi: wasmtime_wasi::WasiCtx,
     resources: wasmtime_wasi::ResourceTable,
-    /// #220: the cli store's own spi connection, for a streaming-dotcmd ext
-    /// that ALSO imports `sqlite:extension/spi` (`archive-cli`/`core-dotcmd`/
-    /// `serialize-cli`). Lazy-opened like the resident `spi_conn` (empty
-    /// `spi_db_path` => `:memory:`). Seeded from the live cli session's `--db`
-    /// (the `db/path` cli-state key) in `wasm_component_invoke_cli`.
-    spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
-    spi_db_path: String,
-}
-
-/// #220: `HasData` marker to wire `sqlite:extension/spi` onto the cli store's
-/// linker, reusing `ProviderSpiWrap` (built from `ProviderCliState`'s fields).
-pub struct ProviderCliSpiData;
-impl HasData for ProviderCliSpiData {
-    type Data<'a> = ProviderSpiWrap<'a>;
 }
 
 impl wasmtime_wasi::WasiView for ProviderCliState {
@@ -1946,16 +1647,37 @@ async fn wasm_component_invoke_cli(
         &cli_imports,
     )
     .map_err(|e| format!("cli-* imports install: {e}"))?;
+    // #220 follow-up: seed the cli store's spi connection from the live cli
+    // session's `--db`, carried in the `db/path` cli-state key (JSON-encoded
+    // by the cli via `str_v`). This puts a streaming-dotcmd ext that ALSO
+    // imports spi (archive-cli/core-dotcmd/serialize-cli) on the SAME database
+    // as the rest of the session rather than an isolated `:memory:`. A missing/
+    // empty value decodes to empty, which `provider_spi_ensure_open` opens as
+    // `:memory:` (the in-memory session case, where there is no db to share).
+    // Pulled up above the `imports_spi` install so the wasmos ProviderSpiHost
+    // handler captures the same path the state's `spi_conn` will use.
+    let spi_db_path = state
+        .get("db/path")
+        .and_then(|j| crate::parse_json_text(j))
+        .unwrap_or_default();
+    // Pre-create the cli spi connection Arc so the wasmos ProviderSpiHost
+    // handler and `ProviderCliState.spi_conn` reference the same handle.
+    let cli_spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>> =
+        Arc::new(ReentrantMutex::new(RefCell::new(None)));
     // #220: a streaming-dotcmd ext may ALSO import spi (archive-cli etc.);
     // satisfy it on the cli store's linker with an isolated connection, exactly
     // as the resident path does (the ext↔shape spi cycle isn't wac-composable).
     if imports_sqlite_spi(component, runtime) {
-        crate::bindings::sqlite::extension::spi::add_to_linker::<_, ProviderCliSpiData>(
+        let spi_imports = crate::wasmos_provider_spi_imports::install_provider_spi_imports(
+            wasmos_runtime_api::HostImports::new(),
+            cli_spi_conn.clone(),
+            spi_db_path.clone(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            engine,
             &mut linker,
-            |s: &mut ProviderCliState| ProviderSpiWrap {
-                conn: &s.spi_conn,
-                db_path: &s.spi_db_path,
-            },
+            component,
+            &spi_imports,
         )
         .map_err(|e| format!("cli sqlite:extension/spi linker: {e}"))?;
     }
@@ -2009,24 +1731,12 @@ async fn wasm_component_invoke_cli(
     }
     let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
     wasi.inherit_stdio();
-    // #220 follow-up: seed the cli store's spi connection from the live cli
-    // session's `--db`, carried in the `db/path` cli-state key (JSON-encoded
-    // by the cli via `str_v`). This puts a streaming-dotcmd ext that ALSO
-    // imports spi (archive-cli/core-dotcmd/serialize-cli) on the SAME database
-    // as the rest of the session rather than an isolated `:memory:`. A missing/
-    // empty value decodes to empty, which `provider_spi_ensure_open` opens as
-    // `:memory:` (the in-memory session case, where there is no db to share).
-    let spi_db_path = state
-        .get("db/path")
-        .and_then(|j| crate::parse_json_text(j))
-        .unwrap_or_default();
     let _ = loader_host; // captured above via `install_loader_bridge_imports`.
     let _ = state; // captured above via `CliBundleHandles::new`.
+    let _ = (&cli_spi_conn, &spi_db_path); // captured above via `install_provider_spi_imports`.
     let st = ProviderCliState {
         wasi: wasi.build(),
         resources: wasmtime_wasi::ResourceTable::new(),
-        spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
-        spi_db_path,
     };
     let mut store = Store::new(engine, st);
     store

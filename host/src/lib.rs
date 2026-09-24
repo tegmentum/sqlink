@@ -122,6 +122,14 @@ pub mod wasmos_spi_imports;
 /// registration. Retires the `impl extension_loader::Host for
 /// HostWrap` block — the last Host trait impl on HostWrap.
 pub mod wasmos_extension_loader_imports;
+/// Phase 4 (final): `#[host_iface]` handler for
+/// `sqlite:extension/spi@1.0.0` on the resident + CLI provider
+/// paths. Sibling of `wasmos_spi_imports::SpiHost` (which handles
+/// the HostWrap side); this handler owns the provider's isolated
+/// spi connection. Retires the `impl spi::Host for
+/// ProviderSpiWrap<'a>` block — the last live consumer of the
+/// `bindings` bindgen (extension-loader-host world).
+pub mod wasmos_provider_spi_imports;
 /// Phase 2 (bindgen-free tabular-mutating): cached `TypedFunc`
 /// dispatch for the 22 vtab / vtab-update methods on
 /// `MutatingBridgeInstance`, letting the `loaded_tabular_mutating`
@@ -180,29 +188,23 @@ use wasmos_runtime_wasmtime_v48::WasmtimeV48Runtime;
 
 pub use policy::{Capability, DnsPolicy, HttpPolicy, Policy};
 
-/// Bindgen against the `extension-loader-host` world. Generates a
-/// `Host` trait (under `sqlink::wasm::extension_loader::Host`) with
-/// one method per loader function, plus typed structs for
-/// `load-options`, `manifest`, `loader-error`. `add_to_linker` wires
-/// them into the wasmtime component linker.
+/// Compatibility shell mirroring the paths the retired
+/// `extension-loader-host` bindgen block exposed. Retained ONLY
+/// as thin re-exports so downstream tests (and legacy callers)
+/// that spell type paths like
+/// `sqlink_host::bindings::sqlite::extension::types::SqlValue`
+/// keep compiling; every symbol resolves to a hand-rolled
+/// `wasmos_extension_types` / `wasmos_vtab_types` type. Migration
+/// COMPLETE — no more `wasmtime::component::bindgen!` in this
+/// crate.
 pub mod bindings {
-    wasmtime::component::bindgen!({
-        path: "../wit",
-        world: "extension-loader-host",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            // Phase 4 remap: types-only interfaces unify with the
-            // hand-rolled sibling modules. Every remapped target
-            // supplies empty Host / HostWithStore trait stubs +
-            // no-op add_to_linker fns so the bindgen macro's
-            // scaffolding requirements are satisfied even though
-            // the interface has no callable methods.
-            "sqlite:extension/types@1.0.0": crate::wasmos_extension_types,
-            "sqlite:extension/vtab@1.0.0": crate::wasmos_vtab_types,
-            "sqlite:extension/policy@1.0.0": crate::wasmos_extension_types,
-        },
-    });
+    pub mod sqlite {
+        pub mod extension {
+            pub use crate::wasmos_extension_types as types;
+            pub use crate::wasmos_vtab_types as vtab;
+            pub use crate::wasmos_extension_types as policy;
+        }
+    }
 }
 
 /// compose:dynlink linker bindings. Previously sqlink bindgen'd its own
@@ -1285,7 +1287,7 @@ impl<'a> compose::compose::dynlink::linker::HostInstance for HostWrap<'a> {
     }
 }
 
-use bindings::sqlink::wasm::extension_loader::{LoaderError, Manifest};
+use wasmos_extension_types::Manifest;
 use wasmos_extension_types::Capability as WitCapability;
 
 /// Convert one WIT capability to the host's Rust enum.
@@ -1487,10 +1489,10 @@ pub(crate) fn manifest_for_provider(
     m: &provider_envelope::Manifest,
     conn: Option<&sqlite_component_core::db::Connection>,
 ) -> Manifest {
-    use bindings::sqlite::extension::metadata::{
-        AggregateFunctionSpec, CollationSpec, DotCommandSpec, ScalarFunctionSpec, VtabSpec,
+    use wasmos_extension_types::{
+        AggregateFunctionSpec, CollationSpec, DotCommandSpec, FunctionFlags, ScalarFunctionSpec,
+        VtabSpec,
     };
-    use wasmos_extension_types::FunctionFlags;
     Manifest {
         name: m.name.clone(),
         version: m.version.clone(),
@@ -8828,13 +8830,6 @@ impl Host {
     }
 }
 
-pub(crate) fn cache_err(msg: impl Into<String>) -> LoaderError {
-    LoaderError {
-        code: 1,
-        message: msg.into(),
-    }
-}
-
 /// Lifetime tag for the extension-loader host binding. wasmtime's
 /// `HasData` lets the bindgen-generated `add_to_linker` ask the
 /// state-getter for a short-lived `HostWrap` borrow on every host
@@ -9690,7 +9685,7 @@ pub(crate) async fn register_vtab_impl(
 pub(crate) fn execute_multi_impl_bindings(
     conn: &sqlite_component_core::db::Connection,
     sql: &str,
-    named_params: &[bindings::sqlite::extension::spi::NamedParam],
+    named_params: &[wasmos_extension_types::NamedParam],
 ) -> std::result::Result<
     Vec<wasmos_extension_types::QueryResult>,
     wasmos_extension_types::SqliteError,
@@ -10031,6 +10026,10 @@ mod contract_guard_tests {
 struct CliRunState {
     wasi: wasmtime_wasi::WasiCtx,
     resources: wasmtime_wasi::ResourceTable,
+    /// Kept for lifetime only — the wasmos handlers hold their own
+    /// `Arc`-backed clones now (the extension-loader-host bindgen
+    /// block that read `state.host` is retired).
+    #[allow(dead_code)]
     host: Host,
     tvm: tvm_wasmtime::TvmHost,
 }

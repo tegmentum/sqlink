@@ -1,72 +1,63 @@
-//! Phase 4: `#[host_iface]` handler for `sqlite:extension/
-//! spi@1.0.0` — the top-level SQL execution surface an extension
-//! uses to run queries against the host's shared spi connection.
-//! 18 methods: execute / execute-scalar / execute-batch / list-vfs
-//! / vfs-name / serialize-db / changes / total-changes /
-//! last-insert-rowid / current-memory-used / backup-into /
-//! restore-from / set-busy-timeout / limit / db-config-bool /
-//! deserialize-db / execute-multi / open-db.
+//! Phase 4 (final): `#[host_iface]` handler for
+//! `sqlite:extension/spi@1.0.0` on the provider-side (resident +
+//! CLI provider stores). Sibling of
+//! `wasmos_spi_imports::SpiHost` (which handles the HostWrap
+//! side via Host's shared_spi_conn); this handler owns the
+//! provider's isolated spi connection instead.
 //!
 //! Retires the `impl bindings::sqlite::extension::spi::Host for
-//! HostWrap<'a>` block in `lib.rs`. Handler captures `Host` at
-//! install time. No direct trait-path callers audited — single-
-//! commit retirement.
+//! ProviderSpiWrap<'a>` block in `compose_provider.rs`. Handler
+//! captures `Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>`
+//! + `db_path: String` at install time — the SAME Arc that
+//! `ProviderState.spi_conn` / `ProviderCliState.spi_conn` holds,
+//! so the wasmos handler's methods act on the same underlying
+//! sqlite3 handle as any code that borrows `state.spi_conn`.
 //!
-//! Note: `compose_provider.rs::ProviderSpiWrap<'a>` also
-//! implements `bindings::sqlite::extension::spi::Host` for a
-//! different store data type (ProviderState); that impl stays
-//! live and is wired separately from compose_provider.rs's own
-//! `add_to_linker` sites (unchanged by this retirement).
-//!
-//! Type shape: uses `wasmos_extension_types::{SqlValue,
-//! SqliteError, QueryResult, NamedParam}` which carry both
-//! wasmtime derives and `WitBridge` (via `WitRecord`/`WitVariant`)
-//! from commit `a80da07c`. `execute_multi` accepts `Vec<NamedParam>`
-//! and converts to the bindgen-generated `bindings::…::NamedParam`
-//! at the boundary so lib.rs's `execute_multi_impl_bindings`
-//! helper (which is also called by compose_provider's still-live
-//! trait impl) stays unchanged.
+//! `open_db` semantics: unlike `SpiHost::open_db` (which drops
+//! the connection + updates the whole host db-path), this
+//! variant matches ProviderSpiWrap's isolated-connection
+//! semantics — opens a new sqlite3 handle for the given path
+//! and swaps it into the captured `conn` Arc.
 
+use std::cell::RefCell;
 use std::sync::Arc;
 
+use parking_lot::ReentrantMutex;
+use sqlite_component_core::db;
 use wasmos_runtime_api::{host_iface, HostCall, HostCallContext, HostImports, RuntimeResult};
 
 use crate::wasmos_extension_types::{NamedParam, QueryResult, SqlValue, SqliteError};
-use crate::Host;
-use crate::{bindings_value_to_db, db_err_to_bindings, db_value_to_bindings,
-    execute_multi_impl_bindings, shared_spi_ensure_open};
+use crate::{
+    bindings_value_to_db, compose_provider::provider_spi_ensure_open, db_err_to_bindings,
+    db_value_to_bindings, execute_multi_impl_bindings, prefix_registry,
+};
 
-/// Convert `wasmos_extension_types::SqliteError` (returned by
-/// lib.rs's `shared_spi_ensure_open` / `db_err_to_bindings`,
-/// which use the with:-remapped bindgen shape) to the wasmos-
-/// native SqliteError shape used across `#[host_iface]` returns.
-/// The two are field-identical; this is a straight copy.
-fn ext_err_passthrough(e: SqliteError) -> SqliteError {
-    e
+pub struct ProviderSpiHost {
+    conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
+    db_path: String,
 }
 
-pub struct SpiHost {
-    host: Host,
-}
-
-impl SpiHost {
-    pub fn new(host: Host) -> Self {
-        Self { host }
+impl ProviderSpiHost {
+    pub fn new(
+        conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
+        db_path: String,
+    ) -> Self {
+        Self { conn, db_path }
     }
 }
 
 #[host_iface]
-impl SpiHost {
+impl ProviderSpiHost {
     async fn execute(
         &self,
         _ctx: &mut HostCallContext<'_>,
         sql: String,
         params: Vec<SqlValue>,
     ) -> RuntimeResult<Result<QueryResult, SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
-            return Ok(Err(ext_err_passthrough(e)));
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
+            return Ok(Err(e));
         }
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         let mut stmt = match conn.prepare(&sql) {
@@ -101,10 +92,10 @@ impl SpiHost {
         sql: String,
         params: Vec<SqlValue>,
     ) -> RuntimeResult<Result<SqlValue, SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
             return Ok(Err(e));
         }
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         let mut stmt = match conn.prepare(&sql) {
@@ -137,10 +128,10 @@ impl SpiHost {
         _ctx: &mut HostCallContext<'_>,
         sql: String,
     ) -> RuntimeResult<Result<i64, SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
             return Ok(Err(e));
         }
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         Ok(match conn.execute_batch(&sql) {
@@ -150,7 +141,7 @@ impl SpiHost {
     }
 
     async fn list_vfs(&self, _ctx: &mut HostCallContext<'_>) -> RuntimeResult<Vec<String>> {
-        Ok(sqlite_component_core::db::Connection::list_vfses())
+        Ok(db::Connection::list_vfses())
     }
 
     async fn vfs_name(
@@ -158,10 +149,10 @@ impl SpiHost {
         _ctx: &mut HostCallContext<'_>,
         db_name: String,
     ) -> RuntimeResult<Result<String, SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
             return Ok(Err(e));
         }
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         Ok(conn.vfs_name(&db_name).map_err(db_err_to_bindings))
@@ -172,38 +163,38 @@ impl SpiHost {
         _ctx: &mut HostCallContext<'_>,
         db_name: String,
     ) -> RuntimeResult<Result<Vec<u8>, SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
             return Ok(Err(e));
         }
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         Ok(conn.serialize_db(&db_name).map_err(db_err_to_bindings))
     }
 
     async fn changes(&self, _ctx: &mut HostCallContext<'_>) -> RuntimeResult<i64> {
-        let _ = shared_spi_ensure_open(&self.host);
-        let g = self.host.shared_spi_conn.lock();
+        let _ = provider_spi_ensure_open(&self.conn, &self.db_path);
+        let g = self.conn.lock();
         let r = g.borrow();
         Ok(r.as_ref().map(|c| c.changes()).unwrap_or(0))
     }
 
     async fn total_changes(&self, _ctx: &mut HostCallContext<'_>) -> RuntimeResult<i64> {
-        let _ = shared_spi_ensure_open(&self.host);
-        let g = self.host.shared_spi_conn.lock();
+        let _ = provider_spi_ensure_open(&self.conn, &self.db_path);
+        let g = self.conn.lock();
         let r = g.borrow();
         Ok(r.as_ref().map(|c| c.total_changes()).unwrap_or(0))
     }
 
     async fn last_insert_rowid(&self, _ctx: &mut HostCallContext<'_>) -> RuntimeResult<i64> {
-        let _ = shared_spi_ensure_open(&self.host);
-        let g = self.host.shared_spi_conn.lock();
+        let _ = provider_spi_ensure_open(&self.conn, &self.db_path);
+        let g = self.conn.lock();
         let r = g.borrow();
         Ok(r.as_ref().map(|c| c.last_insert_rowid()).unwrap_or(0))
     }
 
     async fn current_memory_used(&self, _ctx: &mut HostCallContext<'_>) -> RuntimeResult<i64> {
-        Ok(sqlite_component_core::db::Connection::current_memory_used())
+        Ok(db::Connection::current_memory_used())
     }
 
     async fn backup_into(
@@ -213,16 +204,13 @@ impl SpiHost {
         dst_path: String,
         dst_db: String,
     ) -> RuntimeResult<Result<(), SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
             return Ok(Err(e));
         }
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let src = r.as_ref().expect("ensured open");
-        let dst = match sqlite_component_core::db::Connection::open(
-            &dst_path,
-            sqlite_component_core::db::OpenFlags::DEFAULT,
-        ) {
+        let dst = match db::Connection::open(&dst_path, db::OpenFlags::DEFAULT) {
             Ok(d) => d,
             Err(e) => return Ok(Err(db_err_to_bindings(e))),
         };
@@ -238,17 +226,14 @@ impl SpiHost {
         src_db: String,
         dst_db: String,
     ) -> RuntimeResult<Result<(), SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
             return Ok(Err(e));
         }
-        let src = match sqlite_component_core::db::Connection::open(
-            &src_path,
-            sqlite_component_core::db::OpenFlags::READONLY,
-        ) {
+        let src = match db::Connection::open(&src_path, db::OpenFlags::READONLY) {
             Ok(s) => s,
             Err(e) => return Ok(Err(db_err_to_bindings(e))),
         };
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let dst = r.as_ref().expect("ensured open");
         Ok(src
@@ -261,10 +246,10 @@ impl SpiHost {
         _ctx: &mut HostCallContext<'_>,
         ms: i32,
     ) -> RuntimeResult<Result<(), SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
             return Ok(Err(e));
         }
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         Ok(conn.busy_timeout(ms).map_err(db_err_to_bindings))
@@ -276,8 +261,8 @@ impl SpiHost {
         category: i32,
         value: i32,
     ) -> RuntimeResult<i32> {
-        let _ = shared_spi_ensure_open(&self.host);
-        let g = self.host.shared_spi_conn.lock();
+        let _ = provider_spi_ensure_open(&self.conn, &self.db_path);
+        let g = self.conn.lock();
         let r = g.borrow();
         Ok(r.as_ref().map(|c| c.limit(category, value)).unwrap_or(-1))
     }
@@ -289,10 +274,10 @@ impl SpiHost {
         set: bool,
         value: bool,
     ) -> RuntimeResult<Result<bool, SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
             return Ok(Err(e));
         }
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         Ok(if set {
@@ -309,10 +294,10 @@ impl SpiHost {
         db_name: String,
         bytes: Vec<u8>,
     ) -> RuntimeResult<Result<(), SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
             return Ok(Err(e));
         }
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         Ok(conn
@@ -326,10 +311,10 @@ impl SpiHost {
         sql: String,
         named_params: Vec<NamedParam>,
     ) -> RuntimeResult<Result<Vec<QueryResult>, SqliteError>> {
-        if let Err(e) = shared_spi_ensure_open(&self.host) {
+        if let Err(e) = provider_spi_ensure_open(&self.conn, &self.db_path) {
             return Ok(Err(e));
         }
-        let g = self.host.shared_spi_conn.lock();
+        let g = self.conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         Ok(execute_multi_impl_bindings(conn, &sql, &named_params))
@@ -340,30 +325,46 @@ impl SpiHost {
         _ctx: &mut HostCallContext<'_>,
         path: String,
     ) -> RuntimeResult<Result<(), SqliteError>> {
+        // Provider-isolated variant: open a NEW connection and swap it
+        // into the captured `conn` Arc. Unlike `SpiHost::open_db`
+        // (which drops the whole host connection + updates db_path),
+        // the resident provider owns only its own connection —
+        // reopen directly.
         let new_path = if path.is_empty() || path == ":memory:" {
             ":memory:".to_string()
         } else {
             path
         };
-        {
-            let g = self.host.shared_spi_conn.lock();
-            let mut r = g.borrow_mut();
-            *r = None;
+        let c = if new_path == ":memory:" {
+            match db::Connection::open_in_memory() {
+                Ok(c) => c,
+                Err(e) => return Ok(Err(db_err_to_bindings(e))),
+            }
+        } else {
+            match db::Connection::open(&new_path, db::OpenFlags::DEFAULT) {
+                Ok(c) => c,
+                Err(e) => return Ok(Err(db_err_to_bindings(e))),
+            }
+        };
+        if let Err(e) = prefix_registry::install_schema(&c) {
+            tracing::warn!(err = %e, "provider open_db: prefix schema install failed; continuing");
         }
-        self.host.invalidate_user_conn();
-        *self.host.db_path.write() = new_path;
-        // shared_spi_ensure_open refuses `:memory:` with a clear
-        // error; preserve that for `.open` (with no arg) so the
-        // user sees the same diagnostic as a startup `--db ""`.
-        Ok(shared_spi_ensure_open(&self.host))
+        let g = self.conn.lock();
+        *g.borrow_mut() = Some(c);
+        Ok(Ok(()))
     }
 }
 
 /// Register the `sqlite:extension/spi` handler with `imports`,
-/// capturing the caller's `Host` handle at install time.
-pub fn install_spi_imports(imports: HostImports, host: Host) -> HostImports {
+/// capturing the caller's spi connection Arc + db_path at install
+/// time.
+pub fn install_provider_spi_imports(
+    imports: HostImports,
+    conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
+    db_path: String,
+) -> HostImports {
     imports.register(
         "sqlite:extension/spi@1.0.0",
-        Arc::new(SpiHost::new(host)) as Arc<dyn HostCall>,
+        Arc::new(ProviderSpiHost::new(conn, db_path)) as Arc<dyn HostCall>,
     )
 }

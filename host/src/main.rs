@@ -14,11 +14,15 @@ use wasmtime::component::Linker;
 use wasmtime::Store;
 use wasmtime_wasi::{ResourceTable, WasiCtxBuilder};
 
-use sqlink_host::{bindings, Host, HostWrap, LoaderData};
+use sqlink_host::Host;
 
 struct State {
     wasi: wasmtime_wasi::WasiCtx,
     resources: ResourceTable,
+    /// Kept for lifetime only — the wasmos handlers hold their own
+    /// `Arc`-backed clones now (the extension-loader-host bindgen
+    /// block that read `state.host` is retired).
+    #[allow(dead_code)]
     host: Host,
     /// TVM region directory. As of Stage 5f the cli itself does
     /// not import tvm:memory  but the composed `cli + sqlite-lib`
