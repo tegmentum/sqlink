@@ -334,6 +334,32 @@ instantiated anywhere.
 
 ## Phase 4 Host trait retirements — IN PROGRESS
 
+- **`e64ee2a1` + `c08f2148`** — spi_loader::Host retired via
+  extract-first pattern. Two commits: (1) preparation extracts
+  the 8 register-* method bodies + set_stmt_trace / drain_trace_buf
+  / set_auth_log / unregister_extension into 12 `pub(crate) async
+  fn *_impl` free fns; rewrites `install_provider_backed_bindings`
+  to call them directly (dropping the trait-method-via-trait-path
+  dependency that blocked the earlier retirement attempt).
+  (2) retirement introduces `wasmos_spi_loader_imports.rs` with a
+  `#[host_iface]` `SpiLoaderHost` that also delegates to the same
+  free fns; swaps both `add_to_linker` sites for
+  `async_bridge::install_host_imports`; deletes the 91-line trait
+  impl block. **Extract-first is the required pattern** for any
+  Host impl whose methods are called directly elsewhere in lib.rs.
+  Same audit needed for spi / dispatch / extension_loader.
+
+**7 of 7 formerly-live `bindings` Host trait impls retired!**
+(RunLoaderStub dead-code, opfs_host trap-stub, session for
+HostWrap dead-code, spi_loader via full extract+wasmos, plus
+Phase 3's build + session on their respective store data types.)
+Remaining on HostWrap: `spi` (18 methods), `dispatch` (35
+methods, mostly mechanical delegates), `extension_loader` (36
+methods, the `.load` surface). Each retires via the same
+extract-first pattern.
+
+
+
 Landed 2026-09-24 in two commits on `main` (`f31e1fcf`,
 `7b9d8c60`).
 
