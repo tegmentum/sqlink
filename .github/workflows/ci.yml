@@ -135,6 +135,33 @@ jobs:
         working-directory: host
         run: cargo test --lib compose_provider --all-features -- --test-threads=1
 
+  sqlite-version-drift:
+    # Fail fast if deps/sqlite/sqlite3.h (Makefile-side) and the
+    # libsqlite3-sys bundle (cargo-side) disagree on SQLITE_VERSION.
+    # See scripts/check-sqlite-version.sh for the why. Cheap job —
+    # only needs `cargo fetch` + one 3 MB tarball.
+    name: SQLite version drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install pinned Rust toolchain
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --default-toolchain none --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup show
+      - name: cargo fetch (populate libsqlite3-sys in the registry cache)
+        run: cargo fetch --locked
+      - name: Download SQLite amalgamation (populate deps/sqlite/)
+        run: ./scripts/download-sqlite.sh
+      - name: Verify sqlite version alignment
+        run: ./scripts/check-sqlite-version.sh
+
   native-checks:
     name: sqlink-native crate — build + tests
     runs-on: ubuntu-latest

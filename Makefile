@@ -2,7 +2,8 @@
 # Builds SQLite as a WebAssembly component targeting WASI Preview 2
 
 .PHONY: all clean deps sqlite wasi-sdk bindings build test test-cli help cli extensions \
-        wasmmachine-build wasmmachine-seal wasmmachine-run
+        wasmmachine-build wasmmachine-seal wasmmachine-run \
+        verify-sqlite-version
 
 # Directories
 PROJECT_ROOT := $(shell pwd)
@@ -770,6 +771,14 @@ verify-tools:
 	@command -v wit-bindgen >/dev/null 2>&1 || (echo "wit-bindgen not found. Install with: cargo install wit-bindgen-cli" && exit 1)
 	@command -v wasm-tools >/dev/null 2>&1 || (echo "wasm-tools not found. Install with: cargo install wasm-tools" && exit 1)
 	@echo "All required tools found."
+
+# Fail if deps/sqlite/sqlite3.h and libsqlite3-sys's vendored bundle
+# disagree on SQLITE_VERSION. The Makefile's C-built targets compile
+# the former; cargo's wasm cli component links the latter with the
+# `bundled` feature. Drift means `SELECT sqlite_version()` reports
+# different strings depending on which artifact you invoke.
+verify-sqlite-version:
+	@./scripts/check-sqlite-version.sh
 
 # PLAN-wasmmachine.md E3: register sqlite-cli as a wasmMachine
 # application. wasmmachine-build hashes the cli component and
