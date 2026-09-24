@@ -116,6 +116,12 @@ pub mod wasmos_dispatch_imports;
 /// block (the parallel impl on ProviderSpiWrap in compose_provider
 /// stays live).
 pub mod wasmos_spi_imports;
+/// Phase 4 (final): `#[host_iface]` handler for `sqlink:wasm/
+/// extension-loader@0.1.0` — 36 methods over the full `.load`
+/// surface + resolver management + component cache + runtime
+/// registration. Retires the `impl extension_loader::Host for
+/// HostWrap` block — the last Host trait impl on HostWrap.
+pub mod wasmos_extension_loader_imports;
 /// Phase 2 (bindgen-free tabular-mutating): cached `TypedFunc`
 /// dispatch for the 22 vtab / vtab-update methods on
 /// `MutatingBridgeInstance`, letting the `loaded_tabular_mutating`
@@ -1438,7 +1444,7 @@ mod default_operator_policy_tests {
 /// Translate the WIT `load-options` record into the host's
 /// `Policy`. Mirrors `sqlink-extension`'s `Policy::from_wit` so
 /// values port directly across deployment modes.
-fn policy_from_load_options(opts: &wasmos_extension_types::LoadOptions) -> Policy {
+pub(crate) fn policy_from_load_options(opts: &wasmos_extension_types::LoadOptions) -> Policy {
     let mut policy = Policy::deny_all();
     policy = policy.with_grants(opts.grant.iter().map(from_wit_cap));
     if let Some(http) = &opts.http_policy {
@@ -1477,7 +1483,7 @@ fn policy_from_load_options(opts: &wasmos_extension_types::LoadOptions) -> Polic
 /// scalar/collation tiers exactly as for a bespoke-loaded one. Only
 /// scalar + collation are populated — the safety gate guarantees a
 /// provider-backed extension has no other tiers.
-fn manifest_for_provider(
+pub(crate) fn manifest_for_provider(
     m: &provider_envelope::Manifest,
     conn: Option<&sqlite_component_core::db::Connection>,
 ) -> Manifest {
@@ -3895,7 +3901,7 @@ pub struct Host {
     /// The extension-tier wasmos runtime — the fuel-metered engine
     /// every loaded `sqlite:extension` component compiles and runs
     /// against.
-    runtime: Arc<WasmtimeV48Runtime>,
+    pub(crate) runtime: Arc<WasmtimeV48Runtime>,
     /// The trusted-tier wasmos runtime — the CLI runnable, the
     /// precompile subcommand, and the run_wasm path all use this
     /// engine. Built with `consume_fuel(false)` so per-instance fuel
@@ -3988,7 +3994,7 @@ pub struct Host {
     /// cleared by unregister-extension.
     ext_vtab_registrations: Arc<Mutex<HashMap<String, Vec<String>>>>,
     /// CAS cache for resolved bytes.
-    cache: Arc<RwLock<Option<cache::Cache>>>,
+    pub(crate) cache: Arc<RwLock<Option<cache::Cache>>>,
     /// Built-in compose:dynlink providers, keyed by registry id.
     /// `linker.resolve_by_id` looks here first; digest-based
     /// resolution would route through `cache` once CP7 lands the
@@ -4050,7 +4056,7 @@ pub struct Host {
     /// resolve/invoke/drop through it against the Store's resource
     /// table. Built once at `Host::new` (all inputs are stable
     /// Arc-shared fields).
-    dynlink_bridge: datalink_dynlink::AsyncDynLinkBridge<compose_provider::HostWrapBackend>,
+    pub(crate) dynlink_bridge: datalink_dynlink::AsyncDynLinkBridge<compose_provider::HostWrapBackend>,
     /// Lazily-loaded signature verifier. Used when the active
     /// trust policy is `Ed25519Signed`. Built once (cheap — no
     /// component load) at Host::new; the component is read from
@@ -4205,7 +4211,7 @@ pub struct LanguageRuntime {
 /// via `SQLITE_WASM_COMPONENT_CACHE_MAX_BYTES`. Default 4 GiB
 /// — enough for a handful of postgis-sized bundles; explicit
 /// `0` disables eviction entirely (unbounded growth).
-fn component_cache_max_bytes() -> u64 {
+pub(crate) fn component_cache_max_bytes() -> u64 {
     const DEFAULT_CAP: u64 = 4 * 1024 * 1024 * 1024;
     std::env::var("SQLITE_WASM_COMPONENT_CACHE_MAX_BYTES")
         .ok()
@@ -4218,7 +4224,7 @@ fn component_cache_max_bytes() -> u64 {
 /// back-compat ALIAS. Returns `(scheme, hex)` for any of the three, so
 /// callers route them identically through `Cache::lookup_by_hash`
 /// (which probes the blake3 PK and then the sha-256 mirror column).
-fn pinned_hash_scheme(uri: &str) -> Option<(&'static str, &str)> {
+pub(crate) fn pinned_hash_scheme(uri: &str) -> Option<(&'static str, &str)> {
     for scheme in ["sha256", "digest", "blake3"] {
         if let Some(hex) = uri
             .strip_prefix(scheme)
@@ -8822,7 +8828,7 @@ impl Host {
     }
 }
 
-fn cache_err(msg: impl Into<String>) -> LoaderError {
+pub(crate) fn cache_err(msg: impl Into<String>) -> LoaderError {
     LoaderError {
         code: 1,
         message: msg.into(),
@@ -9747,743 +9753,6 @@ pub(crate) fn execute_multi_impl_bindings(
 // installed via `async_bridge::install_host_imports` at the two
 // call sites (main.rs and lib.rs's `run_cli_capture`).
 
-impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
-    async fn load_extension(
-        &mut self,
-        path: String,
-        options: wasmos_extension_types::LoadOptions,
-    ) -> std::result::Result<Manifest, LoaderError> {
-        let policy = policy_from_load_options(&options);
-        match self.host.load_extension(PathBuf::from(&path), policy).await {
-            Ok(name) => {
-                // #220: a `.load`'d `<ext>-provider.wasm` lives in the
-                // provider-backed map (the bespoke `components` registry is
-                // retired). Return its manifest so the cli registers the
-                // provider-backed trampolines.
-                if let Some(m) = self.host.provider_backed_bindings_manifest(&name) {
-                    return Ok(m);
-                }
-                // Should not happen — we just inserted it under this name.
-                Err(LoaderError {
-                    code: 1,
-                    message: format!("internal: extension {name} vanished after load"),
-                })
-            }
-            Err(e) => Err(LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
-        }
-    }
-
-    async fn unload_extension(&mut self, name: String) -> std::result::Result<(), LoaderError> {
-        self.host.unload(&name).map_err(|e| LoaderError {
-            code: 1,
-            message: e.to_string(),
-        })
-    }
-
-    async fn extension_digest(&mut self, _name: String) -> String {
-        // #220: digests were tracked in the retired `components` registry.
-        String::new()
-    }
-
-    async fn load_extension_from_bytes(
-        &mut self,
-        name_hint: String,
-        bytes: Vec<u8>,
-        options: wasmos_extension_types::LoadOptions,
-    ) -> std::result::Result<Manifest, LoaderError> {
-        // #220 loader retirement: the cli's in-band `.load <bytes>` goes
-        // provider-only. A provider-backed ext lives in `provider_manifests`
-        // (not the bespoke `components` registry), so build its manifest via
-        // `provider_backed_bindings_manifest`.
-        // bundle-cli `.bundle build`: honor a `spawn-build` grant in the load
-        // options (this is how `sqlink --grant spawn-build` reaches the host —
-        // the cli auto-loads bundle-cli with `Capability::SpawnBuild` in its
-        // grant list). Other grants stay handled by the existing policy paths.
-        let spawn_build_granted = options
-            .grant
-            .iter()
-            .any(|c| matches!(c, WitCapability::SpawnBuild));
-        let name = self
-            .host
-            .instantiate_provider_from_bytes(&name_hint, &bytes, spawn_build_granted)
-            .await
-            .map_err(|e| LoaderError {
-                code: 1,
-                message: e.to_string(),
-            })?;
-        self.host
-            .provider_backed_bindings_manifest(&name)
-            .ok_or_else(|| LoaderError {
-                code: 1,
-                message: format!("load-from-bytes succeeded but {name} not provider-backed"),
-            })
-    }
-
-    async fn dispatch_dot_command(
-        &mut self,
-        name: String,
-        args: String,
-        cli_state: Vec<(String, String)>,
-    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::DotCommandResult, LoaderError>
-    {
-        let outcome = self
-            .host
-            .dispatch_dot_command(&name, &args, cli_state)
-            .await
-            .map_err(|e| LoaderError {
-                code: if e.to_string().contains("no dot-command") {
-                    404
-                } else {
-                    500
-                },
-                message: e.to_string(),
-            })?;
-        let state_deltas = outcome
-            .state_deltas
-            .into_iter()
-            .map(|d| bindings::sqlink::wasm::extension_loader::StateDelta {
-                key: d.key,
-                value_json: d.value_json,
-            })
-            .collect();
-        Ok(bindings::sqlink::wasm::extension_loader::DotCommandResult {
-            text: outcome.text,
-            state_deltas,
-            exit_code: outcome.exit_code,
-        })
-    }
-
-    async fn dispatch_parse(
-        &mut self,
-        query: String,
-    ) -> std::result::Result<Option<String>, LoaderError> {
-        self.host
-            .dispatch_parse(&query)
-            .await
-            .map_err(|e| LoaderError {
-                code: 500,
-                message: e.to_string(),
-            })
-    }
-
-    async fn describe_extension(
-        &mut self,
-        path: String,
-    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::DescribedResult, LoaderError>
-    {
-        // L3a: full-form describe carries declared_caps so the
-        // cli's --trust=prompt mode can render them before
-        // asking y/N.
-        match self
-            .host
-            .describe_extension_full(PathBuf::from(&path))
-            .await
-        {
-            Ok((name, digest, declared_caps)) => {
-                Ok(bindings::sqlink::wasm::extension_loader::DescribedResult {
-                    name,
-                    digest_hex: digest,
-                    declared_caps,
-                })
-            }
-            Err(e) => Err(LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
-        }
-    }
-
-    async fn describe_extension_from_uri(
-        &mut self,
-        uri: String,
-    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::DescribedResult, LoaderError>
-    {
-        // file: stays a direct describe  no cache round-trip
-        // makes sense for a local path.
-        if let Some(path) = uri
-            .strip_prefix("file://")
-            .or_else(|| uri.strip_prefix("file:"))
-        {
-            return match self.host.describe_extension_full(PathBuf::from(path)).await {
-                Ok((name, digest, declared_caps)) => {
-                    Ok(bindings::sqlink::wasm::extension_loader::DescribedResult {
-                        name,
-                        digest_hex: digest,
-                        declared_caps,
-                    })
-                }
-                Err(e) => Err(LoaderError {
-                    code: 1,
-                    message: e.to_string(),
-                }),
-            };
-        }
-        // PLAN-latent-cleanup.md L3b: every other scheme (blake3:,
-        // https:, oci:, ...) goes through the shared
-        // resolve_uri_to_bytes path that load_extension_from_uri
-        // uses. Bytes in hand, describe_extension_from_bytes_full
-        // does the rest. --trust=stored / --trust=prompt
-        // enforcement now works against URI-loaded extensions.
-        let bytes = match self.host.resolve_uri_to_bytes(&uri).await {
-            Ok(b) => b,
-            Err(e) => {
-                return Err(LoaderError {
-                    code: 1,
-                    message: e.to_string(),
-                })
-            }
-        };
-        let hint = if let Some((scheme, hex)) = pinned_hash_scheme(&uri) {
-            format!("{scheme}:{}", &hex[..hex.len().min(8)])
-        } else {
-            uri.clone()
-        };
-        match self
-            .host
-            .describe_extension_from_bytes_full(bytes, &hint)
-            .await
-        {
-            Ok((name, digest, declared_caps)) => {
-                Ok(bindings::sqlink::wasm::extension_loader::DescribedResult {
-                    name,
-                    digest_hex: digest,
-                    declared_caps,
-                })
-            }
-            Err(e) => Err(LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
-        }
-    }
-
-    async fn component_cache_stats(
-        &mut self,
-    ) -> bindings::sqlink::wasm::extension_loader::ComponentCacheStatsSnapshot {
-        let s = self.host.component_cache_stats();
-        bindings::sqlink::wasm::extension_loader::ComponentCacheStatsSnapshot {
-            c1_hits: s.c1_hits,
-            c2_hits: s.c2_hits,
-            cold_parses: s.cold_parses,
-            parse_ms: s.parse_ms,
-            serialize_ms: s.serialize_ms,
-            deserialize_ms: s.deserialize_ms,
-            bypassed: s.bypassed,
-            row_count: self.host.component_cache_row_count(),
-            total_bytes: self.host.component_cache_total_bytes(),
-            max_bytes: component_cache_max_bytes(),
-        }
-    }
-
-    async fn component_cache_purge(&mut self) -> u64 {
-        self.host.component_cache_purge().unwrap_or(0)
-    }
-
-    async fn list_extensions(&mut self) -> Vec<Manifest> {
-        // #220: provider-backed extensions live in the provider-backed map.
-        self.host
-            .list()
-            .iter()
-            .filter_map(|n| self.host.provider_backed_bindings_manifest(n))
-            .collect()
-    }
-
-    async fn is_extension_loaded(&mut self, name: String) -> bool {
-        self.host.is_loaded(&name)
-    }
-
-    async fn load_extension_from_uri(
-        &mut self,
-        uri: String,
-        options: wasmos_extension_types::LoadOptions,
-    ) -> std::result::Result<Manifest, LoaderError> {
-        let policy = policy_from_load_options(&options);
-        match self.host.load_extension_from_uri(&uri, policy).await {
-            Ok(name) => {
-                // #220: provider-backed manifest (bespoke `components` retired).
-                self.host
-                    .provider_backed_bindings_manifest(&name)
-                    .ok_or_else(|| LoaderError {
-                        code: 1,
-                        message: format!("internal: ext {name} vanished after URI load"),
-                    })
-            }
-            Err(e) => Err(LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
-        }
-    }
-
-    /// Phase 4 http-CAS. GET `uri`, verify blake3 hash matches
-    /// `expected_digest`, return the bytes. Wired off the host's
-    /// existing reqwest client so the same TLS / DNS configuration
-    /// applies. The cli's `.sqlink resolver` walk routes any
-    /// non-file resolver here.
-    async fn fetch_cas_uri(
-        &mut self,
-        uri: String,
-        expected_digest: String,
-    ) -> std::result::Result<Vec<u8>, LoaderError> {
-        let client = reqwest::Client::new();
-        let resp = client.get(&uri).send().await.map_err(|e| LoaderError {
-            code: 1,
-            message: format!("GET {uri}: {e}"),
-        })?;
-        if !resp.status().is_success() {
-            return Err(LoaderError {
-                code: resp.status().as_u16() as i32,
-                message: format!("GET {uri}: status {}", resp.status()),
-            });
-        }
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| LoaderError {
-                code: 1,
-                message: format!("read body of {uri}: {e}"),
-            })?
-            .to_vec();
-        let got = format!("blake3:{}", blake3::hash(&bytes).to_hex());
-        if got != expected_digest {
-            return Err(LoaderError {
-                code: 1,
-                message: format!("digest mismatch: {got} != {expected_digest}"),
-            });
-        }
-        Ok(bytes)
-    }
-
-    async fn register_resolver(
-        &mut self,
-        scheme: String,
-        path: String,
-        options: wasmos_extension_types::LoadOptions,
-    ) -> std::result::Result<String, LoaderError> {
-        let policy = policy_from_load_options(&options);
-        self.host
-            .register_resolver(&scheme, PathBuf::from(&path), policy)
-            .await
-            .map_err(|e| LoaderError {
-                code: 1,
-                message: e.to_string(),
-            })
-    }
-
-    async fn unregister_resolver(
-        &mut self,
-        scheme: String,
-    ) -> std::result::Result<(), LoaderError> {
-        self.host
-            .unregister_resolver(&scheme)
-            .map_err(|e| LoaderError {
-                code: 1,
-                message: e.to_string(),
-            })
-    }
-
-    async fn list_resolvers(&mut self) -> Vec<(String, String)> {
-        self.host.list_resolvers()
-    }
-
-    async fn list_cache_uris(
-        &mut self,
-    ) -> Vec<bindings::sqlink::wasm::extension_loader::UriCacheEntry> {
-        let g = self.host.cache.read();
-        let Some(cache) = g.as_ref() else {
-            return Vec::new();
-        };
-        cache
-            .list_uris()
-            .into_iter()
-            .map(
-                |e| bindings::sqlink::wasm::extension_loader::UriCacheEntry {
-                    uri: e.uri,
-                    hash: e.hash,
-                    fetched_at: e.fetched_at,
-                },
-            )
-            .collect()
-    }
-
-    async fn purge_cache(&mut self) -> u64 {
-        let g = self.host.cache.read();
-        let Some(cache) = g.as_ref() else {
-            return 0;
-        };
-        cache.purge().unwrap_or(0) as u64
-    }
-
-    async fn get_cache_stats(
-        &mut self,
-    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheStats, LoaderError>
-    {
-        let cache = {
-            let g = self.host.cache.read();
-            g.as_ref()
-                .ok_or_else(|| cache_err("no cache configured"))?
-                .clone()
-        };
-        let store_handle = cache.store();
-        let store = store_handle.lock();
-        let artifact_count = store
-            .artifact_count()
-            .map_err(|e| cache_err(format!("artifact_count: {e}")))?;
-        let uri_count = store
-            .uri_count()
-            .map_err(|e| cache_err(format!("uri_count: {e}")))?;
-        let total_bytes = store
-            .total_bytes()
-            .map_err(|e| cache_err(format!("total_bytes: {e}")))?;
-        let mode = match store.mode() {
-            sqlite_cas_cache::StoreMode::External(p) => {
-                format!("external:{}", p.display())
-            }
-            sqlite_cas_cache::StoreMode::Internal => "internal".to_string(),
-        };
-        let max_bytes = store.config().max_bytes;
-        Ok(bindings::sqlink::wasm::extension_loader::CacheStats {
-            artifact_count,
-            uri_count,
-            total_bytes,
-            mode,
-            max_bytes,
-        })
-    }
-
-    async fn cache_set_max_bytes(&mut self, max: u64) -> std::result::Result<(), LoaderError> {
-        let cache = {
-            let g = self.host.cache.read();
-            g.as_ref()
-                .ok_or_else(|| cache_err("no cache configured"))?
-                .clone()
-        };
-        let store_handle = cache.store();
-        let mut store = store_handle.lock();
-        let mut cfg = store.config().clone();
-        cfg.max_bytes = max;
-        store.set_config(cfg);
-        Ok(())
-    }
-
-    async fn cache_gc(&mut self) -> std::result::Result<u64, LoaderError> {
-        let cache = {
-            let g = self.host.cache.read();
-            g.as_ref()
-                .ok_or_else(|| cache_err("no cache configured"))?
-                .clone()
-        };
-        let store_handle = cache.store();
-        let mut store = store_handle.lock();
-        store.gc().map_err(|e| cache_err(format!("gc: {e}")))
-    }
-
-    async fn cache_evict(&mut self, target_bytes: u64) -> std::result::Result<u64, LoaderError> {
-        let cache = {
-            let g = self.host.cache.read();
-            g.as_ref()
-                .ok_or_else(|| cache_err("no cache configured"))?
-                .clone()
-        };
-        let store_handle = cache.store();
-        let mut store = store_handle.lock();
-        store
-            .evict_lru(target_bytes)
-            .map_err(|e| cache_err(format!("evict_lru: {e}")))
-    }
-
-    async fn cache_export(&mut self, path: String) -> std::result::Result<(), LoaderError> {
-        let cache = {
-            let g = self.host.cache.read();
-            g.as_ref()
-                .ok_or_else(|| cache_err("no cache configured"))?
-                .clone()
-        };
-        let store_handle = cache.store();
-        let store = store_handle.lock();
-        store
-            .export_to(PathBuf::from(path))
-            .map_err(|e| cache_err(format!("export: {e}")))
-    }
-
-    async fn do_cache_import(
-        &mut self,
-        path: String,
-    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheMergeStats, LoaderError>
-    {
-        let cache = {
-            let g = self.host.cache.read();
-            g.as_ref()
-                .ok_or_else(|| cache_err("no cache configured"))?
-                .clone()
-        };
-        let store_handle = cache.store();
-        let mut store = store_handle.lock();
-        let stats = store
-            .merge_from(PathBuf::from(path))
-            .map_err(|e| cache_err(format!("import: {e}")))?;
-        Ok(bindings::sqlink::wasm::extension_loader::CacheMergeStats {
-            artifacts_added: stats.artifacts_added,
-            uris_net_change: stats.uris_net_change,
-        })
-    }
-
-    async fn cache_use_external(&mut self, path: String) -> std::result::Result<(), LoaderError> {
-        let new_cache = cache::Cache::open_external(PathBuf::from(path))
-            .map_err(|e| cache_err(format!("open external: {e}")))?;
-        self.host.set_cache(new_cache);
-        Ok(())
-    }
-
-    async fn cache_use_internal(
-        &mut self,
-        db_path: String,
-    ) -> std::result::Result<(), LoaderError> {
-        let new_cache = cache::Cache::open_internal(PathBuf::from(db_path))
-            .map_err(|e| cache_err(format!("open internal: {e}")))?;
-        self.host.set_cache(new_cache);
-        Ok(())
-    }
-
-    async fn cache_migrate_to_external(
-        &mut self,
-        path: String,
-    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheMergeStats, LoaderError>
-    {
-        let target = PathBuf::from(&path);
-        if target.exists() {
-            return Err(cache_err(format!(
-                "migrate-to-external: {} already exists",
-                target.display()
-            )));
-        }
-        let cache = {
-            let g = self.host.cache.read();
-            g.as_ref()
-                .ok_or_else(|| cache_err("no cache configured"))?
-                .clone()
-        };
-        let store_handle = cache.store();
-        let (artifacts, uris) = {
-            let store = store_handle.lock();
-            if !matches!(store.mode(), sqlite_cas_cache::StoreMode::Internal) {
-                return Err(cache_err(
-                    "migrate-to-external requires the current cache to be in internal mode",
-                ));
-            }
-            let a = store
-                .artifact_count()
-                .map_err(|e| cache_err(format!("artifact_count: {e}")))?;
-            let u = store
-                .uri_count()
-                .map_err(|e| cache_err(format!("uri_count: {e}")))?;
-            store
-                .export_to(&target)
-                .map_err(|e| cache_err(format!("export: {e}")))?;
-            (a, u)
-        };
-        {
-            let mut store = store_handle.lock();
-            store
-                .drop_schema()
-                .map_err(|e| cache_err(format!("drop_schema: {e}")))?;
-        }
-        let new_cache = cache::Cache::open_external(target)
-            .map_err(|e| cache_err(format!("reopen external: {e}")))?;
-        self.host.set_cache(new_cache);
-        Ok(bindings::sqlink::wasm::extension_loader::CacheMergeStats {
-            artifacts_added: artifacts,
-            uris_net_change: uris as i64,
-        })
-    }
-
-    async fn cache_migrate_to_internal(
-        &mut self,
-        db_path: String,
-    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheMergeStats, LoaderError>
-    {
-        let cache = {
-            let g = self.host.cache.read();
-            g.as_ref()
-                .ok_or_else(|| cache_err("no cache configured"))?
-                .clone()
-        };
-        let source_path = {
-            let store = cache.store();
-            let store = store.lock();
-            match store.mode() {
-                sqlite_cas_cache::StoreMode::External(p) => p.clone(),
-                sqlite_cas_cache::StoreMode::Internal => {
-                    return Err(cache_err(
-                        "migrate-to-internal requires the current cache to be in external mode",
-                    ));
-                }
-            }
-        };
-        let new_cache = cache::Cache::open_internal(PathBuf::from(&db_path))
-            .map_err(|e| cache_err(format!("open internal: {e}")))?;
-        let stats = {
-            let store = new_cache.store();
-            let mut store = store.lock();
-            store
-                .merge_from(&source_path)
-                .map_err(|e| cache_err(format!("merge: {e}")))?
-        };
-        self.host.set_cache(new_cache);
-        Ok(bindings::sqlink::wasm::extension_loader::CacheMergeStats {
-            artifacts_added: stats.artifacts_added,
-            uris_net_change: stats.uris_net_change,
-        })
-    }
-
-    async fn run_wasm(
-        &mut self,
-        path: String,
-        options: wasmos_extension_types::LoadOptions,
-    ) -> std::result::Result<String, LoaderError> {
-        let policy = policy_from_load_options(&options);
-        match self.host.run_wasm(PathBuf::from(&path), policy).await {
-            Ok(output) => Ok(output),
-            Err(e) => Err(LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
-        }
-    }
-
-    async fn register_wasm_provider(
-        &mut self,
-        id: String,
-        path: String,
-    ) -> std::result::Result<(), LoaderError> {
-        match self.host.register_wasm_provider(&id, PathBuf::from(&path)) {
-            Ok(()) => Ok(()),
-            Err(e) => Err(LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
-        }
-    }
-
-    async fn load_extension_as_provider(
-        &mut self,
-        ext_name: String,
-        path: String,
-    ) -> std::result::Result<Manifest, LoaderError> {
-        // Task #227: compile the <ext>-provider.wasm as a WARM-ONCE
-        // RESIDENT provider and hand it to the host's provider-backing
-        // path (which describes it, records the backing for every
-        // resident-backed tier, and returns the manifest). The resident
-        // store's persisted guest state is what lets vtab/hook/aggregate
-        // move onto the provider. Return a WIT manifest so the cli
-        // registers ALL tiers exactly as for a bespoke-loaded extension —
-        // the registration trampolines then dispatch through the warm store.
-        let op_policy = crate::default_operator_policy();
-        let provider = match compose_provider::ProviderHandle::new_resident_wasm_component(
-            self.host.runtime().clone(),
-            PathBuf::from(&path),
-            // Task #228: thread the shared dynlink bridge so a resident
-            // provider importing `compose:dynlink/linker` (reentrant SPI)
-            // can re-enter the engine provider from its warm store.
-            Some(self.host.dynlink_bridge.clone()),
-            // Task #220: the cli's --db so an spi-importing ext's spi.execute
-            // hits the same database, not an isolated :memory:.
-            self.host.db_path(),
-            // #220 full-port: thread the loader Host for loader-bridge exts.
-            Some(self.host.clone()),
-            // #106/#220: the in-WASM cli `.load` callback carries no per-load
-            // Policy (only name + path), so apply the DEFAULT OPERATOR POLICY —
-            // safe compute caps always; http/dns/s3 deny-by-default and opt-in
-            // via SQLINK_ALLOW_{HTTP,DNS,S3}. Calls remain gated at call time.
-            op_policy.http.clone(),
-            op_policy.dns.clone(),
-            op_policy.is_granted(Capability::S3),
-            op_policy.is_granted(Capability::SpawnBuild),
-        ) {
-            Ok(p) => p,
-            Err(e) => {
-                return Err(LoaderError {
-                    code: 1,
-                    message: format!("compile provider {path}: {e}"),
-                })
-            }
-        };
-        match self
-            .host
-            .load_extension_as_provider(&ext_name, provider)
-            .await
-        {
-            Ok(m) => {
-                // #220: resolve scalar collisions so the cli registers
-                // `<ext>_<name>` for a builtin-clobbering scalar (see
-                // manifest_for_provider). Builtins are identical across conns.
-                let g = self.host.shared_spi_conn.lock();
-                let r = g.borrow();
-                Ok(manifest_for_provider(&m, r.as_ref()))
-            }
-            Err(e) => Err(LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
-        }
-    }
-
-    async fn register_runtime(
-        &mut self,
-        ext: String,
-        flavor: String,
-        path: String,
-        options: wasmos_extension_types::LoadOptions,
-    ) -> std::result::Result<(), LoaderError> {
-        let policy = policy_from_load_options(&options);
-        match self
-            .host
-            .register_runtime(&ext, &flavor, PathBuf::from(&path), policy)
-            .await
-        {
-            Ok(()) => Ok(()),
-            Err(e) => Err(LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
-        }
-    }
-
-    async fn unregister_runtime(
-        &mut self,
-        ext: String,
-        flavor: String,
-    ) -> std::result::Result<(), LoaderError> {
-        match self.host.unregister_runtime(&ext, &flavor) {
-            Ok(()) => Ok(()),
-            Err(e) => Err(LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
-        }
-    }
-
-    async fn list_runtimes(&mut self) -> Vec<(String, String, String)> {
-        self.host.list_runtimes()
-    }
-
-    async fn run_source(
-        &mut self,
-        path: String,
-        flavor: String,
-    ) -> std::result::Result<String, LoaderError> {
-        match self.host.run_source(&path, &flavor).await {
-            Ok(output) => Ok(output),
-            Err(e) => Err(LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
-        }
-    }
-}
 
 #[cfg(test)]
 mod http_policy_tests {
@@ -10815,10 +10084,19 @@ pub async fn run_cli_capture(
 
     let mut linker: Linker<CliRunState> = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker).map_err(|e| anyhow!("wire WASI: {e}"))?;
-    bindings::sqlink::wasm::extension_loader::add_to_linker::<_, LoaderData>(&mut linker, |s: &mut CliRunState| {
-        HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
-    })
-    .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
+    {
+        let ext_loader_imports = crate::wasmos_extension_loader_imports::install_extension_loader_imports(
+            wasmos_runtime_api::HostImports::new(),
+            host.clone(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            &engine,
+            &mut linker,
+            &component,
+            &ext_loader_imports,
+        )
+        .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
+    }
     {
         let dispatch_imports = crate::wasmos_dispatch_imports::install_dispatch_imports(
             wasmos_runtime_api::HostImports::new(),

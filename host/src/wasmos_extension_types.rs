@@ -16,13 +16,20 @@
 use wasmos_runtime_api::{WitEnum, WitRecord, WitVariant};
 use wasmtime::component::{flags, ComponentType, Lift, Lower};
 
-// Bindgen `with:` remap scaffolding. `sqlite:extension/types@1.0.0`
-// is a types-only interface (no functions to implement), so both
-// trait definitions are empty markers and `add_to_linker` is a
-// no-op — the interface has nothing runtime-wireable. When the
-// `bindings` bindgen `with:` clause remaps `sqlite:extension/
-// types@1.0.0` onto this module, the macro-generated code inside
-// the target world sees these stubs and compiles.
+// Bindgen `with:` remap scaffolding. Two shapes:
+//
+// 1. For `sqlite:extension/types@1.0.0` and `policy@1.0.0`
+//    (types-only interfaces): `Host` / `HostWithStore` are
+//    empty markers and `add_to_linker` is a no-op.
+// 2. For `sqlite:extension/metadata@1.0.0` (has a `describe`
+//    fn — extensions export it, host never implements it):
+//    `MetadataHost` includes a describe stub. The linker
+//    fn is a no-op since nobody actually wires it.
+//
+// The same generic `Host` / `HostWithStore` / add_to_linker
+// pair below serves both shape-1 interfaces because bindgen
+// looks up items by name inside the remapped module.
+
 pub trait Host {}
 impl<_T: Host + ?Sized> Host for &mut _T {}
 
@@ -818,4 +825,107 @@ pub struct Manifest {
     pub prefix_expansion: Option<String>,
     #[component(name = "typed-values")]
     pub typed_values: Vec<TypedValueBinding>,
+}
+
+// ────────────────────────────────────────────────────────────────────
+// sqlink:wasm/extension-loader@0.1.0 record types
+// ────────────────────────────────────────────────────────────────────
+
+/// Mirrors the WIT `extension-loader.loader-error` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
+#[component(record)]
+pub struct LoaderError {
+    pub code: i32,
+    pub message: String,
+}
+
+/// Mirrors the WIT `extension-loader.state-delta` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
+#[component(record)]
+pub struct StateDelta {
+    pub key: String,
+    #[component(name = "value-json")]
+    pub value_json: String,
+}
+
+/// Mirrors the WIT `extension-loader.dot-command-result` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
+#[component(record)]
+pub struct DotCommandResult {
+    pub text: String,
+    #[component(name = "state-deltas")]
+    pub state_deltas: Vec<StateDelta>,
+    #[component(name = "exit-code")]
+    pub exit_code: i32,
+}
+
+/// Mirrors the WIT `extension-loader.described-result` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
+#[component(record)]
+pub struct DescribedResult {
+    pub name: String,
+    #[component(name = "digest-hex")]
+    pub digest_hex: String,
+    #[component(name = "declared-caps")]
+    pub declared_caps: Vec<String>,
+}
+
+/// Mirrors the WIT `extension-loader.component-cache-stats-snapshot` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
+#[component(record)]
+pub struct ComponentCacheStatsSnapshot {
+    #[component(name = "c1-hits")]
+    pub c1_hits: u64,
+    #[component(name = "c2-hits")]
+    pub c2_hits: u64,
+    #[component(name = "cold-parses")]
+    pub cold_parses: u64,
+    #[component(name = "parse-ms")]
+    pub parse_ms: u64,
+    #[component(name = "serialize-ms")]
+    pub serialize_ms: u64,
+    #[component(name = "deserialize-ms")]
+    pub deserialize_ms: u64,
+    pub bypassed: u64,
+    #[component(name = "row-count")]
+    pub row_count: u64,
+    #[component(name = "total-bytes")]
+    pub total_bytes: u64,
+    #[component(name = "max-bytes")]
+    pub max_bytes: u64,
+}
+
+/// Mirrors the WIT `extension-loader.uri-cache-entry` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
+#[component(record)]
+pub struct UriCacheEntry {
+    pub uri: String,
+    pub hash: String,
+    #[component(name = "fetched-at")]
+    pub fetched_at: u64,
+}
+
+/// Mirrors the WIT `extension-loader.cache-stats` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
+#[component(record)]
+pub struct CacheStats {
+    #[component(name = "artifact-count")]
+    pub artifact_count: u64,
+    #[component(name = "uri-count")]
+    pub uri_count: u64,
+    #[component(name = "total-bytes")]
+    pub total_bytes: u64,
+    pub mode: String,
+    #[component(name = "max-bytes")]
+    pub max_bytes: u64,
+}
+
+/// Mirrors the WIT `extension-loader.cache-merge-stats` record.
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
+#[component(record)]
+pub struct CacheMergeStats {
+    #[component(name = "artifacts-added")]
+    pub artifacts_added: u64,
+    #[component(name = "uris-net-change")]
+    pub uris_net_change: i64,
 }

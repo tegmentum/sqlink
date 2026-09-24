@@ -934,14 +934,19 @@ async fn main() -> Result<()> {
     let mut linker: Linker<State> = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker).map_err(|e| anyhow!("wire WASI: {e}"))?;
 
-    bindings::sqlink::wasm::extension_loader::add_to_linker::<_, LoaderData>(
-        &mut linker,
-        |state: &mut State| HostWrap {
-            host: &mut state.host,
-            resources: Some(&mut state.resources),
-        },
-    )
-    .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
+    {
+        let ext_loader_imports = sqlink_host::wasmos_extension_loader_imports::install_extension_loader_imports(
+            wasmos_runtime_api::HostImports::new(),
+            host.clone(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            &engine,
+            &mut linker,
+            &component,
+            &ext_loader_imports,
+        )
+        .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
+    }
 
     {
         let dispatch_imports = sqlink_host::wasmos_dispatch_imports::install_dispatch_imports(

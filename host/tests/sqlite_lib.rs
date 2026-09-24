@@ -92,13 +92,18 @@ async fn instantiate() -> Result<Option<(Store<State>, SqliteLibrary)>> {
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 
     let host = Host::new()?;
-    host_bindings::sqlink::wasm::extension_loader::add_to_linker::<_, LoaderData>(
-        &mut linker,
-        |state: &mut State| HostWrap {
-            host: &mut state.host,
-            resources: Some(&mut state.resources),
-        },
-    )?;
+    {
+        let ext_loader_imports = sqlink_host::wasmos_extension_loader_imports::install_extension_loader_imports(
+            wasmos_runtime_api::HostImports::new(),
+            host.clone(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            &engine,
+            &mut linker,
+            &component,
+            &ext_loader_imports,
+        )?;
+    }
     // Phase 4 retirement: dispatch::Host now wired via the wasmos
     // handler (async_bridge::install_host_imports) rather than the
     // bindgen add_to_linker. See `wasmos_dispatch_imports`.
