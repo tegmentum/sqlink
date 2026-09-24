@@ -114,6 +114,70 @@ flags! {
     }
 }
 
+// Phase 4: hand-rolled WitBridge for FunctionFlags. The
+// `wasmtime::component::flags!` macro emits the struct with its
+// wasmtime `ComponentType`/`Lift`/`Lower` impls but doesn't accept
+// external derives, so we can't dual-derive `WitFlags` the way we
+// dual-derive `WitRecord`/`WitVariant`/`WitEnum` elsewhere in this
+// file. The bridge is compact (3 named bits) so a hand impl is
+// simpler than replacing the whole macro invocation.
+impl wasmos_runtime_api::WitBridgeCtx for FunctionFlags {
+    fn from_value_ctx(
+        value: wasmos_runtime_api::Value,
+        _ctx: &mut wasmos_runtime_api::HostCallContext<'_>,
+    ) -> wasmos_runtime_api::RuntimeResult<Self> {
+        <Self as wasmos_runtime_api::WitBridge>::from_value(value)
+    }
+    fn to_value_ctx(
+        &self,
+        _ctx: &mut wasmos_runtime_api::HostCallContext<'_>,
+    ) -> wasmos_runtime_api::RuntimeResult<wasmos_runtime_api::Value> {
+        Ok(<Self as wasmos_runtime_api::WitBridge>::to_value(self))
+    }
+}
+
+impl wasmos_runtime_api::WitBridge for FunctionFlags {
+    fn from_value(value: wasmos_runtime_api::Value) -> wasmos_runtime_api::RuntimeResult<Self> {
+        let names = match value {
+            wasmos_runtime_api::Value::Flags(v) => v,
+            other => {
+                return Err(wasmos_runtime_api::RuntimeError::msg(format!(
+                    "FunctionFlags: expected flags, got {other:?}"
+                )))
+            }
+        };
+        let mut out = Self::empty();
+        for n in names {
+            match n.as_str() {
+                "deterministic" => out = out | Self::DETERMINISTIC,
+                "direct-only" => out = out | Self::DIRECT_ONLY,
+                "innocuous" => out = out | Self::INNOCUOUS,
+                other => {
+                    return Err(wasmos_runtime_api::RuntimeError::msg(format!(
+                        "FunctionFlags: unknown flag {other:?} (want deterministic / direct-only / innocuous)"
+                    )))
+                }
+            }
+        }
+        Ok(out)
+    }
+    fn to_value(&self) -> wasmos_runtime_api::Value {
+        let mut names = Vec::with_capacity(3);
+        if self.contains(Self::DETERMINISTIC) {
+            names.push("deterministic".to_string());
+        }
+        if self.contains(Self::DIRECT_ONLY) {
+            names.push("direct-only".to_string());
+        }
+        if self.contains(Self::INNOCUOUS) {
+            names.push("innocuous".to_string());
+        }
+        wasmos_runtime_api::Value::Flags(names)
+    }
+}
+
+impl wasmos_runtime_api::WitFlags for FunctionFlags {}
+
 /// Mirrors the WIT `types.auth-action` enum — 32 SQLITE_* action
 /// codes passed to the authorizer callback.
 #[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq, WitEnum)]
@@ -642,7 +706,7 @@ pub enum PolicyError {
 
 /// Mirrors `metadata.typed-value-binding` — per-record decoder /
 /// encoder binding for the `sql-value::wit-value` arm.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct TypedValueBinding {
     #[component(name = "type-id")]
@@ -655,7 +719,7 @@ pub struct TypedValueBinding {
     pub encoder_import: String,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct ScalarFunctionSpec {
     pub id: u64,
@@ -666,7 +730,7 @@ pub struct ScalarFunctionSpec {
     pub func_flags: FunctionFlags,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct AggregateFunctionSpec {
     pub id: u64,
@@ -679,14 +743,14 @@ pub struct AggregateFunctionSpec {
     pub is_window: bool,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct CollationSpec {
     pub id: u64,
     pub name: String,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct VtabSpec {
     pub id: u64,
@@ -696,14 +760,14 @@ pub struct VtabSpec {
     pub batched: bool,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct DotCommandExample {
     pub description: String,
     pub command: String,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct DotCommandSpec {
     pub id: u64,
@@ -721,7 +785,7 @@ pub struct DotCommandSpec {
 
 /// Mirrors the WIT `metadata.manifest` record — the extension's full
 /// declared surface, returned from `describe()`.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct Manifest {
     pub name: String,
