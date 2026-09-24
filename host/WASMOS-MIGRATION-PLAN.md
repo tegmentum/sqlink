@@ -349,14 +349,40 @@ instantiated anywhere.
   Host impl whose methods are called directly elsewhere in lib.rs.
   Same audit needed for spi / dispatch / extension_loader.
 
-**7 of 7 formerly-live `bindings` Host trait impls retired!**
-(RunLoaderStub dead-code, opfs_host trap-stub, session for
-HostWrap dead-code, spi_loader via full extract+wasmos, plus
-Phase 3's build + session on their respective store data types.)
-Remaining on HostWrap: `spi` (18 methods), `dispatch` (35
-methods, mostly mechanical delegates), `extension_loader` (36
-methods, the `.load` surface). Each retires via the same
-extract-first pattern.
+**Preparation commit `a80da07c`** — dual-derived every hand-
+rolled type in `wasmos_extension_types` + `wasmos_vtab_types`
+with both wasmtime (`ComponentType, Lift, Lower`) AND wasmos
+(`WitRecord`/`WitVariant`/`WitEnum`) derives, so the same types
+cross both TypedFunc and `#[host_iface]` boundaries. Unblocks
+single-commit retirement for the 3 remaining Host trait impls
+(dispatch / spi / extension_loader). Metadata sub-types
+(`ScalarFunctionSpec`, `AggregateFunctionSpec`, etc.) kept
+WITHOUT `WitRecord` because their `FunctionFlags` fields come
+from the wasmtime `flags!` macro which doesn't accept external
+derives — extension_loader retirement needs a separate fix for
+that gap.
+
+**Retirement commits `d2221ad9` + `c28cd140`** —
+`dispatch::Host` (35 methods) + `spi::Host` on HostWrap (18
+methods) retired via `#[host_iface]` handlers
+(`wasmos_dispatch_imports.rs`, `wasmos_spi_imports.rs`). Each
+captures `Host` at install time and delegates to
+`self.host.dispatch_*` (dispatch) / sqlite3 helper fns (spi).
+`spi::Host` on `ProviderSpiWrap` in `compose_provider.rs` stays
+live (different store data type, different wiring path).
+
+**7 of 8 originally-live `bindings` Host trait impls retired!**
+Remaining: `extension_loader::Host` on HostWrap (36 methods,
+the `.load` surface). Blocked on FunctionFlags gap — its
+methods return Manifest, which contains ScalarFunctionSpec, which
+contains FunctionFlags. Options:
+- Hand-roll FunctionFlags without `flags!` macro (both wasmtime
+  + wasmos impls manually, ~200 lines).
+- Use untyped `HostCall::call` pattern for extension_loader
+  (like `wasmos_opfs_imports` — hand-marshal Value trees for
+  all 36 methods).
+- Skip method-return typing on Manifest — but `#[host_iface]`
+  requires WitBridge.
 
 
 
