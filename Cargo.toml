@@ -12,36 +12,30 @@ resolver = "2"
 # sqlite-wasm/* crates are NOT workspace members of sqlink;
 # they're members of sqlite-wasm's own workspace. sqlink crates
 # depend on them via path = "../sqlite-wasm/<crate>".
+#
+# ADR-consolidation-2026-09-24: the WebAssembly implementation
+# (cli, sqlink-cli-argv, ~110 extension components, wit/, wac
+# composition plans, wasm examples) moved to
+# ~/git/wasmos/sqlink/ as a nested workspace of wasmos. This
+# workspace now contains only the native-with-embedded-wasmtime
+# side. Native crates that consume wasm content reach outward
+# via `../../wasmos/sqlink/…`:
+#   * host/ pulls extension embed shims from wasmos-side
+#     extensions/*.
+#   * fuzz/ consumes sqlink-cli-argv from the wasmos side.
+#   * host/tests/sqlite_lib.rs's `bindgen!({ path: … })`
+#     resolves against wasmos-side wit/.
 members = [
-    "cli",
     "host",
-    "sqlink-cli-argv",
     "sqlink-extension",
     "sqlink-native",
     "sqlink-parsers",
     "sqlite-cas-cache",
     "sqlink-httpd",
-    "extensions/json1",
-    "extensions/csv",
-    "extensions/math",
-    "extensions/crypto",
-    "extensions/uuid",
-    "extensions/regexp",
-    "extensions/stats",
-    "extensions/postgis-bridge",
-    "examples/rust/runnable-sqlite-demo",
     "tests/extension-smoke",
     "tests/extension-proptest",
 ]
 exclude = [
-    # extensions/* with their own [workspace] are intentionally
-    # standalone  see the dedupe + survey commits. Keep this list
-    # in sync as new standalone crates land.
-    "extensions/color",
-    "extensions/formats",
-    "extensions/iban",
-    "extensions/sys-compat",
-    "extensions/list",
     # tvm-wasm is a submodule (sqlink/tvm-wasm/) with its own
     # [workspace] root. Its crates use `edition.workspace = true`
     # against tvm-wasm's own Cargo.toml; including them in sqlink's

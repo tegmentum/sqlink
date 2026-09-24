@@ -24,7 +24,7 @@
 
 mod bindings {
     wit_bindgen::generate!({
-        path: "../../../wit",
+        path: "../../../../wasmos/sqlink/wit",
         world: "language-runtime",
         generate_all,
     });

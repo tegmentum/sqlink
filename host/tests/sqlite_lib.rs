@@ -17,7 +17,7 @@ use wasmtime_wasi::{ResourceTable, WasiCtxBuilder};
 use sqlink_host::Host;
 
 wasmtime::component::bindgen!({
-    path: "../wit",
+    path: "../../wasmos/sqlink/wit",
     world: "sqlite-library",
     imports: { default: async },
     exports: { default: async },
