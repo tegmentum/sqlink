@@ -97,6 +97,13 @@ pub mod wasmos_session_imports;
 /// opfs VFS; the handler exists only so the composed
 /// `cli + sqlite-lib` runnable can instantiate.
 pub mod wasmos_opfs_imports;
+/// Phase 4: `#[host_iface]` handler for `sqlite:extension/
+/// spi-loader@1.0.0` — 12 methods that mirror the extracted
+/// `register_*_impl` / `set_stmt_trace_impl` /
+/// `drain_trace_buf_impl` / `set_auth_log_impl` /
+/// `unregister_extension_impl` free fns in this file. Retires
+/// the `impl spi_loader::Host for HostWrap` block.
+pub mod wasmos_spi_loader_imports;
 /// Phase 2 (bindgen-free tabular-mutating): cached `TypedFunc`
 /// dispatch for the 22 vtab / vtab-update methods on
 /// `MutatingBridgeInstance`, letting the `loaded_tabular_mutating`
@@ -9234,269 +9241,6 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     }
 }
 
-impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
-    async fn set_stmt_trace(&mut self, on: bool) {
-        if shared_spi_ensure_open(self.host).is_err() {
-            return;
-        }
-        let g = self.host.shared_spi_conn.lock();
-        let r = g.borrow();
-        let Some(conn) = r.as_ref() else { return };
-        if on {
-            let buf = self.host.trace_buf.clone();
-            conn.set_stmt_trace::<_>(Some(move |s: &str| {
-                buf.lock().push(s.to_string());
-            }));
-        } else {
-            conn.set_stmt_trace::<fn(&str)>(None);
-            self.host.trace_buf.lock().clear();
-        }
-    }
-
-    async fn drain_trace_buf(&mut self) -> Vec<String> {
-        std::mem::take(&mut *self.host.trace_buf.lock())
-    }
-
-    async fn set_auth_log(
-        &mut self,
-        on: bool,
-    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        let g = self.host.shared_spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        if on {
-            conn.set_authorizer(Some(
-                |action: i32,
-                 a1: Option<String>,
-                 a2: Option<String>,
-                 a3: Option<String>,
-                 a4: Option<String>| {
-                    eprintln!(
-                        "auth: action={action} a1={:?} a2={:?} a3={:?} a4={:?}",
-                        a1.as_deref(),
-                        a2.as_deref(),
-                        a3.as_deref(),
-                        a4.as_deref()
-                    );
-                    sqlite_component_core::db::AuthResult::Allow
-                },
-            ))
-            .map_err(db_err_to_bindings)
-        } else {
-            conn.set_authorizer::<fn(
-                i32,
-                Option<String>,
-                Option<String>,
-                Option<String>,
-                Option<String>,
-            ) -> sqlite_component_core::db::AuthResult>(None)
-                .map_err(db_err_to_bindings)
-        }
-    }
-
-    async fn register_scalar(
-        &mut self,
-        ext_name: String,
-        name: String,
-        num_args: i32,
-        func_id: u64,
-    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        register_scalar_impl(self.host, ext_name, name, num_args, func_id).await
-    }
-
-    async fn register_collation(
-        &mut self,
-        ext_name: String,
-        name: String,
-        coll_id: u64,
-    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        register_collation_impl(self.host, ext_name, name, coll_id).await
-    }
-
-    async fn register_aggregate(
-        &mut self,
-        ext_name: String,
-        name: String,
-        num_args: i32,
-        func_id: u64,
-        window: bool,
-    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        register_aggregate_impl(self.host, ext_name, name, num_args, func_id, window).await
-    }
-
-    async fn register_authorizer(
-        &mut self,
-        ext_name: String,
-    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        register_authorizer_impl(self.host, ext_name).await
-    }
-
-    async fn register_update_hook(
-        &mut self,
-        ext_name: String,
-    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        register_update_hook_impl(self.host, ext_name).await
-    }
-
-    async fn register_commit_hook(
-        &mut self,
-        ext_name: String,
-    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        register_commit_hook_impl(self.host, ext_name).await
-    }
-
-    async fn register_wal_hook(
-        &mut self,
-        ext_name: String,
-        hook_id: u64,
-    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        register_wal_hook_impl(self.host, ext_name, hook_id).await
-    }
-
-    async fn register_vtab(
-        &mut self,
-        ext_name: String,
-        name: String,
-        vtab_id: u64,
-        eponymous: bool,
-        mutable: bool,
-        batched: bool,
-    ) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
-        register_vtab_impl(self.host, ext_name, name, vtab_id, eponymous, mutable, batched).await
-    }
-
-    async fn unregister_extension(&mut self, ext_name: String) {
-        let scalars = self.host.ext_scalar_registrations.lock().remove(&ext_name);
-        // PLAN-followups.md P1 live-prefer cache  drop every
-        // (ext_name, *, *) entry alongside the scalar registrations.
-        // Pin re-registrations targeting this extension stop working
-        // immediately; a follow-up call to apply-prefix-pin will see
-        // the miss and surface a clean error.
-        {
-            let mut g = self.host.ext_scalar_func_ids.lock();
-            g.retain(|(en, _, _), _| en != &ext_name);
-        }
-        let colls = self
-            .host
-            .ext_collation_registrations
-            .lock()
-            .remove(&ext_name);
-        let aggs = self
-            .host
-            .ext_aggregate_registrations
-            .lock()
-            .remove(&ext_name);
-        let vtabs = self.host.ext_vtab_registrations.lock().remove(&ext_name);
-        // Clear hook ownership only if THIS extension owned the slot.
-        let drop_authorizer = {
-            let mut g = self.host.ext_authorizer_owner.lock();
-            if g.as_deref() == Some(&ext_name) {
-                *g = None;
-                true
-            } else {
-                false
-            }
-        };
-        let drop_update_hook = {
-            let mut g = self.host.ext_update_hook_owner.lock();
-            if g.as_deref() == Some(&ext_name) {
-                *g = None;
-                true
-            } else {
-                false
-            }
-        };
-        let drop_commit_hook = {
-            let mut g = self.host.ext_commit_hook_owner.lock();
-            if g.as_deref() == Some(&ext_name) {
-                *g = None;
-                true
-            } else {
-                false
-            }
-        };
-        let drop_wal_hook = {
-            let mut g = self.host.ext_wal_hook_owner.lock();
-            let owned = g.as_ref().is_some_and(|(n, _)| n == &ext_name);
-            if owned {
-                *g = None;
-                true
-            } else {
-                false
-            }
-        };
-        if scalars.is_none()
-            && colls.is_none()
-            && aggs.is_none()
-            && vtabs.is_none()
-            && !drop_authorizer
-            && !drop_update_hook
-            && !drop_commit_hook
-            && !drop_wal_hook
-        {
-            return;
-        }
-        let g = self.host.shared_spi_conn.lock();
-        let r = g.borrow();
-        let Some(conn) = r.as_ref() else { return };
-        if let Some(entries) = scalars {
-            for (name, num_args) in entries {
-                let _ =
-                    unsafe { unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args) };
-            }
-        }
-        if let Some(entries) = colls {
-            for name in entries {
-                let _ = unsafe { unregister_host_loaded_collation(conn.raw_handle(), &name) };
-            }
-        }
-        if let Some(entries) = aggs {
-            // Aggregates use the same FFI removal path as scalars
-            // (sqlite3_create_function_v2 with null callbacks).
-            for (name, num_args) in entries {
-                let _ =
-                    unsafe { unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args) };
-            }
-        }
-        if let Some(entries) = vtabs {
-            for name in entries {
-                let _ = unsafe { crate::vtab::unregister_vtab_module(conn.raw_handle(), &name) };
-            }
-        }
-        if drop_authorizer {
-            let _ = conn.set_authorizer::<fn(
-                i32,
-                Option<String>,
-                Option<String>,
-                Option<String>,
-                Option<String>,
-            ) -> sqlite_component_core::db::AuthResult>(None);
-        }
-        if drop_update_hook {
-            conn.update_hook::<fn(sqlite_component_core::db::UpdateAction, &str, &str, i64)>(None);
-        }
-        if drop_commit_hook {
-            conn.commit_hook::<fn() -> bool>(None);
-            conn.rollback_hook::<fn()>(None);
-        }
-        if drop_wal_hook {
-            // db::Connection::wal_hook is generic on F; passing
-            // None requires committing to *some* F type, and the
-            // closure-typed installer will then Box::drop the
-            // previously-installed closure as if it were that F.
-            // The installer captured Host + String + u64 — a
-            // different F type per install — so the wrong-type
-            // drop is UB. Clear via the raw FFI instead, which
-            // sets the slot to (NULL, NULL) and intentionally
-            // leaks the prior Box<F>. The leak is per-extension-
-            // unload and is reclaimed at process exit.
-            let _ = unsafe {
-                libsqlite3_sys::sqlite3_wal_hook(conn.raw_handle(), None, std::ptr::null_mut())
-            };
-        }
-    }
-}
 
 
 // Phase 4 preparation: extracted bodies from the
@@ -9507,6 +9251,180 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
 // register-* body is extracted the same way, the trait impl can
 // be retired in a follow-up commit without breaking
 // `install_provider_backed_bindings`.
+
+pub(crate) async fn set_stmt_trace_impl(host: &Host, on: bool) {
+    if shared_spi_ensure_open(host).is_err() {
+        return;
+    }
+    let g = host.shared_spi_conn.lock();
+    let r = g.borrow();
+    let Some(conn) = r.as_ref() else { return };
+    if on {
+        let buf = host.trace_buf.clone();
+        conn.set_stmt_trace::<_>(Some(move |s: &str| {
+            buf.lock().push(s.to_string());
+        }));
+    } else {
+        conn.set_stmt_trace::<fn(&str)>(None);
+        host.trace_buf.lock().clear();
+    }
+}
+
+pub(crate) async fn drain_trace_buf_impl(host: &Host) -> Vec<String> {
+    std::mem::take(&mut *host.trace_buf.lock())
+}
+
+pub(crate) async fn set_auth_log_impl(
+    host: &Host,
+    on: bool,
+) -> std::result::Result<(), wasmos_extension_types::SqliteError> {
+    shared_spi_ensure_open(host)?;
+    let g = host.shared_spi_conn.lock();
+    let r = g.borrow();
+    let conn = r.as_ref().expect("ensured open");
+    if on {
+        conn.set_authorizer(Some(
+            |action: i32,
+             a1: Option<String>,
+             a2: Option<String>,
+             a3: Option<String>,
+             a4: Option<String>| {
+                eprintln!(
+                    "auth: action={action} a1={:?} a2={:?} a3={:?} a4={:?}",
+                    a1.as_deref(),
+                    a2.as_deref(),
+                    a3.as_deref(),
+                    a4.as_deref()
+                );
+                sqlite_component_core::db::AuthResult::Allow
+            },
+        ))
+        .map_err(db_err_to_bindings)
+    } else {
+        conn.set_authorizer::<fn(
+            i32,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) -> sqlite_component_core::db::AuthResult>(None)
+            .map_err(db_err_to_bindings)
+    }
+}
+
+pub(crate) async fn unregister_extension_impl(host: &Host, ext_name: String) {
+    let scalars = host.ext_scalar_registrations.lock().remove(&ext_name);
+    {
+        let mut g = host.ext_scalar_func_ids.lock();
+        g.retain(|(en, _, _), _| en != &ext_name);
+    }
+    let colls = host.ext_collation_registrations.lock().remove(&ext_name);
+    let aggs = host.ext_aggregate_registrations.lock().remove(&ext_name);
+    let vtabs = host.ext_vtab_registrations.lock().remove(&ext_name);
+    let drop_authorizer = {
+        let mut g = host.ext_authorizer_owner.lock();
+        if g.as_deref() == Some(&ext_name) {
+            *g = None;
+            true
+        } else {
+            false
+        }
+    };
+    let drop_update_hook = {
+        let mut g = host.ext_update_hook_owner.lock();
+        if g.as_deref() == Some(&ext_name) {
+            *g = None;
+            true
+        } else {
+            false
+        }
+    };
+    let drop_commit_hook = {
+        let mut g = host.ext_commit_hook_owner.lock();
+        if g.as_deref() == Some(&ext_name) {
+            *g = None;
+            true
+        } else {
+            false
+        }
+    };
+    let drop_wal_hook = {
+        let mut g = host.ext_wal_hook_owner.lock();
+        let owned = g.as_ref().is_some_and(|(n, _)| n == &ext_name);
+        if owned {
+            *g = None;
+            true
+        } else {
+            false
+        }
+    };
+    if scalars.is_none()
+        && colls.is_none()
+        && aggs.is_none()
+        && vtabs.is_none()
+        && !drop_authorizer
+        && !drop_update_hook
+        && !drop_commit_hook
+        && !drop_wal_hook
+    {
+        return;
+    }
+    let g = host.shared_spi_conn.lock();
+    let r = g.borrow();
+    let Some(conn) = r.as_ref() else { return };
+    if let Some(entries) = scalars {
+        for (name, num_args) in entries {
+            let _ = unsafe { unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args) };
+        }
+    }
+    if let Some(entries) = colls {
+        for name in entries {
+            let _ = unsafe { unregister_host_loaded_collation(conn.raw_handle(), &name) };
+        }
+    }
+    if let Some(entries) = aggs {
+        // Aggregates use the same FFI removal path as scalars
+        // (sqlite3_create_function_v2 with null callbacks).
+        for (name, num_args) in entries {
+            let _ = unsafe { unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args) };
+        }
+    }
+    if let Some(entries) = vtabs {
+        for name in entries {
+            let _ = unsafe { crate::vtab::unregister_vtab_module(conn.raw_handle(), &name) };
+        }
+    }
+    if drop_authorizer {
+        let _ = conn.set_authorizer::<fn(
+            i32,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) -> sqlite_component_core::db::AuthResult>(None);
+    }
+    if drop_update_hook {
+        conn.update_hook::<fn(sqlite_component_core::db::UpdateAction, &str, &str, i64)>(None);
+    }
+    if drop_commit_hook {
+        conn.commit_hook::<fn() -> bool>(None);
+        conn.rollback_hook::<fn()>(None);
+    }
+    if drop_wal_hook {
+        // db::Connection::wal_hook is generic on F; passing None
+        // requires committing to *some* F type, and the closure-typed
+        // installer will then Box::drop the previously-installed
+        // closure as if it were that F. The installer captured Host +
+        // String + u64 — a different F type per install — so the
+        // wrong-type drop is UB. Clear via the raw FFI instead, which
+        // sets the slot to (NULL, NULL) and intentionally leaks the
+        // prior Box<F>. The leak is per-extension-unload and is
+        // reclaimed at process exit.
+        let _ = unsafe {
+            libsqlite3_sys::sqlite3_wal_hook(conn.raw_handle(), None, std::ptr::null_mut())
+        };
+    }
+}
 
 pub(crate) async fn register_scalar_impl(
     host: &Host,
@@ -11776,10 +11694,19 @@ pub async fn run_cli_capture(
         HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
     })
     .map_err(|e| anyhow!("wire spi: {e}"))?;
-    bindings::sqlite::extension::spi_loader::add_to_linker::<_, LoaderData>(&mut linker, |s: &mut CliRunState| {
-        HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
-    })
-    .map_err(|e| anyhow!("wire spi-loader: {e}"))?;
+    {
+        let spi_loader_imports = crate::wasmos_spi_loader_imports::install_spi_loader_imports(
+            wasmos_runtime_api::HostImports::new(),
+            host.clone(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            &engine,
+            &mut linker,
+            &component,
+            &spi_loader_imports,
+        )
+        .map_err(|e| anyhow!("wire spi-loader: {e}"))?;
+    }
     // ADR-0029 Phase 6.9 D2 Session 15a — wasmos install path (see
     // make_run_linker for rationale).
     let tvm_imports = crate::wasmos_tvm::build_tvm_memory_imports::<CliRunState>();

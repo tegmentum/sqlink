@@ -986,15 +986,22 @@ async fn main() -> Result<()> {
 
     // spi-loader: register-* trampolines + cli debug toggles. Split
     // out of `spi` so a pure SQLite library (sqlite-lib in the
-    // sqlite-wasm repo) doesn't have to implement them.
-    bindings::sqlite::extension::spi_loader::add_to_linker::<_, LoaderData>(
-        &mut linker,
-        |state: &mut State| HostWrap {
-            host: &mut state.host,
-            resources: Some(&mut state.resources),
-        },
-    )
-    .map_err(|e| anyhow!("wire spi-loader: {e}"))?;
+    // sqlite-wasm repo) doesn't have to implement them. Phase 4:
+    // wired via wasmos-native handler capturing `Host` at install
+    // time (Host is Clone with Arc-wrapped fields).
+    {
+        let spi_loader_imports = sqlink_host::wasmos_spi_loader_imports::install_spi_loader_imports(
+            wasmos_runtime_api::HostImports::new(),
+            host.clone(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            &engine,
+            &mut linker,
+            &component,
+            &spi_loader_imports,
+        )
+        .map_err(|e| anyhow!("wire spi-loader: {e}"))?;
+    }
 
     // tvm:memory wiring  the cli itself no longer imports
     // tvm:memory after Stage 5f (it's a pure SPI client), but the
