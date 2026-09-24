@@ -10,6 +10,7 @@
 //! Rust ↔ `kebab-case` WIT (wasmtime handles the split automatically);
 //! Rust reserved words get an explicit `#[component(name = ...)]`.
 
+use wasmos_runtime_api::{WitEnum, WitRecord};
 use wasmtime::component::{ComponentType, Lift, Lower};
 
 use crate::wasmos_extension_types::SqlValue;
@@ -53,7 +54,7 @@ where
     add_to_linker_instance::<T, D>(&mut inst, host_getter)
 }
 
-#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq, WitEnum)]
 #[component(enum)]
 #[repr(u8)]
 pub enum ConstraintOp {
@@ -89,7 +90,7 @@ pub enum ConstraintOp {
     Function,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct Constraint {
     pub column: i32,
@@ -97,14 +98,14 @@ pub struct Constraint {
     pub usable: bool,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct Orderby {
     pub column: i32,
     pub desc: bool,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct IndexInfo {
     pub constraints: Vec<Constraint>,
@@ -113,7 +114,7 @@ pub struct IndexInfo {
     pub col_used: u64,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct ConstraintUsage {
     #[component(name = "argv-index")]
@@ -121,7 +122,7 @@ pub struct ConstraintUsage {
     pub omit: bool,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct IndexPlan {
     #[component(name = "constraint-usage")]
@@ -138,7 +139,7 @@ pub struct IndexPlan {
     pub orderby_consumed: bool,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct VtabRow {
     pub rowid: i64,

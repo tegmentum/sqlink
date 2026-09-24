@@ -13,6 +13,7 @@
 //! Sibling of [`crate::wasmos_vtab_types`], which owns the same
 //! treatment for `sqlite:extension/vtab@1.0.0`.
 
+use wasmos_runtime_api::{WitEnum, WitRecord, WitVariant};
 use wasmtime::component::{flags, ComponentType, Lift, Lower};
 
 // Bindgen `with:` remap scaffolding. `sqlite:extension/types@1.0.0`
@@ -60,7 +61,7 @@ where
 /// Mirrors the WIT `types.wit-value-payload` record. Carries a
 /// canonical-CBOR-encoded WIT record across the host/extension
 /// boundary.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct WitValuePayload {
     #[component(name = "type-id")]
@@ -73,7 +74,7 @@ pub struct WitValuePayload {
 /// Mirrors the WIT `types.sql-value` variant. The unified SQL value
 /// representation used for arguments, results, parameter binding,
 /// and row data.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitVariant)]
 #[component(variant)]
 pub enum SqlValue {
     #[component(name = "null")]
@@ -91,7 +92,7 @@ pub enum SqlValue {
 }
 
 /// Mirrors the WIT `types.sqlite-error` record.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct SqliteError {
     pub code: i32,
@@ -115,7 +116,7 @@ flags! {
 
 /// Mirrors the WIT `types.auth-action` enum — 32 SQLITE_* action
 /// codes passed to the authorizer callback.
-#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq, WitEnum)]
 #[component(enum)]
 #[repr(u8)]
 pub enum AuthAction {
@@ -188,7 +189,7 @@ pub enum AuthAction {
 }
 
 /// Mirrors the WIT `types.auth-result` enum. 3 unit arms.
-#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq, WitEnum)]
 #[component(enum)]
 #[repr(u8)]
 pub enum AuthResult {
@@ -201,7 +202,7 @@ pub enum AuthResult {
 }
 
 /// Mirrors the WIT `types.update-operation` enum.
-#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq, WitEnum)]
 #[component(enum)]
 #[repr(u8)]
 pub enum UpdateOperation {
@@ -214,7 +215,7 @@ pub enum UpdateOperation {
 }
 
 /// Mirrors the WIT `types.log-level` enum.
-#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(ComponentType, Lift, Lower, Copy, Clone, Debug, PartialEq, Eq, WitEnum)]
 #[component(enum)]
 #[repr(u8)]
 pub enum LogLevel {
@@ -231,7 +232,7 @@ pub enum LogLevel {
 }
 
 /// Mirrors the WIT `types.column-info` record.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct ColumnInfo {
     pub name: String,
@@ -243,7 +244,7 @@ pub struct ColumnInfo {
 }
 
 /// Mirrors the WIT `types.table-info` record.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct TableInfo {
     pub name: String,
@@ -254,7 +255,7 @@ pub struct TableInfo {
 
 /// Mirrors the WIT `types.query-result` record — the result shape
 /// returned by `spi.execute` and friends.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct QueryResult {
     pub columns: Vec<String>,
@@ -266,7 +267,7 @@ pub struct QueryResult {
 
 /// Mirrors the WIT `spi.named-param` record — one row in a
 /// named-parameter binding list ferried to `spi.execute-multi`.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct NamedParam {
     pub name: String,
@@ -278,7 +279,7 @@ pub struct NamedParam {
 // ────────────────────────────────────────────────────────────────────
 
 /// Mirrors the WIT `http.method` variant. Mixed unit + `Other(String)`.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitVariant)]
 #[component(variant)]
 pub enum Method {
     #[component(name = "get")]
@@ -304,7 +305,7 @@ pub enum Method {
 }
 
 /// Mirrors the WIT `http.scheme` variant. 2 unit + `Other(String)`.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitVariant)]
 #[component(variant)]
 pub enum Scheme {
     #[component(name = "http")]
@@ -319,7 +320,7 @@ pub enum Scheme {
 pub type Field = (String, Vec<u8>);
 
 /// Mirrors the WIT `http.request` record.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct Request {
     pub method: Method,
@@ -334,7 +335,7 @@ pub struct Request {
 }
 
 /// Mirrors the WIT `http.response` record.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct Response {
     pub status: u16,
@@ -343,7 +344,7 @@ pub struct Response {
 }
 
 /// Mirrors the WIT `http.http-error` variant.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitVariant)]
 #[component(variant)]
 pub enum HttpError {
     #[component(name = "invalid-url")]
@@ -364,7 +365,7 @@ pub enum HttpError {
 
 /// Mirrors the WIT `s3-base.s3-error` variant. 5 unit + 4 string-
 /// payload arms.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitVariant)]
 #[component(variant)]
 pub enum S3Error {
     #[component(name = "access-denied")]
@@ -387,7 +388,7 @@ pub enum S3Error {
     CapabilityNotGranted,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3Credentials {
     #[component(name = "access-key-id")]
@@ -398,7 +399,7 @@ pub struct S3Credentials {
     pub session_token: Option<String>,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3EndpointConfig {
     pub url: String,
@@ -407,7 +408,7 @@ pub struct S3EndpointConfig {
     pub path_style: bool,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3ObjectMetadata {
     #[component(name = "content-type")]
@@ -420,7 +421,7 @@ pub struct S3ObjectMetadata {
     pub custom: Vec<(String, String)>,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3ObjectInfo {
     pub key: String,
@@ -432,7 +433,7 @@ pub struct S3ObjectInfo {
     pub storage_class: Option<String>,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3GetObjectOptions {
     pub range: Option<(u64, u64)>,
@@ -442,7 +443,7 @@ pub struct S3GetObjectOptions {
     pub if_none_match: Option<String>,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3PutObjectOptions {
     #[component(name = "content-type")]
@@ -452,7 +453,7 @@ pub struct S3PutObjectOptions {
     pub cache_control: Option<String>,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3ListObjectsOptions {
     pub prefix: Option<String>,
@@ -463,26 +464,26 @@ pub struct S3ListObjectsOptions {
     pub continuation_token: Option<String>,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3GetObjectOutput {
     pub body: Vec<u8>,
     pub metadata: S3ObjectMetadata,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3PutObjectOutput {
     pub etag: String,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3HeadObjectOutput {
     pub metadata: S3ObjectMetadata,
 }
 
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct S3ListObjectsOutput {
     pub objects: Vec<S3ObjectInfo>,
@@ -499,7 +500,7 @@ pub struct S3ListObjectsOutput {
 // ────────────────────────────────────────────────────────────────────
 
 /// Mirrors the WIT `build.build-out` record.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct BuildOut {
     #[component(name = "binary-path")]
@@ -515,7 +516,7 @@ pub struct BuildOut {
 /// Mirrors the WIT `policy.capability` variant — one arm per host-
 /// imported interface. Every variant is unit; kebab-case remaps
 /// bridge Rust identifiers back to the WIT names.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitVariant)]
 #[component(variant)]
 pub enum Capability {
     #[component(name = "spi")]
@@ -553,7 +554,7 @@ pub enum Capability {
 }
 
 /// Mirrors the WIT `policy.http-policy` record.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct HttpPolicy {
     #[component(name = "allowed-hosts")]
@@ -567,7 +568,7 @@ pub struct HttpPolicy {
 }
 
 /// Mirrors the WIT `policy.dns-policy` record.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct DnsPolicy {
     #[component(name = "allowed-domains")]
@@ -578,7 +579,7 @@ pub struct DnsPolicy {
 
 /// Mirrors the WIT `policy.fs-policy` record. Reserved for future
 /// use per the WIT spec.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct FsPolicy {
     #[component(name = "readable-prefixes")]
@@ -591,7 +592,7 @@ pub struct FsPolicy {
 
 /// Mirrors the WIT `policy.load-options` record — the load-time
 /// arguments the host passes to `extension-loader.load-extension`.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitRecord)]
 #[component(record)]
 pub struct LoadOptions {
     #[component(name = "fuel-per-call")]
@@ -610,7 +611,7 @@ pub struct LoadOptions {
 }
 
 /// Mirrors the WIT `policy.policy-error` variant.
-#[derive(ComponentType, Lift, Lower, Clone, Debug)]
+#[derive(ComponentType, Lift, Lower, Clone, Debug, WitVariant)]
 #[component(variant)]
 pub enum PolicyError {
     #[component(name = "capability-not-granted")]
