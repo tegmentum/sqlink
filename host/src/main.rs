@@ -980,14 +980,19 @@ async fn main() -> Result<()> {
     // connection HostWrap reaches lives on Host.shared_spi_conn
     // (Stage 2)  same connection every extension's spi calls
     // already touch.
-    bindings::sqlite::extension::spi::add_to_linker::<_, LoaderData>(
-        &mut linker,
-        |state: &mut State| HostWrap {
-            host: &mut state.host,
-            resources: Some(&mut state.resources),
-        },
-    )
-    .map_err(|e| anyhow!("wire spi: {e}"))?;
+    {
+        let spi_imports = sqlink_host::wasmos_spi_imports::install_spi_imports(
+            wasmos_runtime_api::HostImports::new(),
+            host.clone(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            &engine,
+            &mut linker,
+            &component,
+            &spi_imports,
+        )
+        .map_err(|e| anyhow!("wire spi: {e}"))?;
+    }
 
     // spi-loader: register-* trampolines + cli debug toggles. Split
     // out of `spi` so a pure SQLite library (sqlite-lib in the
