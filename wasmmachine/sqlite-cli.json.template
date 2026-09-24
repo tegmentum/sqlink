@@ -53,6 +53,36 @@
     },
     {
       "consumer_id": "sqlite-cli",
+      "import_name": "wasi:cli/terminal-input@0.2.6",
+      "provider_id": "wasi-host",
+      "export_name": "wasi:cli/terminal-input@0.2.6"
+    },
+    {
+      "consumer_id": "sqlite-cli",
+      "import_name": "wasi:cli/terminal-output@0.2.6",
+      "provider_id": "wasi-host",
+      "export_name": "wasi:cli/terminal-output@0.2.6"
+    },
+    {
+      "consumer_id": "sqlite-cli",
+      "import_name": "wasi:cli/terminal-stdin@0.2.6",
+      "provider_id": "wasi-host",
+      "export_name": "wasi:cli/terminal-stdin@0.2.6"
+    },
+    {
+      "consumer_id": "sqlite-cli",
+      "import_name": "wasi:cli/terminal-stdout@0.2.6",
+      "provider_id": "wasi-host",
+      "export_name": "wasi:cli/terminal-stdout@0.2.6"
+    },
+    {
+      "consumer_id": "sqlite-cli",
+      "import_name": "wasi:cli/terminal-stderr@0.2.6",
+      "provider_id": "wasi-host",
+      "export_name": "wasi:cli/terminal-stderr@0.2.6"
+    },
+    {
+      "consumer_id": "sqlite-cli",
       "import_name": "wasi:filesystem/types@0.2.6",
       "provider_id": "wasi-host",
       "export_name": "wasi:filesystem/types@0.2.6"
@@ -92,30 +122,6 @@
       "import_name": "wasi:clocks/wall-clock@0.2.6",
       "provider_id": "wasi-host",
       "export_name": "wasi:clocks/wall-clock@0.2.6"
-    },
-    {
-      "consumer_id": "sqlite-cli",
-      "import_name": "wasi:random/insecure-seed@0.2.6",
-      "provider_id": "wasi-host",
-      "export_name": "wasi:random/insecure-seed@0.2.6"
-    },
-    {
-      "consumer_id": "sqlite-cli",
-      "import_name": "sqlite:extension/types@0.1.0",
-      "provider_id": "sqlite-extension-host",
-      "export_name": "sqlite:extension/types@0.1.0"
-    },
-    {
-      "consumer_id": "sqlite-cli",
-      "import_name": "sqlite:wasm/extension-loader@0.1.0",
-      "provider_id": "sqlite-extension-host",
-      "export_name": "sqlite:wasm/extension-loader@0.1.0"
-    },
-    {
-      "consumer_id": "sqlite-cli",
-      "import_name": "sqlite:wasm/dispatch@0.1.0",
-      "provider_id": "sqlite-extension-host",
-      "export_name": "sqlite:wasm/dispatch@0.1.0"
     }
   ],
   "secrets": [],
