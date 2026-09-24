@@ -371,18 +371,32 @@ captures `Host` at install time and delegates to
 `spi::Host` on `ProviderSpiWrap` in `compose_provider.rs` stays
 live (different store data type, different wiring path).
 
-**7 of 8 originally-live `bindings` Host trait impls retired!**
-Remaining: `extension_loader::Host` on HostWrap (36 methods,
-the `.load` surface). Blocked on FunctionFlags gap — its
-methods return Manifest, which contains ScalarFunctionSpec, which
-contains FunctionFlags. Options:
-- Hand-roll FunctionFlags without `flags!` macro (both wasmtime
-  + wasmos impls manually, ~200 lines).
-- Use untyped `HostCall::call` pattern for extension_loader
-  (like `wasmos_opfs_imports` — hand-marshal Value trees for
-  all 36 methods).
-- Skip method-return typing on Manifest — but `#[host_iface]`
-  requires WitBridge.
+**Commit `185c3f01`** — `extension_loader::Host` retired via
+`wasmos_extension_loader_imports`. 36 methods with rich types
+(Manifest, LoaderError, DescribedResult, DotCommandResult,
+StateDelta, ComponentCacheStatsSnapshot, UriCacheEntry,
+CacheStats, CacheMergeStats). 3 tuple methods use `Value` for
+the arg/return (list_resolvers, list_runtimes, dispatch_dot_command
+cli-state) since `#[host_iface]` rejects `Vec<tuple>`.
+
+Boundary crossing: `bindings_manifest_to_wasmos` converts the
+bindgen-generated `Manifest` (returned by lib.rs helpers) to
+the hand-rolled `wasmos_extension_types::Manifest` at the
+handler's edge. ~40 fields of straight field-copy — chosen over
+adding a metadata `with:` remap because metadata's `describe`
+fn would need a Host trait stub.
+
+**8 of 8 originally-live `bindings` Host trait impls on
+HostWrap RETIRED.** The final blocker for deleting the
+`bindings` block itself is the parallel
+`impl spi::Host for ProviderSpiWrap<'a>` in
+`compose_provider.rs:1221` (18 methods, ~245 lines).
+Retirement pattern: same as HostWrap's spi::Host but capture
+`conn: Arc<...>` + `db_path: String` at install time (not
+Host — ProviderSpiWrap uses per-provider state). Wire per-
+store at compose_provider.rs:1636 (resident_wasm_component_invoke)
+and 1953 (wasm_component_invoke_cli). Once retired + block
+deleted, `bindgen!` count in host/src/ drops to 0.
 
 
 
