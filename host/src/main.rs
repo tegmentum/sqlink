@@ -943,14 +943,19 @@ async fn main() -> Result<()> {
     )
     .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
 
-    bindings::sqlink::wasm::dispatch::add_to_linker::<_, LoaderData>(
-        &mut linker,
-        |state: &mut State| HostWrap {
-            host: &mut state.host,
-            resources: Some(&mut state.resources),
-        },
-    )
-    .map_err(|e| anyhow!("wire dispatch: {e}"))?;
+    {
+        let dispatch_imports = sqlink_host::wasmos_dispatch_imports::install_dispatch_imports(
+            wasmos_runtime_api::HostImports::new(),
+            host.clone(),
+        );
+        wasmos_runtime_wasmtime_v48::async_bridge::install_host_imports(
+            &engine,
+            &mut linker,
+            &component,
+            &dispatch_imports,
+        )
+        .map_err(|e| anyhow!("wire dispatch: {e}"))?;
+    }
 
     // Task #228: the multi-memory composed `cli + sqlite-lib` runnable
     // imports `opfs-host` (browser OPFS primitives). The native runtime
